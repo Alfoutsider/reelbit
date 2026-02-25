@@ -12,7 +12,7 @@ import {
 import {
   easeOutExpo, easeOutBack,
   createWinParticles, updateParticles, drawParticle,
-  createAmbientParticles, updateAmbientParticles,
+  createAmbientParticles, updateAmbientParticles, drawAmbientParticle,
   getShakeOffset, drawAnticipationEffect, drawWinHighlight,
   type Particle, type AmbientParticle, type ShakeState,
 } from "./AnimationManager";
@@ -136,53 +136,99 @@ export default function SlotCanvas({
       // Clear
       ctx.clearRect(-10, -10, CANVAS_W + 20, CANVAS_H + 20);
 
-      // Background
+      // Background — richer depth gradient
       const bgGrad = ctx.createLinearGradient(0, 0, 0, CANVAS_H);
-      bgGrad.addColorStop(0, "#0d0a1a");
-      bgGrad.addColorStop(1, "#06040e");
+      bgGrad.addColorStop(0, "#0f0b1e");
+      bgGrad.addColorStop(0.4, "#0a0714");
+      bgGrad.addColorStop(1, "#05030a");
       ctx.fillStyle = bgGrad;
       ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
 
-      // Ambient particles
+      // Subtle vignette overlay
+      const vignette = ctx.createRadialGradient(
+        CANVAS_W / 2, CANVAS_H / 2, CANVAS_W * 0.25,
+        CANVAS_W / 2, CANVAS_H / 2, CANVAS_W * 0.75
+      );
+      vignette.addColorStop(0, "rgba(0,0,0,0)");
+      vignette.addColorStop(1, "rgba(0,0,0,0.35)");
+      ctx.fillStyle = vignette;
+      ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+
+      // Warm center glow (gives depth)
+      const centerGlow = ctx.createRadialGradient(
+        CANVAS_W / 2, CANVAS_H * 0.45, 0,
+        CANVAS_W / 2, CANVAS_H * 0.45, CANVAS_W * 0.5
+      );
+      centerGlow.addColorStop(0, "rgba(153, 69, 255, 0.04)");
+      centerGlow.addColorStop(0.5, "rgba(100, 50, 200, 0.02)");
+      centerGlow.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.fillStyle = centerGlow;
+      ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+
+      // Ambient particles — premium glow rendering
       ambientRef.current = updateAmbientParticles(ambientRef.current, timeRef.current, CANVAS_H);
       for (const p of ambientRef.current) {
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(150, 130, 255, ${p.alpha})`;
-        ctx.fill();
+        drawAmbientParticle(ctx, p, timeRef.current);
       }
 
-      // Light sweep
-      lightSweepRef.current = (lightSweepRef.current + 0.004) % 1;
-      const sweepX = lightSweepRef.current * (CANVAS_W + 200) - 100;
-      const sweepGrad = ctx.createLinearGradient(sweepX - 80, 0, sweepX + 80, 0);
+      // Light sweep — wider, softer
+      lightSweepRef.current = (lightSweepRef.current + 0.003) % 1;
+      const sweepX = lightSweepRef.current * (CANVAS_W + 300) - 150;
+      const sweepGrad = ctx.createLinearGradient(sweepX - 120, 0, sweepX + 120, 0);
       sweepGrad.addColorStop(0, "rgba(255,255,255,0)");
-      sweepGrad.addColorStop(0.5, "rgba(255,255,255,0.04)");
+      sweepGrad.addColorStop(0.3, "rgba(200,180,255,0.015)");
+      sweepGrad.addColorStop(0.5, "rgba(255,255,255,0.05)");
+      sweepGrad.addColorStop(0.7, "rgba(200,180,255,0.015)");
       sweepGrad.addColorStop(1, "rgba(255,255,255,0)");
       ctx.fillStyle = sweepGrad;
       ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
 
-      // Frame border glow
+      // Frame border glow — outer bloom + inner stroke
+      ctx.save();
+      ctx.shadowColor = "rgba(153,69,255,0.4)";
+      ctx.shadowBlur = 15;
       const frameGrad = ctx.createLinearGradient(0, 0, CANVAS_W, CANVAS_H);
-      frameGrad.addColorStop(0, "rgba(153,69,255,0.3)");
-      frameGrad.addColorStop(0.5, "rgba(255,215,0,0.2)");
-      frameGrad.addColorStop(1, "rgba(153,69,255,0.3)");
+      frameGrad.addColorStop(0, "rgba(153,69,255,0.35)");
+      frameGrad.addColorStop(0.3, "rgba(255,215,0,0.25)");
+      frameGrad.addColorStop(0.7, "rgba(0,200,255,0.2)");
+      frameGrad.addColorStop(1, "rgba(153,69,255,0.35)");
       ctx.strokeStyle = frameGrad;
       ctx.lineWidth = 2;
       roundRect(ctx, 1, 1, CANVAS_W - 2, CANVAS_H - 2, 16);
       ctx.stroke();
+      ctx.shadowBlur = 0;
+      // Inner highlight line
+      ctx.strokeStyle = "rgba(255,255,255,0.04)";
+      ctx.lineWidth = 1;
+      roundRect(ctx, 3, 3, CANVAS_W - 6, CANVAS_H - 6, 14);
+      ctx.stroke();
+      ctx.restore();
 
       // Draw reels
       const reelAreaY = HEADER_H + FRAME_PAD;
       for (let r = 0; r < NUM_REELS; r++) {
         const rx = FRAME_PAD + r * (REEL_W + REEL_GAP);
 
-        // Reel background
-        ctx.fillStyle = "rgba(0,0,0,0.4)";
+        // Reel background — layered depth
+        const reelBg = ctx.createLinearGradient(rx, reelAreaY, rx, reelAreaY + VISIBLE_H);
+        reelBg.addColorStop(0, "rgba(0,0,0,0.5)");
+        reelBg.addColorStop(0.5, "rgba(5,3,15,0.45)");
+        reelBg.addColorStop(1, "rgba(0,0,0,0.5)");
+        ctx.fillStyle = reelBg;
         roundRect(ctx, rx, reelAreaY, REEL_W, VISIBLE_H, 8);
         ctx.fill();
 
-        ctx.strokeStyle = "rgba(255,255,255,0.06)";
+        // Reel inner shadow
+        const innerShadow = ctx.createLinearGradient(rx, reelAreaY, rx + REEL_W, reelAreaY);
+        innerShadow.addColorStop(0, "rgba(0,0,0,0.2)");
+        innerShadow.addColorStop(0.15, "rgba(0,0,0,0)");
+        innerShadow.addColorStop(0.85, "rgba(0,0,0,0)");
+        innerShadow.addColorStop(1, "rgba(0,0,0,0.2)");
+        ctx.fillStyle = innerShadow;
+        ctx.fillRect(rx, reelAreaY, REEL_W, VISIBLE_H);
+
+        // Reel border — subtle highlight
+        ctx.strokeStyle = "rgba(255,255,255,0.07)";
         ctx.lineWidth = 1;
         roundRect(ctx, rx, reelAreaY, REEL_W, VISIBLE_H, 8);
         ctx.stroke();
@@ -211,10 +257,16 @@ export default function SlotCanvas({
           const totalHeight = strip.length * CELL_H;
           const offset = Math.min(eased, 1.0) * (totalHeight - VISIBLE_H);
 
-          // Motion blur — stronger during fast phase, fades smoothly
+          // Motion blur — layered: CSS blur + transparency trails
+          const spinSpeed = progress < 0.65 ? Math.sin((progress / 0.65) * Math.PI) : 0;
           if (progress > 0.02 && progress < 0.65) {
-            const blurAmount = Math.sin((progress / 0.65) * Math.PI) * 3;
-            ctx.filter = `blur(${blurAmount}px)`;
+            ctx.filter = `blur(${spinSpeed * 4}px)`;
+            // Speed lines — vertical streaks for motion feel
+            ctx.fillStyle = `rgba(150, 130, 255, ${spinSpeed * 0.04})`;
+            for (let sl = 0; sl < 3; sl++) {
+              const slx = rx + REEL_PADDING + Math.random() * (REEL_W - REEL_PADDING * 2);
+              ctx.fillRect(slx, reelAreaY, 1, VISIBLE_H);
+            }
           }
 
           for (let i = 0; i < strip.length; i++) {
