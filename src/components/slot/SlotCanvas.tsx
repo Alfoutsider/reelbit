@@ -2,18 +2,18 @@
  * SlotCanvas — Premium Canvas-rendered 5-reel slot machine.
  * Renders reels, animations, particles, and effects at 60fps.
  */
-import { useRef, useEffect, useState, useCallback } from "react";
+import { useRef, useEffect } from "react";
 import {
   SYMBOLS, NUM_REELS, NUM_ROWS, PAYLINES,
-  generateGrid, evaluateWins, countBonusSymbols, shouldAnticipate,
+  generateGrid, evaluateWins, shouldAnticipate,
   weightedRandomSymbol,
   type SymbolDef, type WinResult,
 } from "./SlotEngine";
 import {
-  easeOutExpo,
-  createWinParticles, updateParticles,
+  easeOutExpo, easeOutBack,
+  createWinParticles, updateParticles, drawParticle,
   createAmbientParticles, updateAmbientParticles,
-  getShakeOffset,
+  getShakeOffset, drawAnticipationEffect, drawWinHighlight,
   type Particle, type AmbientParticle, type ShakeState,
 } from "./AnimationManager";
 import { getSymbolCanvas } from "./SymbolRenderer";
@@ -21,7 +21,7 @@ import { getSymbolCanvas } from "./SymbolRenderer";
 // Layout
 const REEL_PADDING = 6;
 const SYMBOL_SIZE = 90;
-const SYMBOL_RENDER_SIZE = 128; // cached canvas size
+const SYMBOL_RENDER_SIZE = 128;
 const GAP = 4;
 const CELL_H = SYMBOL_SIZE + GAP;
 const REEL_W = SYMBOL_SIZE + REEL_PADDING * 2;
@@ -35,10 +35,11 @@ const CANVAS_W = NUM_REELS * REEL_W + (NUM_REELS - 1) * REEL_GAP + FRAME_PAD * 2
 const CANVAS_H = VISIBLE_H + FRAME_PAD * 2 + HEADER_H + FOOTER_H;
 
 // Spin config
-const BASE_SPIN_DURATION = 1200; // ms
-const REEL_DELAY = 150; // ms between each reel stop
-const EXTRA_SYMBOLS = 20; // symbols per reel during spin
-const ANTICIPATION_EXTRA_DELAY = 800; // ms extra for last reel
+const BASE_SPIN_DURATION = 1200;
+const REEL_DELAY = 150;
+const EXTRA_SYMBOLS = 20;
+const ANTICIPATION_EXTRA_DELAY = 1000;
+const BOUNCE_DURATION = 24;
 
 interface SlotCanvasProps {
   bet: number;
@@ -58,10 +59,8 @@ export default function SlotCanvas({
   const animFrameRef = useRef<number>(0);
   const dprRef = useRef(1);
 
-  // State refs (avoid re-render during animation loop)
   const gridRef = useRef<SymbolDef[][]>(generateGrid());
   const targetGridRef = useRef<SymbolDef[][]>(generateGrid());
-  const reelPhaseRef = useRef<number[]>(Array(NUM_REELS).fill(0)); // 0=idle, >0=spinning progress
   const reelStartTimeRef = useRef<number[]>(Array(NUM_REELS).fill(0));
   const reelStoppedRef = useRef<boolean[]>(Array(NUM_REELS).fill(true));
   const spinActiveRef = useRef(false);
@@ -70,16 +69,14 @@ export default function SlotCanvas({
   const shakeRef = useRef<ShakeState>({ active: false, intensity: 0, duration: 0, elapsed: 0 });
   const winResultsRef = useRef<WinResult[]>([]);
   const winFlashRef = useRef(0);
-  const bounceRef = useRef<Map<string, number>>(new Map()); // "reel_row" -> bounce progress
+  const bounceRef = useRef<Map<string, number>>(new Map());
   const lightSweepRef = useRef(0);
   const anticipateRef = useRef(false);
-
-  // Random symbol strips for each reel (generated on spin start)
   const reelStripsRef = useRef<SymbolDef[][]>(Array(NUM_REELS).fill([]));
-
   const timeRef = useRef(0);
+  // Track reel-stop bounce (overshoot then settle)
+  const reelBounceRef = useRef<number[]>(Array(NUM_REELS).fill(-1)); // -1 = inactive
 
-  // Initialize ambient particles
   useEffect(() => {
     const dpr = window.devicePixelRatio || 1;
     dprRef.current = dpr;
@@ -87,7 +84,7 @@ export default function SlotCanvas({
     if (!canvas) return;
     canvas.width = CANVAS_W * dpr;
     canvas.height = CANVAS_H * dpr;
-    ambientRef.current = createAmbientParticles(CANVAS_W, CANVAS_H, 30);
+    ambientRef.current = createAmbientParticles(CANVAS_W, CANVAS_H, 40);
   }, []);
 
   // Spin trigger
@@ -101,14 +98,13 @@ export default function SlotCanvas({
     winResultsRef.current = [];
     winFlashRef.current = 0;
     bounceRef.current.clear();
+    reelBounceRef.current = Array(NUM_REELS).fill(-1);
 
-    // Generate random strips for each reel
     for (let r = 0; r < NUM_REELS; r++) {
       const strip: SymbolDef[] = [];
       for (let i = 0; i < EXTRA_SYMBOLS; i++) {
         strip.push(weightedRandomSymbol());
       }
-      // Final 3 symbols are the target
       strip.push(...target[r]);
       reelStripsRef.current[r] = strip;
       reelStoppedRef.current[r] = false;
@@ -157,11 +153,11 @@ export default function SlotCanvas({
       }
 
       // Light sweep
-      lightSweepRef.current = (lightSweepRef.current + 0.003) % 1;
+      lightSweepRef.current = (lightSweepRef.current + 0.004) % 1;
       const sweepX = lightSweepRef.current * (CANVAS_W + 200) - 100;
-      const sweepGrad = ctx.createLinearGradient(sweepX - 60, 0, sweepX + 60, 0);
+      const sweepGrad = ctx.createLinearGradient(sweepX - 80, 0, sweepX + 80, 0);
       sweepGrad.addColorStop(0, "rgba(255,255,255,0)");
-      sweepGrad.addColorStop(0.5, "rgba(255,255,255,0.03)");
+      sweepGrad.addColorStop(0.5, "rgba(255,255,255,0.04)");
       sweepGrad.addColorStop(1, "rgba(255,255,255,0)");
       ctx.fillStyle = sweepGrad;
       ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
@@ -186,23 +182,19 @@ export default function SlotCanvas({
         roundRect(ctx, rx, reelAreaY, REEL_W, VISIBLE_H, 8);
         ctx.fill();
 
-        // Reel border
         ctx.strokeStyle = "rgba(255,255,255,0.06)";
         ctx.lineWidth = 1;
         roundRect(ctx, rx, reelAreaY, REEL_W, VISIBLE_H, 8);
         ctx.stroke();
 
-        // Clip to reel area
+        // Clip
         ctx.save();
         ctx.beginPath();
         roundRect(ctx, rx, reelAreaY, REEL_W, VISIBLE_H, 8);
         ctx.clip();
 
         if (!reelStoppedRef.current[r] && spinActiveRef.current) {
-          // Spinning reel
           const startTime = reelStartTimeRef.current[r];
-
-          // Check anticipation: slow last reel if 2+ bonus in first 4
           let duration = BASE_SPIN_DURATION + r * REEL_DELAY;
           if (r === NUM_REELS - 1 && anticipateRef.current) {
             duration += ANTICIPATION_EXTRA_DELAY;
@@ -210,18 +202,21 @@ export default function SlotCanvas({
 
           const elapsed = now - startTime;
           const progress = Math.min(elapsed / duration, 1);
-          const eased = easeOutExpo(progress);
+          // Use easeOutBack for overshoot feel on the last 30%
+          const eased = progress < 0.7
+            ? easeOutExpo(progress / 0.7) * 0.85
+            : 0.85 + easeOutBack((progress - 0.7) / 0.3) * 0.15;
 
           const strip = reelStripsRef.current[r];
           const totalHeight = strip.length * CELL_H;
-          const offset = eased * (totalHeight - VISIBLE_H);
+          const offset = Math.min(eased, 1.0) * (totalHeight - VISIBLE_H);
 
-          // Motion blur
-          if (progress < 0.7 && progress > 0.05) {
-            ctx.filter = `blur(${Math.sin(progress * Math.PI) * 2}px)`;
+          // Motion blur — stronger during fast phase, fades smoothly
+          if (progress > 0.02 && progress < 0.65) {
+            const blurAmount = Math.sin((progress / 0.65) * Math.PI) * 3;
+            ctx.filter = `blur(${blurAmount}px)`;
           }
 
-          // Draw strip
           for (let i = 0; i < strip.length; i++) {
             const sy = i * CELL_H - offset;
             if (sy > -CELL_H && sy < VISIBLE_H + CELL_H) {
@@ -230,93 +225,116 @@ export default function SlotCanvas({
                 symCanvas,
                 rx + REEL_PADDING,
                 reelAreaY + sy + (CELL_H - SYMBOL_SIZE) / 2,
-                SYMBOL_SIZE,
-                SYMBOL_SIZE
+                SYMBOL_SIZE, SYMBOL_SIZE
               );
             }
           }
-
           ctx.filter = "none";
 
-          // Check if this reel is done
           if (progress >= 1) {
             reelStoppedRef.current[r] = true;
+            reelBounceRef.current[r] = 0; // start bounce animation
             gridRef.current[r] = targetGridRef.current[r];
 
-            // Check anticipation after reel 3 stops
             if (r === 3) {
               anticipateRef.current = shouldAnticipate(targetGridRef.current, 4);
             }
 
-            // All reels done?
             if (reelStoppedRef.current.every(Boolean)) {
               spinActiveRef.current = false;
-              // Evaluate wins
               const wins = evaluateWins(targetGridRef.current, bet);
               winResultsRef.current = wins;
               const totalWin = wins.reduce((s, w) => s + w.payout, 0);
 
               if (totalWin > 0) {
-                winFlashRef.current = 60;
-                onWin(totalWin, totalWin >= bet * 20);
+                winFlashRef.current = 90; // longer flash for premium feel
 
-                // Particles per winning symbol
                 for (const w of wins) {
                   for (let wr = 0; wr < w.count; wr++) {
                     const px = FRAME_PAD + wr * (REEL_W + REEL_GAP) + REEL_W / 2;
                     const py = reelAreaY + w.positions[wr] * CELL_H + CELL_H / 2;
                     particlesRef.current.push(
-                      ...createWinParticles(px, py, 12, w.symbol.color)
+                      ...createWinParticles(px, py, 16, w.symbol.color)
                     );
                     bounceRef.current.set(`${wr}_${w.positions[wr]}`, 0);
                   }
                 }
 
-                // Screen shake for big wins
                 if (totalWin >= bet * 10) {
-                  shakeRef.current = { active: true, intensity: 6, duration: 20, elapsed: 0 };
+                  shakeRef.current = { active: true, intensity: 8, duration: 30, elapsed: 0 };
+                } else if (totalWin >= bet * 3) {
+                  shakeRef.current = { active: true, intensity: 3, duration: 15, elapsed: 0 };
                 }
-              }
 
+                onWin(totalWin, totalWin >= bet * 20);
+              }
               onSpinEnd();
             }
           }
         } else {
-          // Static reel - draw current grid
+          // Static reel — draw with bounce and win highlights
           const currentGrid = gridRef.current[r];
+          
+          // Reel-stop bounce offset (whole reel bounces on stop)
+          let reelBounceOff = 0;
+          if (reelBounceRef.current[r] >= 0) {
+            const bp = reelBounceRef.current[r];
+            reelBounceRef.current[r]++;
+            if (bp < BOUNCE_DURATION) {
+              const t = bp / BOUNCE_DURATION;
+              // Damped oscillation
+              reelBounceOff = Math.sin(t * Math.PI * 3) * (1 - t) * 6;
+            } else {
+              reelBounceRef.current[r] = -1;
+            }
+          }
+
           for (let row = 0; row < NUM_ROWS; row++) {
             const sy = row * CELL_H;
             const sym = currentGrid[row];
             const bounceKey = `${r}_${row}`;
-            let bounceOff = 0;
+            let symbolBounce = 0;
 
+            // Win symbol bounce — elastic
             if (bounceRef.current.has(bounceKey)) {
               const bp = bounceRef.current.get(bounceKey)!;
               bounceRef.current.set(bounceKey, bp + 1);
-              if (bp < 20) {
-                bounceOff = Math.sin((bp / 20) * Math.PI) * -8;
+              if (bp < 30) {
+                const t = bp / 30;
+                symbolBounce = Math.sin(t * Math.PI * 2.5) * (1 - t) * -12;
               } else {
                 bounceRef.current.delete(bounceKey);
               }
             }
 
-            // Win highlight glow
+            // Win highlight
             const isWinning = winResultsRef.current.some(
               (w) => w.positions[r] === row && r < w.count
             );
             if (isWinning && winFlashRef.current > 0) {
-              const flashAlpha = Math.sin((winFlashRef.current / 60) * Math.PI) * 0.3;
-              ctx.fillStyle = `rgba(255, 215, 0, ${flashAlpha})`;
-              ctx.fillRect(rx, reelAreaY + sy, REEL_W, CELL_H - GAP);
+              const winSym = winResultsRef.current.find(
+                (w) => w.positions[r] === row && r < w.count
+              );
+              drawWinHighlight(
+                ctx, rx, reelAreaY + sy, REEL_W, CELL_H - GAP,
+                winSym?.symbol.color ?? "#FFD700",
+                winFlashRef.current / 90
+              );
             }
 
             const symCanvas = getSymbolCanvas(sym, SYMBOL_RENDER_SIZE);
+            // Win symbols scale up slightly
+            const scale = isWinning && winFlashRef.current > 0
+              ? 1 + Math.sin((winFlashRef.current / 90) * Math.PI * 3) * 0.06
+              : 1;
+            const drawSize = SYMBOL_SIZE * scale;
+            const drawOffset = (SYMBOL_SIZE - drawSize) / 2;
+
             ctx.drawImage(
               symCanvas,
-              rx + REEL_PADDING,
-              reelAreaY + sy + (CELL_H - SYMBOL_SIZE) / 2 + bounceOff,
-              SYMBOL_SIZE,
-              SYMBOL_SIZE
+              rx + REEL_PADDING + drawOffset,
+              reelAreaY + sy + (CELL_H - SYMBOL_SIZE) / 2 + symbolBounce + reelBounceOff + drawOffset,
+              drawSize, drawSize
             );
           }
         }
@@ -324,7 +342,7 @@ export default function SlotCanvas({
         ctx.restore();
 
         // Top/bottom reel fade masks
-        const fadeH = 15;
+        const fadeH = 18;
         const topFade = ctx.createLinearGradient(0, reelAreaY, 0, reelAreaY + fadeH);
         topFade.addColorStop(0, "#0d0a1a");
         topFade.addColorStop(1, "rgba(13,10,26,0)");
@@ -342,9 +360,24 @@ export default function SlotCanvas({
       if (winFlashRef.current > 0) {
         winFlashRef.current--;
         for (const w of winResultsRef.current) {
-          ctx.strokeStyle = w.symbol.color + "80";
-          ctx.lineWidth = 2;
-          ctx.setLineDash([4, 4]);
+          // Animated dash offset
+          const dashOffset = timeRef.current * 2;
+          ctx.strokeStyle = w.symbol.color + "90";
+          ctx.lineWidth = 2.5;
+          ctx.setLineDash([6, 4]);
+          ctx.lineDashOffset = dashOffset;
+          ctx.beginPath();
+          for (let wr = 0; wr < w.count; wr++) {
+            const px = FRAME_PAD + wr * (REEL_W + REEL_GAP) + REEL_W / 2;
+            const py = reelAreaY + w.positions[wr] * CELL_H + CELL_H / 2;
+            if (wr === 0) ctx.moveTo(px, py);
+            else ctx.lineTo(px, py);
+          }
+          ctx.stroke();
+          // Glow line
+          ctx.strokeStyle = w.symbol.color + "30";
+          ctx.lineWidth = 6;
+          ctx.setLineDash([]);
           ctx.beginPath();
           for (let wr = 0; wr < w.count; wr++) {
             const px = FRAME_PAD + wr * (REEL_W + REEL_GAP) + REEL_W / 2;
@@ -357,33 +390,39 @@ export default function SlotCanvas({
         }
       }
 
-      // Particles
+      // Particles — premium rendering
       particlesRef.current = updateParticles(particlesRef.current);
       for (const p of particlesRef.current) {
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-        ctx.fillStyle = p.color + Math.floor(p.alpha * 255).toString(16).padStart(2, "0");
-        ctx.fill();
+        drawParticle(ctx, p);
       }
 
       // Center payline marker
       const lineY = reelAreaY + 1 * CELL_H + CELL_H / 2;
-      ctx.strokeStyle = "rgba(255,215,0,0.15)";
+      ctx.strokeStyle = "rgba(255,215,0,0.12)";
       ctx.lineWidth = 1;
-      ctx.setLineDash([6, 6]);
+      ctx.setLineDash([8, 6]);
       ctx.beginPath();
       ctx.moveTo(FRAME_PAD - 4, lineY);
       ctx.lineTo(CANVAS_W - FRAME_PAD + 4, lineY);
       ctx.stroke();
       ctx.setLineDash([]);
 
-      // Anticipation glow on last reel
+      // Payline arrows
+      for (const side of [-1, 1]) {
+        const ax = side === -1 ? FRAME_PAD - 8 : CANVAS_W - FRAME_PAD + 8;
+        ctx.fillStyle = "rgba(255,215,0,0.25)";
+        ctx.beginPath();
+        ctx.moveTo(ax, lineY - 5);
+        ctx.lineTo(ax + side * 6, lineY);
+        ctx.lineTo(ax, lineY + 5);
+        ctx.closePath();
+        ctx.fill();
+      }
+
+      // Anticipation effect on last reel
       if (anticipateRef.current && !reelStoppedRef.current[NUM_REELS - 1]) {
         const lastReelX = FRAME_PAD + (NUM_REELS - 1) * (REEL_W + REEL_GAP);
-        const glowAlpha = 0.15 + Math.sin(timeRef.current * 0.15) * 0.1;
-        ctx.fillStyle = `rgba(0, 255, 136, ${glowAlpha})`;
-        roundRect(ctx, lastReelX, reelAreaY, REEL_W, VISIBLE_H, 8);
-        ctx.fill();
+        drawAnticipationEffect(ctx, lastReelX, reelAreaY, REEL_W, VISIBLE_H, timeRef.current);
       }
 
       ctx.restore();
@@ -407,7 +446,6 @@ export default function SlotCanvas({
   );
 }
 
-/** Helper to draw rounded rect path */
 function roundRect(
   ctx: CanvasRenderingContext2D,
   x: number, y: number, w: number, h: number, r: number
