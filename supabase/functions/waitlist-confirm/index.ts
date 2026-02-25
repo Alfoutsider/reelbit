@@ -1,11 +1,31 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
+const allowedOrigins = [
+  "https://reelbit.lovable.app",
+  "https://reelbit.fun",
+  "https://id-preview--6c4ba71d-52e1-44c0-8e47-6f68383e1d33.lovable.app",
+];
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type",
 };
+
+const rateLimitStore = new Map<string, { count: number; resetAt: number }>();
+
+function checkRateLimit(identifier: string, maxRequests: number, windowMs: number): boolean {
+  const now = Date.now();
+  const record = rateLimitStore.get(identifier);
+  if (!record || now > record.resetAt) {
+    rateLimitStore.set(identifier, { count: 1, resetAt: now + windowMs });
+    return true;
+  }
+  if (record.count >= maxRequests) return false;
+  record.count++;
+  return true;
+}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -13,6 +33,23 @@ serve(async (req) => {
   }
 
   try {
+    // Origin validation
+    const origin = req.headers.get("origin");
+    if (origin && !allowedOrigins.includes(origin)) {
+      return new Response(
+        JSON.stringify({ error: "Unauthorized" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Rate limiting: 10 requests per IP per 5 minutes
+    const clientIp = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+    if (!checkRateLimit(clientIp, 10, 300000)) {
+      return new Response(
+        JSON.stringify({ error: "Too many requests. Please try again later." }),
+        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
     const url = new URL(req.url);
     const token = url.searchParams.get("token");
 
