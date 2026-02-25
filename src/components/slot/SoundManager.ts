@@ -7,6 +7,13 @@ let audioCtx: AudioContext | null = null;
 let masterGain: GainNode | null = null;
 let muted = false;
 
+// Ambient state
+let ambientGain: GainNode | null = null;
+let ambientOscs: OscillatorNode[] = [];
+let ambientNoiseSource: AudioBufferSourceNode | null = null;
+let ambientPlaying = false;
+let ambientVolume = 0.5; // 0-1 user control
+
 function getCtx(): AudioContext {
   if (!audioCtx) {
     audioCtx = new AudioContext();
@@ -26,10 +33,179 @@ function getMaster(): GainNode {
 export function setMuted(m: boolean) {
   muted = m;
   if (masterGain) masterGain.gain.value = m ? 0 : 0.35;
+  if (ambientGain) {
+    ambientGain.gain.setTargetAtTime(m ? 0 : ambientVolume * 0.12, getCtx().currentTime, 0.3);
+  }
 }
 
 export function isMuted(): boolean {
   return muted;
+}
+
+// ── AMBIENT SOUNDTRACK ──
+
+/** Start the ambient volcanic drone loop */
+export function startAmbient() {
+  if (ambientPlaying) return;
+  const ctx = getCtx();
+  ambientPlaying = true;
+
+  // Ambient gain node (separate from master for independent volume)
+  ambientGain = ctx.createGain();
+  ambientGain.gain.value = 0;
+  ambientGain.connect(ctx.destination);
+  // Fade in
+  ambientGain.gain.setTargetAtTime(muted ? 0 : ambientVolume * 0.12, ctx.currentTime, 1.0);
+
+  // Deep drone — root note with subtle movement
+  const drone1 = ctx.createOscillator();
+  drone1.type = "sine";
+  drone1.frequency.value = 55; // A1 — deep bass
+  const drone1Gain = ctx.createGain();
+  drone1Gain.gain.value = 0.35;
+  drone1.connect(drone1Gain);
+  drone1Gain.connect(ambientGain);
+  drone1.start();
+  ambientOscs.push(drone1);
+
+  // Second drone — perfect fifth
+  const drone2 = ctx.createOscillator();
+  drone2.type = "sine";
+  drone2.frequency.value = 82.4; // E2
+  const drone2Gain = ctx.createGain();
+  drone2Gain.gain.value = 0.2;
+  drone2.connect(drone2Gain);
+  drone2Gain.connect(ambientGain);
+  drone2.start();
+  ambientOscs.push(drone2);
+
+  // Warm pad — triangle wave with slow LFO modulation
+  const pad = ctx.createOscillator();
+  pad.type = "triangle";
+  pad.frequency.value = 110; // A2
+  const padGain = ctx.createGain();
+  padGain.gain.value = 0.08;
+  // LFO for pad tremolo
+  const lfo = ctx.createOscillator();
+  lfo.type = "sine";
+  lfo.frequency.value = 0.15; // Very slow
+  const lfoGain = ctx.createGain();
+  lfoGain.gain.value = 0.04;
+  lfo.connect(lfoGain);
+  lfoGain.connect(padGain.gain);
+  lfo.start();
+  pad.connect(padGain);
+  padGain.connect(ambientGain);
+  pad.start();
+  ambientOscs.push(pad, lfo);
+
+  // Eerie high harmonic
+  const harmonic = ctx.createOscillator();
+  harmonic.type = "sine";
+  harmonic.frequency.value = 330; // E4
+  const harmGain = ctx.createGain();
+  harmGain.gain.value = 0.02;
+  // Slow pitch wobble
+  const wobble = ctx.createOscillator();
+  wobble.type = "sine";
+  wobble.frequency.value = 0.08;
+  const wobbleGain = ctx.createGain();
+  wobbleGain.gain.value = 3;
+  wobble.connect(wobbleGain);
+  wobbleGain.connect(harmonic.frequency);
+  wobble.start();
+  harmonic.connect(harmGain);
+  harmGain.connect(ambientGain);
+  harmonic.start();
+  ambientOscs.push(harmonic, wobble);
+
+  // Dark minor third — haunting flavor
+  const minor = ctx.createOscillator();
+  minor.type = "sine";
+  minor.frequency.value = 130.8; // C3 (minor third of A)
+  const minorGain = ctx.createGain();
+  minorGain.gain.value = 0.03;
+  // Slow fade in/out via LFO
+  const minorLfo = ctx.createOscillator();
+  minorLfo.type = "sine";
+  minorLfo.frequency.value = 0.05;
+  const minorLfoGain = ctx.createGain();
+  minorLfoGain.gain.value = 0.02;
+  minorLfo.connect(minorLfoGain);
+  minorLfoGain.connect(minorGain.gain);
+  minorLfo.start();
+  minor.connect(minorGain);
+  minorGain.connect(ambientGain);
+  minor.start();
+  ambientOscs.push(minor, minorLfo);
+
+  // Filtered noise — volcanic rumble
+  const noiseLen = 4;
+  const bufferSize = ctx.sampleRate * noiseLen;
+  const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+  
+  const noise = ctx.createBufferSource();
+  noise.buffer = buffer;
+  noise.loop = true;
+  
+  const lpf = ctx.createBiquadFilter();
+  lpf.type = "lowpass";
+  lpf.frequency.value = 200;
+  lpf.Q.value = 1;
+  
+  // Slow filter sweep for movement
+  const filterLfo = ctx.createOscillator();
+  filterLfo.type = "sine";
+  filterLfo.frequency.value = 0.07;
+  const filterLfoGain = ctx.createGain();
+  filterLfoGain.gain.value = 80;
+  filterLfo.connect(filterLfoGain);
+  filterLfoGain.connect(lpf.frequency);
+  filterLfo.start();
+  ambientOscs.push(filterLfo);
+  
+  const noiseGain = ctx.createGain();
+  noiseGain.gain.value = 0.15;
+  noise.connect(lpf);
+  lpf.connect(noiseGain);
+  noiseGain.connect(ambientGain);
+  noise.start();
+  ambientNoiseSource = noise;
+}
+
+/** Stop the ambient soundtrack with fade out */
+export function stopAmbient() {
+  if (!ambientPlaying || !ambientGain) return;
+  const ctx = getCtx();
+  ambientGain.gain.setTargetAtTime(0, ctx.currentTime, 0.8);
+  
+  // Clean up after fade
+  setTimeout(() => {
+    ambientOscs.forEach(o => { try { o.stop(); } catch {} });
+    ambientOscs = [];
+    if (ambientNoiseSource) { try { ambientNoiseSource.stop(); } catch {} }
+    ambientNoiseSource = null;
+    ambientGain = null;
+    ambientPlaying = false;
+  }, 3000);
+}
+
+/** Set ambient volume 0-1 */
+export function setAmbientVolume(vol: number) {
+  ambientVolume = Math.max(0, Math.min(1, vol));
+  if (ambientGain && !muted) {
+    ambientGain.gain.setTargetAtTime(ambientVolume * 0.12, getCtx().currentTime, 0.1);
+  }
+}
+
+export function getAmbientVolume(): number {
+  return ambientVolume;
+}
+
+export function isAmbientPlaying(): boolean {
+  return ambientPlaying;
 }
 
 /** Quick oscillator helper */

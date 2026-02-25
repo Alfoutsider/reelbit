@@ -9,6 +9,7 @@ import {
   playSpin, playWin, playBigWin, playSuperWin,
   playFreeSpinsTrigger, playBuyFeature, playClick,
   setMuted, isMuted,
+  startAmbient, stopAmbient, setAmbientVolume, getAmbientVolume, isAmbientPlaying,
 } from "./slot/SoundManager";
 
 const BET_OPTIONS = [1, 5, 10, 25, 50];
@@ -233,6 +234,8 @@ const SlotDemoSection = () => {
   const [bigWinOverlay, setBigWinOverlay] = useState<{ amount: number; tier: string } | null>(null);
   const [freeSpinsIntro, setFreeSpinsIntro] = useState<number | null>(null);
   const [soundOn, setSoundOn] = useState(true);
+  const [ambientOn, setAmbientOn] = useState(false);
+  const [ambientVol, setAmbientVol] = useState(0.5);
   const autoSpinRef = useRef<NodeJS.Timeout>();
 
   const handleSpin = useCallback(() => {
@@ -325,6 +328,22 @@ const SlotDemoSection = () => {
     setSoundOn(newState);
     setMuted(!newState);
   }, [soundOn]);
+
+  const toggleAmbient = useCallback(() => {
+    if (ambientOn) {
+      stopAmbient();
+      setAmbientOn(false);
+    } else {
+      startAmbient();
+      setAmbientOn(true);
+    }
+  }, [ambientOn]);
+
+  const handleAmbientVolume = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const vol = parseFloat(e.target.value);
+    setAmbientVol(vol);
+    setAmbientVolume(vol);
+  }, []);
 
   useEffect(() => {
     if (autoSpin && !spinning && !bigWinOverlay && !freeSpinsIntro) {
@@ -465,7 +484,8 @@ const SlotDemoSection = () => {
                   </div>
                   <span className="font-orbitron font-bold text-sm tracking-wider" style={{ color: "#FFD700" }}>DRAGON'S INFERNO</span>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
+                  {/* Sound toggle */}
                   <button
                     onClick={toggleSound}
                     className="w-7 h-7 flex items-center justify-center rounded-md transition-all"
@@ -474,7 +494,7 @@ const SlotDemoSection = () => {
                       border: "1px solid rgba(255,255,255,0.1)",
                       color: soundOn ? "#FFD700" : "rgba(255,255,255,0.25)",
                     }}
-                    title={soundOn ? "Mute" : "Unmute"}
+                    title={soundOn ? "Mute SFX" : "Unmute SFX"}
                   >
                     {soundOn ? (
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -490,8 +510,45 @@ const SlotDemoSection = () => {
                       </svg>
                     )}
                   </button>
-                  <span className="text-muted-foreground text-xs font-inter">20 Paylines</span>
-                  <span className="text-muted-foreground text-xs font-inter">Tumble</span>
+
+                  {/* Ambient music toggle */}
+                  <button
+                    onClick={toggleAmbient}
+                    className="w-7 h-7 flex items-center justify-center rounded-md transition-all"
+                    style={{
+                      background: ambientOn ? "rgba(255,100,0,0.15)" : "rgba(255,255,255,0.05)",
+                      border: ambientOn ? "1px solid rgba(255,150,0,0.4)" : "1px solid rgba(255,255,255,0.1)",
+                      color: ambientOn ? "#FF8800" : "rgba(255,255,255,0.25)",
+                    }}
+                    title={ambientOn ? "Stop Music" : "Play Music"}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M9 18V5l12-2v13" />
+                      <circle cx="6" cy="18" r="3" />
+                      <circle cx="18" cy="16" r="3" />
+                    </svg>
+                  </button>
+
+                  {/* Volume slider */}
+                  {ambientOn && (
+                    <input
+                      type="range"
+                      min="0"
+                      max="1"
+                      step="0.05"
+                      value={ambientVol}
+                      onChange={handleAmbientVolume}
+                      className="w-16 h-1 appearance-none rounded-full cursor-pointer"
+                      style={{
+                        background: `linear-gradient(to right, #FF8800 ${ambientVol * 100}%, rgba(255,255,255,0.1) ${ambientVol * 100}%)`,
+                        accentColor: "#FF8800",
+                      }}
+                      title={`Music volume: ${Math.round(ambientVol * 100)}%`}
+                    />
+                  )}
+
+                  <span className="text-muted-foreground text-xs font-inter hidden sm:inline">20 Paylines</span>
+                  <span className="text-muted-foreground text-xs font-inter hidden sm:inline">Tumble</span>
                   <span className="text-xs font-inter px-2 py-0.5 rounded" style={{
                     backgroundColor: "rgba(255,60,0,0.15)",
                     color: "#FF6600",
