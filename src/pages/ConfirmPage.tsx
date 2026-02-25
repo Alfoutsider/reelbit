@@ -142,7 +142,7 @@ const ConfirmPage = () => {
               <div className="flex items-center justify-between pt-2 border-t border-white/5">
                 <span className="text-white/40 text-xs font-inter">Your referrals</span>
                 <span className="font-orbitron font-bold text-neon-gold text-lg">
-                  {data.referral_count}
+                  {data.referral_count != null ? data.referral_count : 0}
                 </span>
               </div>
             </div>
