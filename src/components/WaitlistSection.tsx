@@ -4,10 +4,11 @@ import { supabase } from "@/integrations/supabase/client";
 const BENEFITS = [
   "Early access to AI slot builder — months before public launch",
   "Bonus founder allocation on your first bonding curve",
-  "Priority placement & visibility in ReelBit Casino",
-  "Lifetime higher revenue share (45% vs 35% standard)",
-  "Exclusive founder NFT badge displayed on your slot",
-  "Join the revolution before public launch — first mover advantage",
+  "Priority placement and visibility in ReelBit Casino",
+  "+5% revenue boost for your first 6 months (35% vs 30% standard)",
+  "Exclusive founder badge displayed on your slot",
+  "Referral rewards — earn 2% of referred creators' revenue for 3 months",
+  "First mover advantage before public launch",
 ];
 
 const WaitlistSection = () => {
@@ -96,26 +97,49 @@ const WaitlistSection = () => {
               ))}
             </ul>
 
-            {/* Counter */}
-            <div className="mt-10 glass-card p-5 inline-flex items-center gap-4">
-              <div className="flex -space-x-2">
-                {["🎭", "👾", "🤖", "🎯"].map((emoji, i) => (
-                  <div
-                    key={i}
-                    className="w-9 h-9 rounded-full flex items-center justify-center text-sm border-2 border-black"
-                    style={{ background: `hsl(${220 + i * 30} 50% 15%)` }}
-                  >
-                    {emoji}
-                  </div>
-                ))}
-              </div>
-              <div>
-                <div className="font-orbitron font-bold text-white text-lg">
-                  5,000+{" "}
-                  <span className="neon-text-cyan text-sm font-semibold">creators</span>
+            {/* Referral highlight */}
+            <div className="mt-10 glass-card p-5 space-y-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-neon-magenta/10 border border-neon-magenta/30 flex items-center justify-center">
+                  <svg className="w-5 h-5 text-neon-magenta" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                    <circle cx="9" cy="7" r="4" />
+                    <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+                    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                  </svg>
                 </div>
-                <div className="text-white/40 text-xs font-inter">
-                  Already on the waitlist — limited spots remain
+                <div>
+                  <div className="font-orbitron font-bold text-white text-sm">
+                    Refer &amp; Earn
+                  </div>
+                  <div className="text-white/40 text-xs font-inter">
+                    Invite creators and earn 2% of their slot revenue for 3 months
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-4">
+                <div className="flex -space-x-2">
+                  {[0, 1, 2, 3].map((i) => (
+                    <div
+                      key={i}
+                      className="w-8 h-8 rounded-full border-2 border-black flex items-center justify-center"
+                      style={{ background: `hsl(${220 + i * 30} 50% 15%)` }}
+                    >
+                      <svg className="w-4 h-4 text-white/40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <circle cx="12" cy="7" r="4" />
+                        <path d="M5.5 21v-2a6.5 6.5 0 0 1 13 0v2" />
+                      </svg>
+                    </div>
+                  ))}
+                </div>
+                <div>
+                  <div className="font-orbitron font-bold text-white text-lg">
+                    5,000+{" "}
+                    <span className="neon-text-cyan text-sm font-semibold">creators</span>
+                  </div>
+                  <div className="text-white/40 text-xs font-inter">
+                    Already on the waitlist
+                  </div>
                 </div>
               </div>
             </div>
@@ -132,7 +156,12 @@ const WaitlistSection = () => {
             >
               {status === "success" ? (
                 <div className="text-center py-8">
-                  <div className="text-5xl mb-4">📬</div>
+                <div className="w-14 h-14 mx-auto mb-4 rounded-full bg-neon-cyan/10 border border-neon-cyan/30 flex items-center justify-center">
+                    <svg className="w-7 h-7 text-neon-cyan" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect width="20" height="16" x="2" y="4" rx="2" />
+                      <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
+                    </svg>
+                  </div>
                   <h3 className="font-orbitron font-bold text-2xl text-neon-cyan mb-3">
                     Check Your Email!
                   </h3>
@@ -141,7 +170,7 @@ const WaitlistSection = () => {
                   </p>
                   <div className="mt-6 p-3 rounded-lg bg-neon-cyan/5 border border-neon-cyan/20">
                     <p className="text-neon-cyan text-sm font-inter">
-                      📩 Click the confirmation link in your email to secure your spot
+                      Click the confirmation link in your email to secure your spot
                     </p>
                   </div>
                   <button
@@ -202,19 +231,19 @@ const WaitlistSection = () => {
                       disabled={status === "loading" || !email}
                       className="btn-primary w-full py-4 rounded-xl text-base disabled:opacity-50 disabled:cursor-not-allowed mt-2"
                     >
-                      {status === "loading" ? "⟳ Joining..." : "🚀 Join Waitlist — It's Free"}
+                      {status === "loading" ? "Joining..." : "Join Waitlist -- It's Free"}
                     </button>
                   </form>
 
                   {/* Trust signals */}
                   <div className="mt-6 pt-6 border-t border-white/5 grid grid-cols-3 gap-4 text-center">
                     {[
-                      { icon: "🔒", label: "No spam" },
-                      { icon: "📬", label: "Email confirm" },
-                      { icon: "💎", label: "Bonus perks" },
+                      { label: "No spam", icon: <svg className="w-5 h-5 text-neon-cyan" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect width="18" height="11" x="3" y="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg> },
+                      { label: "Email confirm", icon: <svg className="w-5 h-5 text-neon-cyan" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect width="20" height="16" x="2" y="4" rx="2" /><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" /></svg> },
+                      { label: "Bonus perks", icon: <svg className="w-5 h-5 text-neon-gold" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg> },
                     ].map((item) => (
                       <div key={item.label}>
-                        <div className="text-lg">{item.icon}</div>
+                        <div className="flex justify-center">{item.icon}</div>
                         <div className="text-white/30 text-xs font-inter mt-1">{item.label}</div>
                       </div>
                     ))}
