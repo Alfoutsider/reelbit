@@ -2,16 +2,16 @@
 seeds = false
 skip-lint = false
 
-[programs.localnet]
-token_launch = "TokenLaunch111111111111111111111111111111111"
-graduation_detector = "GradDetect1111111111111111111111111111111111"
-lp_vault = "LpVault111111111111111111111111111111111111"
-harvester = "Harvester1111111111111111111111111111111111"
-distribution = "Distrib111111111111111111111111111111111111"
-shareholder_pool = "SharePool1111111111111111111111111111111111"
-jackpot_pool = "JackpotPool111111111111111111111111111111111"
-casino_grr_vault = "CasinoGRR1111111111111111111111111111111111"
-legal_reserve = "LegalReserv11111111111111111111111111111111"
+[programs.devnet]
+token_launch = "PSyJ5Noww1Td29VzMFDzfnEs6tVTu2uBf6UHiwUDboM"
+graduation_detector = "DrA2zhr24oDrSdgK4T43HFwjQjDscfNgX5hFRvPbXWXZ"
+lp_vault = "HtjSGfXNT6JSnec7gVRhjbvFZjQNVFRqbr5woGguDLq3"
+harvester = "75PMkvCvvxVDxVCXZbTtDctad34Y8drbdx771xfPKtTR"
+distribution = "Fop8hgm28VikzuKsMkCHzuKrspP4HerBgR5C7SPF4j6v"
+shareholder_pool = "6o4VtYBwFSC59x9HBQMwUDv5fMZrLEkATPHkC7avdasW"
+jackpot_pool = "C6LC5za7EurQ4Zhvf3Hz5BBgw2qayUUC4JCJTkmZY3Lc"
+casino_grr_vault = "5NzSoEATixUhRYzYgJJqvEdgZnwFtQVwnvvscruS6UqN"
+legal_reserve = "GGjD413tshawyi76MhrjeBFfVDzYK6vMHjbemWWBnCd1"
 
 [registry]
 url = "https://api.apr.dev"

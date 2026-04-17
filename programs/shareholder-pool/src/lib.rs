@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 
-declare_id!("11111111111111111111111111111111");
+declare_id!("6o4VtYBwFSC59x9HBQMwUDv5fMZrLEkATPHkC7avdasW");
 
 #[program]
 pub mod shareholder_pool {

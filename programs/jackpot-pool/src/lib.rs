@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 
-declare_id!("11111111111111111111111111111111");
+declare_id!("C6LC5za7EurQ4Zhvf3Hz5BBgw2qayUUC4JCJTkmZY3Lc");
 
 #[program]
 pub mod jackpot_pool {

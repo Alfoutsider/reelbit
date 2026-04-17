@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 
-declare_id!("11111111111111111111111111111111");
+declare_id!("Fop8hgm28VikzuKsMkCHzuKrspP4HerBgR5C7SPF4j6v");
 
 #[program]
 pub mod distribution {

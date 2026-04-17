@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 
-declare_id!("11111111111111111111111111111111");
+declare_id!("GGjD413tshawyi76MhrjeBFfVDzYK6vMHjbemWWBnCd1");
 
 #[program]
 pub mod legal_reserve {
