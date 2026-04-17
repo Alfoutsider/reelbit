@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 
-declare_id!("5NzSoEATixUhRYzYgJJqvEdgZnwFtQVwnvvscruS6UqN");
+declare_id!("C6yDo6weWztw38hBxqcfR53vwwz1qmc6xNXRyDC3HE8T");
 
 #[program]
 pub mod casino_grr_vault {

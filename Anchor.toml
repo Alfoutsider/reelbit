@@ -1,37 +1,28 @@
+[toolchain]
+
 [features]
-seeds = false
+resolution = true
 skip-lint = false
 
 [programs.devnet]
-token_launch = "PSyJ5Noww1Td29VzMFDzfnEs6tVTu2uBf6UHiwUDboM"
-graduation_detector = "DrA2zhr24oDrSdgK4T43HFwjQjDscfNgX5hFRvPbXWXZ"
-lp_vault = "HtjSGfXNT6JSnec7gVRhjbvFZjQNVFRqbr5woGguDLq3"
-harvester = "75PMkvCvvxVDxVCXZbTtDctad34Y8drbdx771xfPKtTR"
-distribution = "Fop8hgm28VikzuKsMkCHzuKrspP4HerBgR5C7SPF4j6v"
-shareholder_pool = "6o4VtYBwFSC59x9HBQMwUDv5fMZrLEkATPHkC7avdasW"
-jackpot_pool = "C6LC5za7EurQ4Zhvf3Hz5BBgw2qayUUC4JCJTkmZY3Lc"
-casino_grr_vault = "5NzSoEATixUhRYzYgJJqvEdgZnwFtQVwnvvscruS6UqN"
-legal_reserve = "GGjD413tshawyi76MhrjeBFfVDzYK6vMHjbemWWBnCd1"
-
-[registry]
-url = "https://api.apr.dev"
+casino_grr_vault = "C6yDo6weWztw38hBxqcfR53vwwz1qmc6xNXRyDC3HE8T"
+distribution = "58JoCZYPdLiixapnsYM6xXYB7Me8M6TKGXsqCewEto8v"
+graduation_detector = "HjrWDt8x46beDUP33NCzHc4VdswYKEE2axf6F2CoDxha"
+harvester = "612nmeDQ6xCRBYoML5hXog1GuYDik4JYAvW8Tihvcpj3"
+jackpot_pool = "CnsFM3xfkWZdv79kERxGfJmty9NRS9jiFEV6tMTnR9gH"
+legal_reserve = "CBtsCTSz8Ug43aPfbVCG2XJsjPzr3p6wTGu5qyVnyVc1"
+lp_vault = "5Vobh8rxWv4eMKUme9Y15C3ta3vh6y1G7MW6N87SejwL"
+shareholder_pool = "2aWNKw6Y3yTyxf1A64BvJBd3K3UJSqwymg8ncTbsirNm"
+token_launch = "HkGiTLpuij4w7ZM87ooYYn3JPy9neEaxZPwpJKU2imzu"
 
 [provider]
 cluster = "devnet"
 wallet = "~/.config/solana/id.json"
 
+[workspace]
+members = ["programs/token-launch", "programs/graduation-detector", "programs/lp-vault", "programs/harvester", "programs/distribution", "programs/shareholder-pool", "programs/jackpot-pool", "programs/casino-grr-vault", "programs/legal-reserve"]
+
 [scripts]
 test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"
 
-[workspace]
-members = [
-  "programs/token-launch",
-  "programs/graduation-detector",
-  "programs/lp-vault",
-  "programs/harvester",
-  "programs/distribution",
-  "programs/shareholder-pool",
-  "programs/jackpot-pool",
-  "programs/casino-grr-vault",
-  "programs/legal-reserve"
-]
+[hooks]

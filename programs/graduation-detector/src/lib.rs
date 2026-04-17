@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 
-declare_id!("DrA2zhr24oDrSdgK4T43HFwjQjDscfNgX5hFRvPbXWXZ");
+declare_id!("HjrWDt8x46beDUP33NCzHc4VdswYKEE2axf6F2CoDxha");
 
 #[program]
 pub mod graduation_detector {
