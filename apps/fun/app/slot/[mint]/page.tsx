@@ -1,6 +1,5 @@
 "use client";
 
-import { use } from "react";
 import { motion } from "framer-motion";
 import { ArrowLeft, ExternalLink, Copy, Zap } from "lucide-react";
 import Link from "next/link";
@@ -39,8 +38,8 @@ function timeAgo(ts: number) {
   return `${Math.floor(s / 3600)}h ago`;
 }
 
-export default function SlotPage({ params }: { params: Promise<{ mint: string }> }) {
-  const { mint } = use(params);
+export default function SlotPage({ params }: { params: { mint: string } }) {
+  const { mint } = params;
   const slot = MOCK_SLOT; // TODO: fetch by mint
   const progress = graduationProgress(slot.mcapUsd);
   const model = SLOT_MODELS.find((m) => m.id === slot.model);
