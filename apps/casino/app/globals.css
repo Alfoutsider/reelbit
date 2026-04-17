@@ -1,0 +1,11 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #080810;
+  --surface: #0f0f1a;
+}
+
+* { box-sizing: border-box; }
+body { background: var(--bg); color: white; }
