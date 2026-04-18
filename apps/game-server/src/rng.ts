@@ -27,15 +27,13 @@ export function generateReelPositions(
   return results;
 }
 
+/** Returns the strip index (position) for each reel, not the symbol. */
 export function spinReels(
   strips: SymbolId[][],
   seed: SpinSeed,
-): SymbolId[] {
+): number[] {
   const positions = generateReelPositions(seed, strips.length);
-  return strips.map((strip, i) => {
-    const idx = Math.floor(positions[i] * strip.length) % strip.length;
-    return strip[idx];
-  });
+  return strips.map((strip, i) => Math.floor(positions[i] * strip.length) % strip.length);
 }
 
 export function newServerSeed(): string {

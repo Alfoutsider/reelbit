@@ -1,13 +1,13 @@
 export const PROGRAM_IDS = {
-  tokenLaunch:         "HkGiTLpuij4w7ZM87ooYYn3JPy9neEaxZPwpJKU2imzu",
-  graduationDetector:  "HjrWDt8x46beDUP33NCzHc4VdswYKEE2axf6F2CoDxha",
-  lpVault:             "5Vobh8rxWv4eMKUme9Y15C3ta3vh6y1G7MW6N87SejwL",
-  harvester:           "612nmeDQ6xCRBYoML5hXog1GuYDik4JYAvW8Tihvcpj3",
-  distribution:        "58JoCZYPdLiixapnsYM6xXYB7Me8M6TKGXsqCewEto8v",
-  shareholderPool:     "2aWNKw6Y3yTyxf1A64BvJBd3K3UJSqwymg8ncTbsirNm",
-  jackpotPool:         "CnsFM3xfkWZdv79kERxGfJmty9NRS9jiFEV6tMTnR9gH",
-  casinoGrrVault:      "C6yDo6weWztw38hBxqcfR53vwwz1qmc6xNXRyDC3HE8T",
-  legalReserve:        "CBtsCTSz8Ug43aPfbVCG2XJsjPzr3p6wTGu5qyVnyVc1",
+  tokenLaunch:         "5vy9vYy9A6wAy59nRvvpGd5drVwQU1JYqRuSg7xQZDD8",
+  graduationDetector:  "UkSurzWXkysn6j3jGcYxKT5zzox4riJoeuPBieod5jS",
+  lpVault:             "GkafhSz23DhkebGnL3BKh2mJgFTXXLmE7PJ3rUQAwytm",
+  harvester:           "9x7bSPdNCBFxWgFffXzfiCK8fYHDbdsQpBayLGDVo1nP",
+  distribution:        "GLkNLk84MXxDpf2xJyVuzrMn2GFMYdiQUF52AEaD3FtM",
+  shareholderPool:     "GwhZojK6XRwjC8DiMHx6sR7Tj87wtBtkJFRdXtLCskAK",
+  jackpotPool:         "AD2RXz29wS3kb6PPhh7RE5ndMVxc3EFK233NYYQyeedB",
+  casinoGrrVault:      "GXkCZuEZ8hScm1YnQqdYMe9SBf2MUgezkzBjny1bUAnU",
+  legalReserve:        "8QS218wn9JAVTcc3F8Ged4RFdnbsyRY22rJqy6Km2Xb2",
 } as const;
 
 export const GRADUATION_TARGET_USD = 100_000;

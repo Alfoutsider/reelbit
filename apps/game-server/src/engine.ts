@@ -135,11 +135,7 @@ export class SlotEngine {
     // Build visible grid [reel][row]
     const reelGrid: SymbolId[][] = [];
     for (let r = 0; r < reelCount; r++) {
-      const pos = Math.floor((spinResult[r] as unknown as number) * strips[r].length);
-      // spinResult gives a SymbolId but we need position — recalculate
-      const stripLen = strips[r].length;
-      const stripPos = strips[r].indexOf(spinResult[r]);
-      const rows = getVisibleRows(strips[r], stripPos);
+      const rows = getVisibleRows(strips[r], spinResult[r]);
       reelGrid.push([...rows]);
     }
 
