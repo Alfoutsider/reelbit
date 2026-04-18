@@ -1,10 +1,14 @@
 import fs from "fs";
 import path from "path";
 
+export type SlotModel = "Classic3Reel" | "Standard5Reel" | "FiveReelFreeSpins";
+
 export interface SlotTheme {
   mint: string;
   tokenName: string;
   tokenSymbol: string;
+  slotModel: SlotModel;
+  graduated: boolean;
   status: "generating" | "ready" | "failed";
   heroImageUrl: string | null;
   bgImageUrl: string | null;
@@ -34,6 +38,20 @@ export function getTheme(mint: string): SlotTheme | null {
 
 export function getAllThemes(): SlotTheme[] {
   return Object.values(readStore());
+}
+
+export function getGraduatedThemes(): SlotTheme[] {
+  return Object.values(readStore()).filter((t) => t.graduated && t.status === "ready");
+}
+
+export function markGraduated(mint: string, slotModel: SlotModel): void {
+  const store = readStore();
+  if (store[mint]) {
+    store[mint].graduated = true;
+    store[mint].slotModel = slotModel;
+    store[mint].updatedAt = Date.now();
+    writeStore(store);
+  }
 }
 
 export function setTheme(theme: SlotTheme): void {

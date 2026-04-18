@@ -13,8 +13,18 @@ import { formatSol, shortenAddress } from "@/lib/utils";
 import type { SpinResult } from "@/components/slot/types";
 
 const RPC_URL = process.env.NEXT_PUBLIC_RPC_URL ?? "https://api.devnet.solana.com";
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
 const DEFAULT_BET = 0.1 * LAMPORTS_PER_SOL;
-const DEFAULT_MODEL = "Classic3Reel" as const;
+
+interface SlotTheme {
+  tokenName: string;
+  tokenSymbol: string;
+  slotModel: "Classic3Reel" | "Standard5Reel" | "FiveReelFreeSpins";
+  primaryColor: string;
+  accentColor: string;
+  heroImageUrl: string | null;
+  bgImageUrl: string | null;
+}
 
 interface RecentSpin {
   result: SpinResult;
@@ -26,6 +36,7 @@ export default function CasinoSlotPage({ params }: { params: { mint: string } })
   const { authenticated, login, user } = usePrivy();
   const { wallets } = useWallets();
 
+  const [theme, setTheme] = useState<SlotTheme | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [clientSeed, setClientSeed] = useState(generateClientSeed);
   const [betLamports, setBetLamports] = useState(DEFAULT_BET);
@@ -41,6 +52,14 @@ export default function CasinoSlotPage({ params }: { params: { mint: string } })
   const wallet = wallets[0];
   const walletAddress = wallet?.address ?? "";
 
+  // Fetch slot theme
+  useEffect(() => {
+    fetch(`${API_URL}/themes/${mint}`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((t) => t && setTheme(t))
+      .catch(() => {});
+  }, [mint]);
+
   // Fetch SOL balance
   useEffect(() => {
     if (!walletAddress) return;
@@ -53,10 +72,10 @@ export default function CasinoSlotPage({ params }: { params: { mint: string } })
   // Create game session when wallet connects
   useEffect(() => {
     if (!authenticated || !walletAddress || session) return;
-    createSession(walletAddress, DEFAULT_MODEL)
+    createSession(walletAddress, theme?.slotModel ?? "Classic3Reel")
       .then(setSession)
       .catch((e) => setError(`Session error: ${e.message}`));
-  }, [authenticated, walletAddress, session]);
+  }, [authenticated, walletAddress, session, theme]);
 
   const handleSpin = useCallback(async () => {
     if (!session || isSpinning) return;
@@ -109,11 +128,14 @@ export default function CasinoSlotPage({ params }: { params: { mint: string } })
     : "—";
 
   return (
-    <div className="min-h-screen bg-[#080810] text-white">
+    <div
+      className="min-h-screen text-white"
+      style={theme?.bgImageUrl ? { background: `url(${theme.bgImageUrl}) center/cover no-repeat fixed, #080810` } : { background: "#080810" }}
+    >
       {/* Header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-white/5">
+      <div className="flex items-center justify-between px-6 py-4 border-b border-white/5 bg-[#080810]/80 backdrop-blur">
         <Link href="/" className="flex items-center gap-2 text-white/50 hover:text-white transition-colors text-sm">
-          <ArrowLeft size={16} /> reelbit.casino
+          <ArrowLeft size={16} /> {theme ? `${theme.tokenName} ($${theme.tokenSymbol})` : "reelbit.casino"}
         </Link>
         <div className="flex items-center gap-3 text-sm">
           <div className="flex items-center gap-1.5 text-green-400/80">
@@ -139,7 +161,7 @@ export default function CasinoSlotPage({ params }: { params: { mint: string } })
         {/* Slot machine */}
         <div className="flex flex-col items-center gap-6">
           <SlotMachine
-            model={DEFAULT_MODEL}
+            model={theme?.slotModel ?? "Classic3Reel"}
             spinResult={spinResult}
             isSpinning={isSpinning}
             onSpinComplete={handleSpinComplete}

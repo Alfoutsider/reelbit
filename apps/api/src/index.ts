@@ -4,7 +4,7 @@ import { Connection } from "@solana/web3.js";
 import { config } from "./config";
 import { extractTokenLaunchEvents } from "./decoder";
 import { handleGraduation } from "./migration";
-import { getAllThemes, getTheme } from "./themeStore";
+import { getAllThemes, getTheme, getGraduatedThemes } from "./themeStore";
 import { triggerThemeGeneration } from "./slotTheme";
 import type { HeliusWebhookPayload } from "./types";
 
@@ -24,6 +24,10 @@ app.get("/health", (_req: Request, res: Response) => {
 
 app.get("/themes", (_req: Request, res: Response) => {
   res.json(getAllThemes());
+});
+
+app.get("/themes/graduated", (_req: Request, res: Response) => {
+  res.json(getGraduatedThemes());
 });
 
 app.get("/themes/:mint", (req: Request, res: Response) => {
@@ -67,11 +71,12 @@ app.post("/webhooks/helius", async (req: Request, res: Response) => {
 
       if (events.graduated) {
         await handleGraduation(events.graduated, connection);
-        // Fire-and-forget theme generation (name/symbol fetched off-chain in future sprint)
+        // graduated=true so this slot appears on reelbit.casino
         triggerThemeGeneration(
           events.graduated.mint,
           events.graduated.mint.slice(0, 8),
           "TOKEN",
+          true,
         ).catch(console.error);
       }
     } catch (err) {
