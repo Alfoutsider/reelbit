@@ -1,20 +1,21 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/layout/Providers";
-
-const geist = Inter({ subsets: ["latin"], variable: "--font-geist-sans" });
+import { Navbar } from "@/components/layout/Navbar";
 
 export const metadata: Metadata = {
-  title: "ReelBit Casino",
-  description: "On-chain slot machines with 96% RTP",
+  title: "ReelBit Casino — On-Chain Slots with 96% RTP",
+  description: "Play provably fair slot machines on Solana. Deposit SOL and spin.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={geist.variable}>
-      <body className="bg-[#080810] antialiased">
-        <Providers>{children}</Providers>
+    <html lang="en">
+      <body className="casino-bg antialiased">
+        <Providers>
+          <Navbar />
+          <main className="pt-14">{children}</main>
+        </Providers>
       </body>
     </html>
   );

@@ -15,4 +15,5 @@ export const config = {
   graduationDetectorProgramId: "UkSurzWXkysn6j3jGcYxKT5zzox4riJoeuPBieod5jS",
   distributionProgramId: "GLkNLk84MXxDpf2xJyVuzrMn2GFMYdiQUF52AEaD3FtM",
   lpVaultProgramId: "GkafhSz23DhkebGnL3BKh2mJgFTXXLmE7PJ3rUQAwytm",
+  internalSecret: process.env.INTERNAL_API_SECRET ?? "dev-secret-change-in-prod",
 };
