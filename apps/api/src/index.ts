@@ -8,12 +8,14 @@ import { getAllThemes, getTheme, getGraduatedThemes } from "./themeStore";
 import { triggerThemeGeneration } from "./slotTheme";
 import { getBalance, credit, debit, transfer, isSeenDeposit, markDepositSeen } from "./balanceStore";
 import { getHouseWalletAddress, sendSol, verifyDepositTx } from "./houseWallet";
+import { getProfile, createProfile, updateProfile, isUsernameTaken, savePfpFile } from "./profileStore";
 import type { HeliusWebhookPayload } from "./types";
 
 const app = express();
 app.use(express.json({ limit: "10mb" }));
 
 app.use("/images", express.static(path.resolve(process.cwd(), "data/images")));
+app.use("/pfp",    express.static(path.resolve(process.cwd(), "data/pfp")));
 
 const connection = new Connection(config.rpcUrl, "confirmed");
 
@@ -47,6 +49,86 @@ app.post("/themes/trigger", async (req: Request, res: Response) => {
   res.json({ status: "generating" });
   triggerThemeGeneration(mint, tokenName, tokenSymbol, false).catch(console.error);
 });
+
+// ── Profile endpoints ─────────────────────────────────────────────────────────
+
+app.get("/profile/:wallet", (req: Request, res: Response) => {
+  const profile = getProfile(req.params.wallet);
+  if (!profile) return res.status(404).json({ error: "Profile not found" });
+  res.json(profile);
+});
+
+app.post("/profile", (req: Request, res: Response) => {
+  const { wallet, username } = req.body as { wallet: string; username: string };
+  if (!wallet || !username) return res.status(400).json({ error: "wallet and username required" });
+  if (username.length < 3 || username.length > 20) return res.status(400).json({ error: "Username must be 3–20 chars" });
+  if (!/^[a-zA-Z0-9_]+$/.test(username)) return res.status(400).json({ error: "Username: letters, numbers, underscore only" });
+  if (isUsernameTaken(username)) return res.status(409).json({ error: "Username already taken" });
+  const profile = createProfile(wallet, username);
+  res.status(201).json(profile);
+});
+
+app.patch("/profile/:wallet", (req: Request, res: Response) => {
+  const { wallet } = req.params;
+  const { username } = req.body as { username: string };
+  if (!username) return res.status(400).json({ error: "username required" });
+  if (username.length < 3 || username.length > 20) return res.status(400).json({ error: "Username must be 3–20 chars" });
+  if (!/^[a-zA-Z0-9_]+$/.test(username)) return res.status(400).json({ error: "Username: letters, numbers, underscore only" });
+  if (isUsernameTaken(username, wallet)) return res.status(409).json({ error: "Username already taken" });
+  try {
+    const profile = updateProfile(wallet, { username });
+    res.json(profile);
+  } catch (err) { res.status(404).json({ error: (err as Error).message }); }
+});
+
+app.post("/profile/:wallet/pfp/upload", (req: Request, res: Response) => {
+  const { wallet } = req.params;
+  const { base64, ext } = req.body as { base64: string; ext: string };
+  if (!base64 || !ext) return res.status(400).json({ error: "base64 and ext required" });
+  if (base64.length > 5_000_000) return res.status(413).json({ error: "Image too large (max ~3.5 MB)" });
+  if (!getProfile(wallet)) return res.status(404).json({ error: "Create a profile first" });
+  try {
+    const filename = savePfpFile(wallet, base64, ext);
+    const pfpUrl = `${config.serverBaseUrl}/pfp/${filename}`;
+    const profile = updateProfile(wallet, { pfpUrl, pfpType: "upload", nftMint: null });
+    res.json(profile);
+  } catch (err) { res.status(500).json({ error: (err as Error).message }); }
+});
+
+app.post("/profile/:wallet/pfp/nft", async (req: Request, res: Response) => {
+  const { wallet } = req.params;
+  const { mint } = req.body as { mint: string };
+  if (!mint) return res.status(400).json({ error: "mint required" });
+  if (!getProfile(wallet)) return res.status(404).json({ error: "Create a profile first" });
+  try {
+    const imageUrl = await fetchNftImage(mint);
+    const profile = updateProfile(wallet, { pfpUrl: imageUrl, pfpType: "nft", nftMint: mint });
+    res.json(profile);
+  } catch (err) { res.status(400).json({ error: (err as Error).message }); }
+});
+
+async function fetchNftImage(mintAddress: string): Promise<string> {
+  const key = config.heliusApiKey;
+  if (!key) throw new Error("Helius API key not configured");
+  const res = await fetch(`https://mainnet.helius-rpc.com/?api-key=${key}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ jsonrpc: "2.0", id: "nft-pfp", method: "getAsset", params: { id: mintAddress } }),
+  });
+  const json = await res.json() as { result?: { content?: { links?: { image?: string }; files?: { uri?: string; cdn_uri?: string }[]; json_uri?: string } } };
+  const content = json.result?.content;
+  if (!content) throw new Error("NFT not found");
+
+  const direct = content.links?.image ?? content.files?.[0]?.cdn_uri ?? content.files?.[0]?.uri;
+  if (direct) return direct;
+
+  if (content.json_uri) {
+    const metaRes = await fetch(content.json_uri, { signal: AbortSignal.timeout(10_000) });
+    const meta = await metaRes.json() as { image?: string };
+    if (meta.image) return meta.image;
+  }
+  throw new Error("Could not extract image from NFT metadata");
+}
 
 // ── House wallet ──────────────────────────────────────────────────────────────
 

@@ -16,4 +16,6 @@ export const config = {
   distributionProgramId: "GLkNLk84MXxDpf2xJyVuzrMn2GFMYdiQUF52AEaD3FtM",
   lpVaultProgramId: "GkafhSz23DhkebGnL3BKh2mJgFTXXLmE7PJ3rUQAwytm",
   internalSecret: process.env.INTERNAL_API_SECRET ?? "dev-secret-change-in-prod",
+  heliusApiKey:   process.env.HELIUS_API_KEY ?? "",
+  serverBaseUrl:  process.env.SERVER_BASE_URL ?? "http://localhost:3001",
 };
