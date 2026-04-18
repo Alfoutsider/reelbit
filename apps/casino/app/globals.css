@@ -1,11 +1,128 @@
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Rajdhani:wght@300;400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+/* ─── Design tokens ─────────────────────────────────────────── */
 :root {
-  --bg: #080810;
-  --surface: #0f0f1a;
+  --gold:        #d4a017;
+  --gold-light:  #f5c842;
+  --gold-dim:    #a07810;
+  --purple:      #8b5cf6;
+  --purple-dark: #5b21b6;
+  --cyan:        #06b6d4;
+
+  --bg-deep:    #06060f;
+  --bg-dark:    #0a0a18;
+  --bg-surface: #0f0f22;
+  --bg-card:    #12122a;
 }
 
+/* ─── Base ──────────────────────────────────────────────────── */
 * { box-sizing: border-box; }
-body { background: var(--bg); color: white; }
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--bg-deep);
+  color: #e8e8f4;
+  font-family: 'Rajdhani', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ─── Scrollbar ──────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(139,92,246,0.35); border-radius: 2px; }
+
+/* ─── Typography ─────────────────────────────────────────────── */
+.font-orbitron { font-family: 'Orbitron', sans-serif; }
+
+.gold-text {
+  background: linear-gradient(135deg, var(--gold-light) 0%, var(--gold) 50%, var(--gold-dim) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ─── Symbol win animation ───────────────────────────────────── */
+@keyframes symbolPulse {
+  from { filter: drop-shadow(0 0 6px rgba(255,215,0,0.6)); }
+  to   { filter: drop-shadow(0 0 18px rgba(255,215,0,1)) drop-shadow(0 0 32px rgba(255,215,0,0.4)); }
+}
+
+.symbol-win {
+  animation: symbolPulse 0.6s ease-in-out infinite alternate;
+}
+
+/* ─── LCD display ────────────────────────────────────────────── */
+.lcd-display {
+  font-family: 'Orbitron', sans-serif;
+  background: #020208;
+  border: 1px solid rgba(212,160,23,0.25);
+  border-radius: 8px;
+  padding: 6px 14px;
+  color: var(--gold-light);
+  letter-spacing: 0.1em;
+}
+
+/* ─── Spin button ────────────────────────────────────────────── */
+.spin-btn {
+  font-family: 'Orbitron', sans-serif;
+  font-weight: 900;
+  letter-spacing: 0.15em;
+  background: linear-gradient(135deg, var(--purple-dark), var(--purple));
+  border: 2px solid rgba(139,92,246,0.5);
+  border-radius: 50%;
+  color: #fff;
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+  overflow: hidden;
+}
+
+.spin-btn:hover { box-shadow: 0 0 40px rgba(139,92,246,0.6); border-color: rgba(139,92,246,0.9); }
+.spin-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.spin-btn::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 40% 35%, rgba(255,255,255,0.15), transparent 60%);
+  border-radius: 50%;
+}
+
+/* ─── Ambient orb ────────────────────────────────────────────── */
+.orb {
+  position: fixed;
+  border-radius: 50%;
+  pointer-events: none;
+  filter: blur(80px);
+  animation: orbFloat 12s ease-in-out infinite;
+}
+
+@keyframes orbFloat {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33%       { transform: translate(20px, -30px) scale(1.05); }
+  66%       { transform: translate(-15px, 15px) scale(0.95); }
+}
+
+/* ─── Bet controls ───────────────────────────────────────────── */
+.bet-btn {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  background: rgba(212,160,23,0.08);
+  border: 1px solid rgba(212,160,23,0.2);
+  border-radius: 8px;
+  color: var(--gold);
+  padding: 6px 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.bet-btn:hover { background: rgba(212,160,23,0.15); border-color: rgba(212,160,23,0.45); }
+
+/* ─── Glow helpers ───────────────────────────────────────────── */
+.glow-gold   { box-shadow: 0 0 24px rgba(212,160,23,0.3); }
+.glow-purple { box-shadow: 0 0 24px rgba(139,92,246,0.3); }

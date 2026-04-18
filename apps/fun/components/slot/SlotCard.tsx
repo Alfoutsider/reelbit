@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { motion } from "framer-motion";
-import { TrendingUp, Users, Zap } from "lucide-react";
+import { TrendingUp, Zap, Clock } from "lucide-react";
 import { cn, formatUsd, shortenAddress, graduationProgress } from "@/lib/utils";
 import type { SlotToken } from "@/types/slot";
 import { SLOT_MODELS } from "@/lib/constants";
@@ -14,94 +14,90 @@ interface Props {
   index?: number;
 }
 
+function timeAgo(ts: number) {
+  const s = Math.floor((Date.now() - ts) / 1000);
+  if (s < 60)   return `${s}s`;
+  if (s < 3600) return `${Math.floor(s / 60)}m`;
+  return `${Math.floor(s / 3600)}h`;
+}
+
 export function SlotCard({ slot, solPrice = 150, index = 0 }: Props) {
   const progress = graduationProgress(slot.mcapUsd);
   const model = SLOT_MODELS.find((m) => m.id === slot.model);
+  const nearGrad = progress > 75 && !slot.graduated;
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.05 }}
-      whileHover={{ y: -4 }}
+      transition={{ delay: index * 0.05, duration: 0.35 }}
     >
-      <Link href={`/slot/${slot.mint}`}>
-        <div className="group relative rounded-2xl border border-white/5 bg-white/[0.03] hover:border-purple-500/30 hover:bg-white/[0.06] transition-all duration-200 overflow-hidden">
-          {/* Graduation glow when near threshold */}
-          {progress > 80 && (
-            <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-purple-500/5 to-pink-500/5 pointer-events-none" />
-          )}
-
-          {/* Token image */}
-          <div className="relative h-44 w-full bg-gradient-to-br from-purple-900/20 to-black/40 overflow-hidden">
-            {slot.imageUri ? (
-              <Image
-                src={slot.imageUri}
-                alt={slot.name}
-                fill
-                className="object-cover opacity-90 group-hover:scale-105 transition-transform duration-500"
-              />
-            ) : (
-              <div className="flex h-full items-center justify-center text-5xl">🎰</div>
-            )}
-            {/* Model badge */}
-            <div className="absolute top-2 right-2 rounded-full bg-black/60 backdrop-blur-sm px-2 py-0.5 text-xs text-white/70">
-              {model?.emoji} {model?.label}
-            </div>
-            {/* Graduated badge */}
-            {slot.graduated && (
-              <div className="absolute top-2 left-2 flex items-center gap-1 rounded-full bg-green-500/20 border border-green-500/40 px-2 py-0.5 text-xs text-green-400">
-                <Zap size={10} /> Graduated
+      <Link href={`/slot/${slot.mint}`} className="block card-slot group">
+        <div className="relative h-40 w-full overflow-hidden rounded-t-2xl">
+          {slot.imageUri ? (
+            <Image src={slot.imageUri} alt={slot.name} fill
+              className="object-cover group-hover:scale-105 transition-transform duration-500 opacity-80" />
+          ) : (
+            <div className="slot-img-placeholder h-full w-full relative">
+              <div className="absolute inset-0 flex items-center justify-center">
+                <span className="font-orbitron text-xl font-black text-white/10 tracking-widest">{slot.ticker}</span>
               </div>
+            </div>
+          )}
+          <div className="absolute inset-0 bg-gradient-to-t from-casino-card via-transparent to-transparent" />
+          <div className="absolute top-2.5 left-2.5 right-2.5 flex items-start justify-between">
+            {slot.graduated ? (
+              <span className="badge badge-graduated"><Zap size={8} /> LIVE</span>
+            ) : nearGrad ? (
+              <span className="badge badge-gold animate-pulse-gold">🔥 GRADUATING</span>
+            ) : (
+              <span className="badge badge-model">{model?.label}</span>
             )}
+            <span className="flex items-center gap-1 bg-black/50 backdrop-blur-sm rounded-full px-2 py-0.5 text-[10px] text-white/50 font-orbitron">
+              <Clock size={8} />{timeAgo(slot.createdAt)}
+            </span>
+          </div>
+        </div>
+
+        <div className="p-4 space-y-3.5">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <p className="font-rajdhani font-bold text-white text-[15px] leading-tight truncate">{slot.name}</p>
+              <p className="text-[11px] text-white/35 font-orbitron tracking-wider mt-0.5">${slot.ticker}</p>
+            </div>
+            <div className="text-right shrink-0">
+              <p className="font-orbitron text-sm font-bold text-white">{formatUsd(slot.mcapUsd / solPrice, solPrice)}</p>
+              <p className="text-[10px] text-white/30 font-orbitron">MCAP</p>
+            </div>
           </div>
 
-          <div className="p-4 space-y-3">
-            {/* Name + ticker */}
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="font-semibold text-white leading-tight">{slot.name}</p>
-                <p className="text-xs text-white/40">${slot.ticker}</p>
-              </div>
-              <p className="text-sm font-mono text-purple-300">
-                {formatUsd(slot.mcapUsd / solPrice, solPrice)}
-              </p>
-            </div>
-
-            {/* Bonding curve progress */}
-            <div className="space-y-1">
-              <div className="flex justify-between text-xs text-white/40">
-                <span>Bonding curve</span>
-                <span>{progress.toFixed(1)}%</span>
-              </div>
-              <div className="h-1.5 w-full rounded-full bg-white/5 overflow-hidden">
-                <motion.div
-                  className={cn(
-                    "h-full rounded-full",
-                    progress >= 100
-                      ? "bg-green-400"
-                      : progress > 70
-                      ? "bg-gradient-to-r from-purple-500 to-pink-500"
-                      : "bg-purple-500"
-                  )}
-                  initial={{ width: 0 }}
-                  animate={{ width: `${progress}%` }}
-                  transition={{ duration: 0.8, ease: "easeOut" }}
-                />
-              </div>
-            </div>
-
-            {/* Stats row */}
-            <div className="flex items-center justify-between text-xs text-white/40">
-              <span className="flex items-center gap-1">
-                <TrendingUp size={11} />
-                Vol {formatUsd(slot.volume24h / solPrice, solPrice)}
-              </span>
-              <span className="flex items-center gap-1">
-                <Users size={11} />
-                {shortenAddress(slot.creator)}
+          <div className="space-y-1.5">
+            <div className="flex justify-between items-center">
+              <span className="section-label text-[9px]">Bonding Curve</span>
+              <span className={cn(
+                "font-orbitron text-[10px] font-bold",
+                slot.graduated ? "text-green-400" : nearGrad ? "text-gold animate-pulse-gold" : "text-purple-400"
+              )}>
+                {slot.graduated ? "GRADUATED" : `${progress.toFixed(1)}%`}
               </span>
             </div>
+            <div className="bonding-bar-track">
+              <motion.div
+                className={cn("bonding-bar-fill", nearGrad && "near-grad")}
+                style={{ width: `${Math.min(progress, 100)}%` }}
+                initial={{ width: 0 }}
+                animate={{ width: `${Math.min(progress, 100)}%` }}
+                transition={{ duration: 0.8, ease: [0.34, 1.56, 0.64, 1] }}
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between border-t border-white/5 pt-2.5">
+            <span className="flex items-center gap-1.5 text-[11px] text-white/35 font-rajdhani font-semibold">
+              <TrendingUp size={11} className="text-purple-400" />
+              {formatUsd(slot.volume24h / solPrice, solPrice)} vol
+            </span>
+            <span className="text-[10px] text-white/25 font-mono">{shortenAddress(slot.creator)}</span>
           </div>
         </div>
       </Link>

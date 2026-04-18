@@ -1,39 +1,54 @@
 import express, { Request, Response, NextFunction } from "express";
+import path from "path";
 import { Connection } from "@solana/web3.js";
 import { config } from "./config";
 import { extractTokenLaunchEvents } from "./decoder";
 import { handleGraduation } from "./migration";
+import { getAllThemes, getTheme } from "./themeStore";
+import { triggerThemeGeneration } from "./slotTheme";
 import type { HeliusWebhookPayload } from "./types";
 
 const app = express();
 app.use(express.json({ limit: "10mb" }));
 
-const connection = new Connection(config.rpcUrl, "confirmed");
+// Serve generated images
+app.use("/images", express.static(path.resolve(process.cwd(), "data/images")));
 
-// ── Health ────────────────────────────────────────────────────────────────────
+const connection = new Connection(config.rpcUrl, "confirmed");
 
 app.get("/health", (_req: Request, res: Response) => {
   res.json({ status: "ok", ts: Date.now() });
 });
 
-// ── Helius webhook endpoint ───────────────────────────────────────────────────
-// Configure in Helius dashboard: POST https://<your-server>/webhooks/helius
-// Transaction types: TOKEN_MINT, TRANSFER, UNKNOWN (catch-all for our programs)
-// Address filter: token_launch program ID
+// ── Theme endpoints ───────────────────────────────────────────────────────────
+
+app.get("/themes", (_req: Request, res: Response) => {
+  res.json(getAllThemes());
+});
+
+app.get("/themes/:mint", (req: Request, res: Response) => {
+  const theme = getTheme(req.params.mint);
+  if (!theme) return res.status(404).json({ error: "Theme not found" });
+  res.json(theme);
+});
+
+app.post("/themes/trigger", async (req: Request, res: Response) => {
+  const { mint, tokenName, tokenSymbol } = req.body as Record<string, string>;
+  if (!mint || !tokenName || !tokenSymbol) {
+    return res.status(400).json({ error: "mint, tokenName, tokenSymbol required" });
+  }
+  res.json({ status: "generating" });
+  triggerThemeGeneration(mint, tokenName, tokenSymbol).catch(console.error);
+});
+
+// ── Helius webhook ────────────────────────────────────────────────────────────
 
 app.post("/webhooks/helius", async (req: Request, res: Response) => {
-  // Helius sends a JSON array of transactions
-  const payloads: HeliusWebhookPayload[] = Array.isArray(req.body)
-    ? req.body
-    : [req.body];
-
-  // Ack immediately — Helius retries on non-2xx
+  const payloads: HeliusWebhookPayload[] = Array.isArray(req.body) ? req.body : [req.body];
   res.status(200).json({ received: payloads.length });
 
   for (const payload of payloads) {
     if (payload.transactionError) continue;
-
-    // Only process transactions that touched our token-launch program
     const touchesLaunch = payload.instructions.some(
       (ix) => ix.programId === config.tokenLaunchProgramId,
     );
@@ -52,6 +67,12 @@ app.post("/webhooks/helius", async (req: Request, res: Response) => {
 
       if (events.graduated) {
         await handleGraduation(events.graduated, connection);
+        // Fire-and-forget theme generation (name/symbol fetched off-chain in future sprint)
+        triggerThemeGeneration(
+          events.graduated.mint,
+          events.graduated.mint.slice(0, 8),
+          "TOKEN",
+        ).catch(console.error);
       }
     } catch (err) {
       console.error("[webhook] Error processing tx:", payload.signature, err);
@@ -66,10 +87,6 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
   res.status(500).json({ error: err.message });
 });
 
-// ── Start ─────────────────────────────────────────────────────────────────────
-
 app.listen(config.port, () => {
-  console.log(`[api] ReelBit webhook server running on port ${config.port}`);
-  console.log(`[api] RPC: ${config.rpcUrl}`);
-  console.log(`[api] Watching program: ${config.tokenLaunchProgramId}`);
+  console.log(`[api] ReelBit API running on port ${config.port}`);
 });

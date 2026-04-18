@@ -18,7 +18,7 @@ export const RTP_PCT               = 96;
 export const HOUSE_EDGE_PCT        = 4;
 
 export const SLOT_MODELS = [
-  { id: "Classic3Reel",      label: "Classic 3-Reel",         emoji: "🎰" },
-  { id: "Standard5Reel",     label: "Standard 5-Reel",        emoji: "🎲" },
-  { id: "FiveReelFreeSpins", label: "5-Reel + Free Spins",    emoji: "✨" },
+  { id: "Classic3Reel", label: "Classic 3-Reel", emoji: "🎰", reels: 3 },
+  { id: "Standard5Reel",     label: "Standard 5-Reel",        emoji: "🎲", reels: 5 },
+  { id: "FiveReelFreeSpins", label: "5-Reel + Free Spins",    emoji: "✨", reels: 5 },
 ] as const;

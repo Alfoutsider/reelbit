@@ -9,14 +9,13 @@ const config: Config = {
   theme: {
     extend: {
       fontFamily: {
-        sans: ["var(--font-geist-sans)", "system-ui", "sans-serif"],
+        orbitron: ["Orbitron", "sans-serif"],
+        rajdhani: ["Rajdhani", "sans-serif"],
+        sans: ["Rajdhani", "system-ui", "sans-serif"],
       },
       colors: {
-        background: "var(--bg)",
-        surface: "var(--surface)",
-      },
-      animation: {
-        "spin-slow": "spin 3s linear infinite",
+        gold: { DEFAULT: "#d4a017", light: "#f5c842", dim: "#a07810" },
+        casino: { deep: "#06060f", dark: "#0a0a18", surface: "#0f0f22", card: "#12122a" },
       },
     },
   },
