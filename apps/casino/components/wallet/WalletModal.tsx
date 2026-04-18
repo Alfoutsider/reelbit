@@ -92,15 +92,15 @@ export function WalletModal({ open, onClose, walletAddress, onBalanceChange }: P
 
   async function handleTransfer() {
     const lamports = Math.floor(parseFloat(transferAmt) * LAMPORTS_PER_SOL);
-    if (!transferTo.trim()) { setMsg({ text: "Enter recipient wallet address.", ok: false }); return; }
+    if (!transferTo.trim()) { setMsg({ text: "Enter the recipient's User ID.", ok: false }); return; }
     if (!lamports || lamports <= 0) { setMsg({ text: "Enter a valid amount.", ok: false }); return; }
     if (lamports > balance) { setMsg({ text: "Insufficient balance.", ok: false }); return; }
     setLoading(true); setMsg(null);
     try {
-      const { balance: newBal } = await requestTransfer(walletAddress, transferTo.trim(), lamports);
+      const { balance: newBal, recipient } = await requestTransfer(walletAddress, transferTo.trim(), lamports);
       setBalance(newBal);
       onBalanceChange?.(newBal);
-      setMsg({ text: `✅ Transferred ${transferAmt} SOL to ${transferTo.slice(0, 8)}…`, ok: true });
+      setMsg({ text: `✅ Sent ${transferAmt} SOL to ${recipient.username} (#${recipient.userId})`, ok: true });
       setTransferAmt(""); setTransferTo("");
     } catch (e) {
       setMsg({ text: (e as Error).message, ok: false });
@@ -290,13 +290,14 @@ export function WalletModal({ open, onClose, walletAddress, onBalanceChange }: P
                   </div>
 
                   <div className="space-y-2">
-                    <p className="text-white/60 text-xs font-orbitron tracking-wider">RECIPIENT WALLET</p>
+                    <p className="text-white/60 text-xs font-orbitron tracking-wider">RECIPIENT USER ID</p>
                     <input
                       value={transferTo}
                       onChange={(e) => setTransferTo(e.target.value)}
-                      placeholder="Wallet address…"
-                      className="input-casino text-xs font-mono"
+                      placeholder="#XXXXXXXX"
+                      className="input-casino font-mono"
                     />
+                    <p className="text-white/20 text-[10px]">Enter the recipient&apos;s User ID (e.g. #R7K2XP9M). Found in their profile.</p>
                   </div>
 
                   <div className="space-y-2">
@@ -329,8 +330,8 @@ export function WalletModal({ open, onClose, walletAddress, onBalanceChange }: P
                     Transfer
                   </button>
 
-                  <p className="text-white/20 text-xs text-center">
-                    Transfers are instant and internal — no blockchain transaction.
+                  <p className="text-white/20 text-[10px] text-center">
+                    Instant internal transfer — no gas, no blockchain tx.
                   </p>
                 </div>
               )}

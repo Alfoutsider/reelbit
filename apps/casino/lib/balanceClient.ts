@@ -40,13 +40,13 @@ export async function requestWithdraw(
 
 export async function requestTransfer(
   from: string,
-  to: string,
+  toUserId: string,
   lamports: number,
-): Promise<{ balance: number }> {
+): Promise<{ balance: number; recipient: { userId: string; username: string } }> {
   const res = await fetch(`${API}/transfer`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ from, to, lamports }),
+    body: JSON.stringify({ from, toUserId, lamports }),
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error ?? "Transfer failed");

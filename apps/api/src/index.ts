@@ -8,7 +8,7 @@ import { getAllThemes, getTheme, getGraduatedThemes } from "./themeStore";
 import { triggerThemeGeneration } from "./slotTheme";
 import { getBalance, credit, debit, transfer, isSeenDeposit, markDepositSeen } from "./balanceStore";
 import { getHouseWalletAddress, sendSol, verifyDepositTx } from "./houseWallet";
-import { getProfile, createProfile, updateProfile, isUsernameTaken, savePfpFile } from "./profileStore";
+import { getProfile, createProfile, updateProfile, getProfileByUserId, savePfpFile } from "./profileStore";
 import type { HeliusWebhookPayload } from "./types";
 
 const app = express();
@@ -52,6 +52,12 @@ app.post("/themes/trigger", async (req: Request, res: Response) => {
 
 // ── Profile endpoints ─────────────────────────────────────────────────────────
 
+app.get("/profile/by-id/:userId", (req: Request, res: Response) => {
+  const profile = getProfileByUserId(req.params.userId);
+  if (!profile) return res.status(404).json({ error: "User ID not found" });
+  res.json(profile);
+});
+
 app.get("/profile/:wallet", (req: Request, res: Response) => {
   const profile = getProfile(req.params.wallet);
   if (!profile) return res.status(404).json({ error: "Profile not found" });
@@ -63,7 +69,6 @@ app.post("/profile", (req: Request, res: Response) => {
   if (!wallet || !username) return res.status(400).json({ error: "wallet and username required" });
   if (username.length < 3 || username.length > 20) return res.status(400).json({ error: "Username must be 3–20 chars" });
   if (!/^[a-zA-Z0-9_]+$/.test(username)) return res.status(400).json({ error: "Username: letters, numbers, underscore only" });
-  if (isUsernameTaken(username)) return res.status(409).json({ error: "Username already taken" });
   const profile = createProfile(wallet, username);
   res.status(201).json(profile);
 });
@@ -74,7 +79,6 @@ app.patch("/profile/:wallet", (req: Request, res: Response) => {
   if (!username) return res.status(400).json({ error: "username required" });
   if (username.length < 3 || username.length > 20) return res.status(400).json({ error: "Username must be 3–20 chars" });
   if (!/^[a-zA-Z0-9_]+$/.test(username)) return res.status(400).json({ error: "Username: letters, numbers, underscore only" });
-  if (isUsernameTaken(username, wallet)) return res.status(409).json({ error: "Username already taken" });
   try {
     const profile = updateProfile(wallet, { username });
     res.json(profile);
@@ -181,13 +185,16 @@ app.post("/withdraw", async (req: Request, res: Response) => {
 });
 
 app.post("/transfer", (req: Request, res: Response) => {
-  const { from, to, lamports } = req.body as { from: string; to: string; lamports: number };
-  if (!from || !to || !lamports) {
-    return res.status(400).json({ error: "from, to, lamports required" });
+  const { from, toUserId, lamports } = req.body as { from: string; toUserId: string; lamports: number };
+  if (!from || !toUserId || !lamports) {
+    return res.status(400).json({ error: "from, toUserId, lamports required" });
   }
+  const recipient = getProfileByUserId(toUserId);
+  if (!recipient) return res.status(404).json({ error: `User #${toUserId.replace(/^#/, "")} not found` });
+  if (recipient.wallet === from) return res.status(400).json({ error: "Cannot transfer to yourself" });
   try {
-    transfer(from, to, lamports);
-    res.json({ balance: getBalance(from) });
+    transfer(from, recipient.wallet, lamports);
+    res.json({ balance: getBalance(from), recipient: { userId: recipient.userId, username: recipient.username } });
   } catch (err) {
     res.status(400).json({ error: (err as Error).message });
   }

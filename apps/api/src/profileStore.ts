@@ -33,10 +33,9 @@ export function getProfile(wallet: string): UserProfile | null {
   return readStore()[wallet] ?? null;
 }
 
-export function isUsernameTaken(username: string, excludeWallet?: string): boolean {
-  return Object.values(readStore()).some(
-    (p) => p.username.toLowerCase() === username.toLowerCase() && p.wallet !== excludeWallet,
-  );
+export function getProfileByUserId(userId: string): UserProfile | null {
+  const clean = userId.replace(/^#/, "").toUpperCase();
+  return Object.values(readStore()).find((p) => p.userId === clean) ?? null;
 }
 
 export function createProfile(wallet: string, username: string): UserProfile {
