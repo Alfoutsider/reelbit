@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { usePrivy, useWallets } from "@privy-io/react-auth";
+import { usePrivy, useWallets } from "@/lib/privy";
 import { ArrowDownUp, Wallet, AlertTriangle, ExternalLink } from "lucide-react";
 import { PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
 import type { AnchorWallet } from "@solana/wallet-adapter-react";

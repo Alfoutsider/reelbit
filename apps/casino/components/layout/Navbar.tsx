@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Wallet, LogOut, Zap, User, Gamepad2 } from "lucide-react";
-import { usePrivy, useWallets } from "@privy-io/react-auth";
+import { usePrivy, useWallets } from "@/lib/privy";
 import { useRouter } from "next/navigation";
 import { WalletModal } from "@/components/wallet/WalletModal";
 import { ProfileModal } from "@/components/profile/ProfileModal";
@@ -150,13 +150,18 @@ export function Navbar() {
               </>
             ) : (
               /* ── Not connected ── */
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-3">
                 <Link href="/demo" className="text-[10px] font-orbitron text-purple-400/60 hover:text-purple-400 transition-colors px-2">
                   Demo
                 </Link>
-                <button onClick={login} className="btn-launch py-2 px-4 text-[11px]">
-                  Connect Wallet
-                </button>
+                <div className="flex flex-col items-center gap-0.5">
+                  <button onClick={login} className="btn-launch py-1.5 px-5 text-[11px]">
+                    Login
+                  </button>
+                  <button onClick={login} className="text-[9px] font-orbitron text-purple-400/50 hover:text-purple-400 transition-colors">
+                    Register
+                  </button>
+                </div>
               </div>
             )}
           </div>

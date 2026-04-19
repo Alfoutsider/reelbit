@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Search, Flame, Star, Trophy, Loader2, Zap, TrendingUp, User, Rocket } from "lucide-react";
 import Link from "next/link";
-import { usePrivy, useWallets } from "@privy-io/react-auth";
+import { usePrivy, useWallets } from "@/lib/privy";
 import { cn } from "@/lib/utils";
 import { getDemoSession, getDemoSlots, type DemoSlot } from "@/lib/demoSession";
 

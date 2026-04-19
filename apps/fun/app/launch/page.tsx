@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { usePrivy, useWallets } from "@privy-io/react-auth";
+import { usePrivy, useWallets } from "@/lib/privy";
 import type { AnchorWallet } from "@solana/wallet-adapter-react";
 import { launchSlot } from "@/lib/tokenLaunch";
 import { Upload, Rocket, CheckCircle, Info, ChevronRight, Sparkles } from "lucide-react";

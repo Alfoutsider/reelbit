@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePrivy } from "@privy-io/react-auth";
+import { usePrivy } from "@/lib/privy";
 import { motion } from "framer-motion";
 import { Wallet, ExternalLink, Zap } from "lucide-react";
 import { cn, shortenAddress } from "@/lib/utils";
@@ -39,21 +39,38 @@ export function Navbar() {
           </a>
         </div>
 
-        <motion.button
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.97 }}
-          onClick={authenticated ? logout : login}
-          disabled={!ready}
-          className={cn(
-            "flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-bold transition-all font-orbitron tracking-wide",
-            authenticated
-              ? "bg-purple-500/10 text-purple-300 border border-purple-500/30 hover:bg-purple-500/20"
-              : "btn-launch"
-          )}
-        >
-          <Wallet size={14} />
-          {authenticated && address ? shortenAddress(address) : "CONNECT"}
-        </motion.button>
+        {authenticated && address ? (
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.97 }}
+            onClick={logout}
+            disabled={!ready}
+            className="flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-bold transition-all font-orbitron tracking-wide bg-purple-500/10 text-purple-300 border border-purple-500/30 hover:bg-purple-500/20"
+          >
+            <Wallet size={14} />
+            {shortenAddress(address)}
+          </motion.button>
+        ) : (
+          <div className="flex flex-col items-center gap-0.5">
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.97 }}
+              onClick={login}
+              disabled={!ready}
+              className="btn-launch flex items-center gap-2 rounded-xl px-5 py-1.5 text-sm font-bold font-orbitron tracking-wide"
+            >
+              <Wallet size={14} />
+              Login
+            </motion.button>
+            <button
+              onClick={login}
+              disabled={!ready}
+              className="text-[9px] font-orbitron text-gold/50 hover:text-gold transition-colors"
+            >
+              Register
+            </button>
+          </div>
+        )}
       </div>
     </nav>
   );

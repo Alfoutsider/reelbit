@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { X, Copy, Check, ArrowDownToLine, ArrowUpFromLine, ArrowLeftRight, Wallet, Gift } from "lucide-react";
 import { SwipeToConfirm } from "@/components/wallet/SwipeToConfirm";
 import { Connection, PublicKey, SystemProgram, Transaction, LAMPORTS_PER_SOL } from "@solana/web3.js";
-import { useWallets } from "@privy-io/react-auth";
+import { useWallets } from "@/lib/privy";
 import { cn } from "@/lib/utils";
 import {
   fetchBalance,
