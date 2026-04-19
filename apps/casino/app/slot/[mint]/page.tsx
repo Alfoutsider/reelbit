@@ -119,7 +119,7 @@ export default function CasinoSlotPage({ params }: { params: { mint: string } })
   // Create game session when wallet connects
   useEffect(() => {
     if (!authenticated || !walletAddress || session) return;
-    createSession(walletAddress, theme?.slotModel ?? "Classic3Reel")
+    createSession(walletAddress, theme?.slotModel ?? "Classic3Reel", mint)
       .then(setSession)
       .catch((e) => setError(`Session error: ${e.message}`));
   }, [authenticated, walletAddress, session, theme]);

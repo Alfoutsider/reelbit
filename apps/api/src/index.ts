@@ -1,6 +1,6 @@
 import express, { Request, Response, NextFunction } from "express";
 import path from "path";
-import { Connection, PublicKey } from "@solana/web3.js";
+import { Connection, PublicKey, Transaction, TransactionInstruction, sendAndConfirmTransaction } from "@solana/web3.js";
 import { config } from "./config";
 import { extractTokenLaunchEvents } from "./decoder";
 import { handleGraduation } from "./migration";
@@ -8,7 +8,7 @@ import { getAllThemes, getTheme, getGraduatedThemes, setTheme, deriveColors } fr
 import type { SlotModel } from "./themeStore";
 import { triggerThemeGeneration } from "./slotTheme";
 import { getBalance, credit, debit, transfer, isSeenDeposit, markDepositSeen } from "./balanceStore";
-import { getHouseWalletAddress, sendSol, verifyDepositTx } from "./houseWallet";
+import { getHouseKeypair, getHouseWalletAddress, sendSol, verifyDepositTx } from "./houseWallet";
 import { getProfile, createProfile, updateProfile, getProfileByUserId, savePfpFile } from "./profileStore";
 import type { HeliusWebhookPayload } from "./types";
 import {
@@ -289,6 +289,64 @@ app.post("/internal/credit", requireInternal, (req: Request, res: Response) => {
   const { wallet, lamports } = req.body as { wallet: string; lamports: number };
   const balance = credit(wallet, lamports);
   res.json({ balance });
+});
+
+// Discriminator: sha256("global:pay_jackpot")[0..8] = [162,254,59,123,187,96,225,171]
+const PAY_JACKPOT_DISCRIMINATOR = Buffer.from([162, 254, 59, 123, 187, 96, 225, 171]);
+const TOKEN_LAUNCH_PROGRAM_ID   = new PublicKey(config.tokenLaunchProgramId);
+
+function buildPayJackpotInstruction(mint: PublicKey, winner: PublicKey): TransactionInstruction {
+  const authority = getHouseKeypair().publicKey;
+
+  const [platformConfig] = PublicKey.findProgramAddressSync(
+    [Buffer.from("platform_config")],
+    TOKEN_LAUNCH_PROGRAM_ID,
+  );
+  const [jackpotVault] = PublicKey.findProgramAddressSync(
+    [Buffer.from("jackpot_vault"), mint.toBuffer()],
+    TOKEN_LAUNCH_PROGRAM_ID,
+  );
+
+  return new TransactionInstruction({
+    programId: TOKEN_LAUNCH_PROGRAM_ID,
+    data: PAY_JACKPOT_DISCRIMINATOR,
+    keys: [
+      { pubkey: authority,      isSigner: true,  isWritable: true  }, // authority
+      { pubkey: mint,           isSigner: false, isWritable: false }, // mint
+      { pubkey: platformConfig, isSigner: false, isWritable: false }, // platform_config
+      { pubkey: jackpotVault,   isSigner: false, isWritable: true  }, // jackpot_vault
+      { pubkey: winner,         isSigner: false, isWritable: true  }, // winner
+      { pubkey: new PublicKey("11111111111111111111111111111111"), isSigner: false, isWritable: false }, // system_program
+    ],
+  });
+}
+
+app.post("/internal/jackpot-won", requireInternal, async (req: Request, res: Response) => {
+  const { wallet, mint: mintStr } = req.body as { wallet: string; mint: string; sessionId: string };
+  if (!wallet || !mintStr) {
+    return res.status(400).json({ error: "wallet and mint required" });
+  }
+
+  let mint: PublicKey;
+  let winner: PublicKey;
+  try {
+    mint   = new PublicKey(mintStr);
+    winner = new PublicKey(wallet);
+  } catch {
+    return res.status(400).json({ error: "Invalid mint or wallet address" });
+  }
+
+  try {
+    const keypair = getHouseKeypair();
+    const ix      = buildPayJackpotInstruction(mint, winner);
+    const tx      = new Transaction().add(ix);
+    const txSignature = await sendAndConfirmTransaction(connection, tx, [keypair]);
+    console.log(`[jackpot] Paid jackpot to ${wallet} for mint ${mintStr} — ${txSignature}`);
+    res.json({ txSignature });
+  } catch (err) {
+    console.error("[jackpot] pay_jackpot failed:", err);
+    res.status(500).json({ error: (err as Error).message });
+  }
 });
 
 // ── Helius webhook ────────────────────────────────────────────────────────────

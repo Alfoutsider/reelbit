@@ -50,12 +50,12 @@ async function main() {
 
   // ── POST /session/create ──────────────────────────────────────────────────
 
-  app.post<{ Body: { wallet: string; model: SlotModel } }>(
+  app.post<{ Body: { wallet: string; model: SlotModel; mint: string } }>(
     "/session/create",
     async (req, reply) => {
-      const { wallet, model } = req.body;
-      if (!wallet || !model) {
-        return reply.code(400).send({ error: "wallet and model required" });
+      const { wallet, model, mint } = req.body;
+      if (!wallet || !model || !mint) {
+        return reply.code(400).send({ error: "wallet, model, and mint required" });
       }
 
       const id             = randomBytes(16).toString("hex");
@@ -63,7 +63,7 @@ async function main() {
       const serverSeedHash = hashServerSeed(serverSeed);
       const now            = Date.now();
 
-      createSession({ id, wallet, model, serverSeed, serverSeedHash, nonce: 0, createdAt: now, lastSpinAt: now });
+      createSession({ id, wallet, mint, model, serverSeed, serverSeedHash, nonce: 0, createdAt: now, lastSpinAt: now });
 
       return reply.send({ sessionId: id, serverSeedHash });
     },
@@ -111,6 +111,14 @@ async function main() {
 
         if (result.totalPayout > 0) {
           creditBalance(updated.wallet, result.totalPayout);
+        }
+
+        if (result.isJackpot) {
+          fetch(`${API_URL}/internal/jackpot-won`, {
+            method:  "POST",
+            headers: { "Content-Type": "application/json", "x-internal-secret": INTERNAL_SECRET },
+            body:    JSON.stringify({ wallet: updated.wallet, mint: updated.mint, sessionId }),
+          }).catch((err) => app.log.error("[game-server] jackpot-won call failed:", err));
         }
 
         app.log.info({ wallet: updated.wallet, bet: betLamports, payout: result.totalPayout, nonce: updated.nonce });

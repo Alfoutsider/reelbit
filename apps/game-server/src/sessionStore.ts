@@ -17,6 +17,7 @@ import type { SlotModel } from "./engine";
 export interface Session {
   id:             string;
   wallet:         string;
+  mint:           string;  // token mint — identifies jackpot vault on jackpot win
   model:          SlotModel;
   serverSeed:     string;  // revealed only on /session/reveal
   serverSeedHash: string;  // shared with client on /session/create

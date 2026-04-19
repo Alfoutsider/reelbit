@@ -271,6 +271,13 @@ pub struct SlotMigrated {
     pub tokens_seeded: u64,    // raw token units (curve remainder + LP reserve)
 }
 
+#[event]
+pub struct JackpotPaid {
+    pub mint:   Pubkey,
+    pub winner: Pubkey,
+    pub amount: u64,   // lamports paid out
+}
+
 // ── Instruction params ────────────────────────────────────────────────────────
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
@@ -613,6 +620,44 @@ pub struct MigrateToAmm<'info> {
 
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub token_program: Program<'info, Token>,
+    pub system_program: Program<'info, System>,
+}
+
+/// Called by the platform authority to pay out the jackpot vault to a winner.
+/// The game server fires this after the slot engine confirms an all-SEVENs result.
+/// Authority must be the platform authority recorded in PlatformConfig —
+/// prevents any party other than the platform from triggering a payout.
+#[derive(Accounts)]
+pub struct PayJackpot<'info> {
+    /// Platform authority — must match PlatformConfig.authority.
+    #[account(
+        mut,
+        constraint = authority.key() == platform_config.authority @ TokenLaunchError::Unauthorized,
+    )]
+    pub authority: Signer<'info>,
+
+    pub mint: Account<'info, Mint>,
+
+    #[account(
+        seeds = [b"platform_config"],
+        bump = platform_config.bump,
+    )]
+    pub platform_config: Account<'info, PlatformConfig>,
+
+    /// Jackpot vault — SOL accumulator funded by claim_fees (30% slice).
+    /// CHECK: PDA validated by seeds
+    #[account(
+        mut,
+        seeds = [b"jackpot_vault", mint.key().as_ref()],
+        bump,
+    )]
+    pub jackpot_vault: SystemAccount<'info>,
+
+    /// Winner's wallet — receives the entire vault balance minus rent floor.
+    /// CHECK: winner identity verified off-chain via session/nonce proof
+    #[account(mut)]
+    pub winner: SystemAccount<'info>,
+
     pub system_program: Program<'info, System>,
 }
 
@@ -1038,6 +1083,47 @@ pub mod token_launch {
             legal_share,
             license_share,
             jackpot_expired,
+        });
+
+        Ok(())
+    }
+
+    /// Pay out the jackpot vault to a verified winner.
+    ///
+    /// Called by the platform authority (via the API server) immediately after
+    /// the game server confirms an all-SEVENs spin result. The off-chain session
+    /// nonce + server-seed proof serves as the randomness guarantee in lieu of
+    /// on-chain VRF (VRF is a Sprint 4 upgrade).
+    ///
+    /// Transfers the entire vault balance minus the rent-exempt floor so the PDA
+    /// remains funded and can accept future jackpot deposits for the same mint.
+    pub fn pay_jackpot(ctx: Context<PayJackpot>) -> Result<()> {
+        let rent_exempt_min: u64 = 890_880; // standard floor for 0-byte system account
+        let vault_lamports = ctx.accounts.jackpot_vault.lamports();
+        let payout = vault_lamports.saturating_sub(rent_exempt_min);
+
+        require!(payout > 0, TokenLaunchError::ZeroAmount);
+
+        let mint_key        = ctx.accounts.mint.key();
+        let jackpot_bump    = ctx.bumps.jackpot_vault;
+        let seeds: &[&[u8]] = &[b"jackpot_vault", mint_key.as_ref(), &[jackpot_bump]];
+
+        system_program::transfer(
+            CpiContext::new_with_signer(
+                ctx.accounts.system_program.key(),
+                system_program::Transfer {
+                    from: ctx.accounts.jackpot_vault.to_account_info(),
+                    to:   ctx.accounts.winner.to_account_info(),
+                },
+                &[seeds],
+            ),
+            payout,
+        )?;
+
+        emit!(JackpotPaid {
+            mint:   mint_key,
+            winner: ctx.accounts.winner.key(),
+            amount: payout,
         });
 
         Ok(())

@@ -1,14 +1,21 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::{self, Token, TokenAccount, Transfer};
 
-declare_id!("58JoCZYPdLiixapnsYM6xXYB7Me8M6TKGXsqCewEto8v");
+declare_id!("GLkNLk84MXxDpf2xJyVuzrMn2GFMYdiQUF52AEaD3FtM");
 
 // ── Basis points ─────────────────────────────────────────────────────────────
-const BPS_PLATFORM: u64 = 2500;    // 25%
-const BPS_CREATOR: u64 = 2500;     // 25%
-const BPS_SHAREHOLDER: u64 = 2000; // 20%
-const BPS_JACKPOT: u64 = 1500;     // 15%
-// legal reserve gets remainder to absorb integer-division dust
+// NOTE: This program is NOT currently deployed. The authoritative fee split is
+// enforced off-chain in apps/api/src/distributionCron.ts (pre-bond) and
+// apps/api/src/lpHarvestCron.ts (post-graduation). These constants must stay
+// in sync with those files.
+//
+// Post-graduation LP split (6-way):
+//   creator 25% / platform 20% / jackpot 25% / legal 10% / license 10% / holder_dividend 10%
+const BPS_PLATFORM: u64 = 2000;         // 20%
+const BPS_CREATOR: u64 = 2500;          // 25%
+const BPS_HOLDER_DIVIDEND: u64 = 1000;  // 10% (earmarked for top-100 holder dividend)
+const BPS_JACKPOT: u64 = 2500;          // 25%
+// legal + license get remainder to absorb integer-division dust (≈ 20% combined)
 const BPS_TOTAL: u64 = 10_000;
 
 // ── State ─────────────────────────────────────────────────────────────────────
@@ -17,7 +24,7 @@ const BPS_TOTAL: u64 = 10_000;
 pub struct DistributionConfig {
     pub authority: Pubkey,
     pub platform_treasury: Pubkey,
-    pub shareholder_pool: Pubkey,
+    pub holder_dividend_pool: Pubkey,
     pub jackpot_pool: Pubkey,
     pub legal_reserve: Pubkey,
     pub total_distributed: u64,
@@ -49,7 +56,7 @@ pub struct FeeDistributed {
     pub total: u64,
     pub platform: u64,
     pub creator_share: u64,
-    pub shareholder: u64,
+    pub holder_dividend: u64,
     pub jackpot: u64,
     pub legal: u64,
     pub source: FeeSource,
@@ -109,7 +116,7 @@ pub struct Distribute<'info> {
     pub creator_ta: Account<'info, TokenAccount>,
 
     #[account(mut, token::mint = source_vault.mint)]
-    pub shareholder_ta: Account<'info, TokenAccount>,
+    pub holder_dividend_ta: Account<'info, TokenAccount>,
 
     #[account(mut, token::mint = source_vault.mint)]
     pub jackpot_ta: Account<'info, TokenAccount>,
@@ -129,14 +136,14 @@ pub mod distribution {
     pub fn initialize(
         ctx: Context<Initialize>,
         platform_treasury: Pubkey,
-        shareholder_pool: Pubkey,
+        holder_dividend_pool: Pubkey,
         jackpot_pool: Pubkey,
         legal_reserve: Pubkey,
     ) -> Result<()> {
         let cfg = &mut ctx.accounts.config;
         cfg.authority = ctx.accounts.authority.key();
         cfg.platform_treasury = platform_treasury;
-        cfg.shareholder_pool = shareholder_pool;
+        cfg.holder_dividend_pool = holder_dividend_pool;
         cfg.jackpot_pool = jackpot_pool;
         cfg.legal_reserve = legal_reserve;
         cfg.total_distributed = 0;
@@ -155,12 +162,12 @@ pub mod distribution {
     ) -> Result<()> {
         require!(amount > 0, DistributionError::ZeroAmount);
 
-        let platform    = bps(amount, BPS_PLATFORM);
-        let creator_sh  = bps(amount, BPS_CREATOR);
-        let shareholder = bps(amount, BPS_SHAREHOLDER);
-        let jackpot     = bps(amount, BPS_JACKPOT);
-        let legal       = amount
-            .checked_sub(platform + creator_sh + shareholder + jackpot)
+        let platform         = bps(amount, BPS_PLATFORM);
+        let creator_sh       = bps(amount, BPS_CREATOR);
+        let holder_dividend  = bps(amount, BPS_HOLDER_DIVIDEND);
+        let jackpot          = bps(amount, BPS_JACKPOT);
+        let legal            = amount
+            .checked_sub(platform + creator_sh + holder_dividend + jackpot)
             .ok_or(DistributionError::Overflow)?;
 
         let seeds_refs: Vec<&[u8]> = vault_authority_seeds.iter().map(|s| s.as_slice()).collect();
@@ -183,11 +190,11 @@ pub mod distribution {
             };
         }
 
-        xfer!(ctx.accounts.platform_ta,    platform);
-        xfer!(ctx.accounts.creator_ta,     creator_sh);
-        xfer!(ctx.accounts.shareholder_ta, shareholder);
-        xfer!(ctx.accounts.jackpot_ta,     jackpot);
-        xfer!(ctx.accounts.legal_ta,       legal);
+        xfer!(ctx.accounts.platform_ta,         platform);
+        xfer!(ctx.accounts.creator_ta,           creator_sh);
+        xfer!(ctx.accounts.holder_dividend_ta,   holder_dividend);
+        xfer!(ctx.accounts.jackpot_ta,           jackpot);
+        xfer!(ctx.accounts.legal_ta,             legal);
 
         ctx.accounts.config.total_distributed =
             ctx.accounts.config.total_distributed.saturating_add(amount);
@@ -198,7 +205,7 @@ pub mod distribution {
             total: amount,
             platform,
             creator_share: creator_sh,
-            shareholder,
+            holder_dividend,
             jackpot,
             legal,
             source,

@@ -12,11 +12,12 @@ export interface Session {
 export async function createSession(
   wallet: string,
   model: "Classic3Reel" | "Standard5Reel" | "FiveReelFreeSpins",
+  mint: string,
 ): Promise<Session> {
   const res = await fetch(`${GAME_SERVER}/session/create`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ wallet, model }),
+    body: JSON.stringify({ wallet, model, mint }),
   });
   if (!res.ok) throw new Error("Failed to create session");
   return res.json();
