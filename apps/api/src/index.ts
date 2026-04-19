@@ -7,7 +7,7 @@ import { handleGraduation } from "./migration";
 import { getAllThemes, getTheme, getGraduatedThemes, setTheme, deriveColors } from "./themeStore";
 import type { SlotModel } from "./themeStore";
 import { triggerThemeGeneration } from "./slotTheme";
-import { getBalance, credit, debit, transfer, isSeenDeposit, markDepositSeen } from "./balanceStore";
+import { getPlayable, credit, debit, transfer, isSeenDeposit, markDepositSeen } from "./balanceStore";
 import { getHouseKeypair, getHouseWalletAddress, sendSol, verifyDepositTx } from "./houseWallet";
 import { getProfile, createProfile, updateProfile, getProfileByUserId, savePfpFile } from "./profileStore";
 import type { HeliusWebhookPayload } from "./types";
@@ -25,6 +25,10 @@ import { startDistributionCron, FEE_SPLIT } from "./distributionCron";
 import { startLpHarvestCron } from "./lpHarvestCron";
 import { startHolderDividendCron } from "./holderDividendCron";
 import { getAllDividends, getDividend } from "./dividendStore";
+import { startMcapWatcher } from "./mcapWatcher";
+import { getSolUsdPrice, lamportsToUsdc, usdcToLamports } from "./pythPrice";
+import { swapSolToUsdc, USDC_MINT } from "./jupiterSwap";
+import { USDC_UNIT, applyWelcomeBonus, recordWagering, getBalance } from "./balanceStore";
 
 const app = express();
 app.use(express.json({ limit: "10mb" }));
@@ -207,12 +211,27 @@ app.post("/themes/register", (req: Request, res: Response) => {
 });
 
 // ── Balance endpoints ─────────────────────────────────────────────────────────
+// All internal balances are in USDC micro-units (1 USDC = 1_000_000).
 
 app.get("/balance/:wallet", (req: Request, res: Response) => {
-  const balance = getBalance(req.params.wallet);
-  res.json({ wallet: req.params.wallet, balance });
+  const entry = getBalance(req.params.wallet);
+  res.json({ wallet: req.params.wallet, ...entry });
 });
 
+/** GET /sol-price — live SOL/USD from Pyth (used by wallet modal for conversion display) */
+app.get("/sol-price", async (_req: Request, res: Response) => {
+  const price = await getSolUsdPrice(connection);
+  res.json({ price, mint: USDC_MINT });
+});
+
+/**
+ * POST /deposit/confirm
+ * Body: { txSignature, wallet }
+ * 1. Verifies the SOL transfer to house wallet
+ * 2. Swaps SOL → USDC via Jupiter
+ * 3. Credits USDC balance
+ * 4. Applies welcome bonus on first deposit (100% match, max $200, 35× wagering)
+ */
 app.post("/deposit/confirm", async (req: Request, res: Response) => {
   const { txSignature, wallet } = req.body as { txSignature: string; wallet: string };
   if (!txSignature || !wallet) {
@@ -224,43 +243,66 @@ app.post("/deposit/confirm", async (req: Request, res: Response) => {
   try {
     const { lamports } = await verifyDepositTx(connection, txSignature);
     markDepositSeen(txSignature);
-    const balance = credit(wallet, lamports);
-    res.json({ balance, deposited: lamports });
+
+    // Swap the received SOL to USDC
+    const usdcReceived = await swapSolToUsdc(connection, lamports);
+    const entry        = credit(wallet, usdcReceived);
+
+    // Welcome bonus — one-time, first deposit only
+    const bonusEntry = applyWelcomeBonus(wallet, usdcReceived);
+
+    res.json({
+      deposited:    usdcReceived,
+      balance:      bonusEntry.playable,
+      bonus:        bonusEntry.bonus,
+      bonusClaimed: bonusEntry.welcomeBonusClaimed && bonusEntry.bonus > 0,
+    });
   } catch (err) {
     res.status(400).json({ error: (err as Error).message });
   }
 });
 
+/**
+ * POST /withdraw
+ * Body: { wallet, usdcUnits, destination? }
+ * Converts USDC μ-units back to SOL at current Pyth price and sends on-chain.
+ */
 app.post("/withdraw", async (req: Request, res: Response) => {
-  const { wallet, lamports, destination } = req.body as {
+  const { wallet, usdcUnits, destination } = req.body as {
     wallet: string;
-    lamports: number;
+    usdcUnits: number;
     destination?: string;
   };
-  if (!wallet || !lamports) {
-    return res.status(400).json({ error: "wallet and lamports required" });
+  if (!wallet || !usdcUnits) {
+    return res.status(400).json({ error: "wallet and usdcUnits required" });
   }
   const to = destination ?? wallet;
   try {
-    const newBalance = debit(wallet, lamports);
+    const entry       = debit(wallet, usdcUnits);
+    const lamports    = await usdcToLamports(connection, usdcUnits);
     const txSignature = await sendSol(connection, to, lamports);
-    res.json({ txSignature, balance: newBalance });
+    res.json({ txSignature, balance: entry.playable, withdrawn: usdcUnits });
   } catch (err) {
     res.status(400).json({ error: (err as Error).message });
   }
 });
 
+/**
+ * POST /transfer
+ * Body: { from, toUserId, usdcUnits }
+ * Instant internal transfer — no blockchain tx, no gas.
+ */
 app.post("/transfer", (req: Request, res: Response) => {
-  const { from, toUserId, lamports } = req.body as { from: string; toUserId: string; lamports: number };
-  if (!from || !toUserId || !lamports) {
-    return res.status(400).json({ error: "from, toUserId, lamports required" });
+  const { from, toUserId, usdcUnits } = req.body as { from: string; toUserId: string; usdcUnits: number };
+  if (!from || !toUserId || !usdcUnits) {
+    return res.status(400).json({ error: "from, toUserId, usdcUnits required" });
   }
   const recipient = getProfileByUserId(toUserId);
   if (!recipient) return res.status(404).json({ error: `User #${toUserId.replace(/^#/, "")} not found` });
   if (recipient.wallet === from) return res.status(400).json({ error: "Cannot transfer to yourself" });
   try {
-    transfer(from, recipient.wallet, lamports);
-    res.json({ balance: getBalance(from), recipient: { userId: recipient.userId, username: recipient.username } });
+    transfer(from, recipient.wallet, usdcUnits);
+    res.json({ balance: getPlayable(from), recipient: { userId: recipient.userId, username: recipient.username } });
   } catch (err) {
     res.status(400).json({ error: (err as Error).message });
   }
@@ -276,19 +318,20 @@ function requireInternal(req: Request, res: Response, next: NextFunction) {
 }
 
 app.post("/internal/debit", requireInternal, (req: Request, res: Response) => {
-  const { wallet, lamports } = req.body as { wallet: string; lamports: number };
+  const { wallet, usdcUnits } = req.body as { wallet: string; usdcUnits: number };
   try {
-    const balance = debit(wallet, lamports);
-    res.json({ balance });
+    const entry = debit(wallet, usdcUnits);
+    recordWagering(wallet, usdcUnits); // track toward bonus wagering requirement
+    res.json({ balance: entry.playable, bonus: entry.bonus });
   } catch (err) {
     res.status(402).json({ error: (err as Error).message });
   }
 });
 
 app.post("/internal/credit", requireInternal, (req: Request, res: Response) => {
-  const { wallet, lamports } = req.body as { wallet: string; lamports: number };
-  const balance = credit(wallet, lamports);
-  res.json({ balance });
+  const { wallet, usdcUnits } = req.body as { wallet: string; usdcUnits: number };
+  const entry = credit(wallet, usdcUnits);
+  res.json({ balance: entry.playable, bonus: entry.bonus });
 });
 
 // Discriminator: sha256("global:pay_jackpot")[0..8] = [162,254,59,123,187,96,225,171]
@@ -573,4 +616,5 @@ app.listen(config.port, () => {
   startDistributionCron(connection);
   startLpHarvestCron(connection);
   startHolderDividendCron(connection);
+  startMcapWatcher(connection);
 });

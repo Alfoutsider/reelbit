@@ -1,18 +1,50 @@
+/**
+ * Internal casino balance store — all amounts in USDC micro-units (6 decimals).
+ * 1 USDC = 1_000_000 units.
+ *
+ * Supports:
+ *  - Playable balance (deposited + won, withdrawable after wagering clears)
+ *  - Bonus balance   (welcome bonus, requires 35× wagering before withdraw)
+ *
+ * Writes are atomic (tmp-file rename). Operations are synchronous to prevent
+ * race conditions during rapid spin sequences.
+ */
+
 import fs from "fs";
 import path from "path";
 
+export const USDC_DECIMALS = 6;
+export const USDC_UNIT     = 1_000_000;   // 1 USDC in micro-units
+export const BONUS_WAGER_MULTIPLIER = 35; // 35× wagering requirement on bonus
+
+export interface BalanceEntry {
+  playable:             number; // spendable + withdrawable USDC μ-units
+  bonus:                number; // locked bonus USDC μ-units
+  wageringRequired:     number; // USDC μ-units of wagering needed to unlock bonus
+  wageringCompleted:    number; // USDC μ-units wagered so far against bonus requirement
+  welcomeBonusClaimed:  boolean;
+}
+
 const BALANCE_PATH  = path.resolve(process.cwd(), "data/balances.json");
+const BALANCE_TMP   = BALANCE_PATH + ".tmp";
 const DEPOSITS_PATH = path.resolve(process.cwd(), "data/deposits.json");
 
-function readBalances(): Record<string, number> {
+function read(): Record<string, BalanceEntry> {
   try { return JSON.parse(fs.readFileSync(BALANCE_PATH, "utf-8")); }
   catch { return {}; }
 }
 
-function writeBalances(b: Record<string, number>): void {
+function write(store: Record<string, BalanceEntry>): void {
   fs.mkdirSync(path.dirname(BALANCE_PATH), { recursive: true });
-  fs.writeFileSync(BALANCE_PATH, JSON.stringify(b, null, 2));
+  fs.writeFileSync(BALANCE_TMP, JSON.stringify(store, null, 2));
+  fs.renameSync(BALANCE_TMP, BALANCE_PATH);
 }
+
+function defaultEntry(): BalanceEntry {
+  return { playable: 0, bonus: 0, wageringRequired: 0, wageringCompleted: 0, welcomeBonusClaimed: false };
+}
+
+// ── Deposit deduplication ─────────────────────────────────────────────────────
 
 export function isSeenDeposit(txSig: string): boolean {
   try {
@@ -29,31 +61,100 @@ export function markDepositSeen(txSig: string): void {
   fs.writeFileSync(DEPOSITS_PATH, JSON.stringify(seen, null, 2));
 }
 
-export function getBalance(wallet: string): number {
-  return readBalances()[wallet] ?? 0;
+// ── Read ──────────────────────────────────────────────────────────────────────
+
+export function getBalance(wallet: string): BalanceEntry {
+  return read()[wallet] ?? defaultEntry();
 }
 
-export function credit(wallet: string, lamports: number): number {
-  const store = readBalances();
-  store[wallet] = (store[wallet] ?? 0) + lamports;
-  writeBalances(store);
-  return store[wallet];
+export function getPlayable(wallet: string): number {
+  return (read()[wallet] ?? defaultEntry()).playable;
 }
 
-export function debit(wallet: string, lamports: number): number {
-  const store = readBalances();
-  const current = store[wallet] ?? 0;
-  if (current < lamports) throw new Error(`Insufficient balance: have ${current}, need ${lamports}`);
-  store[wallet] = current - lamports;
-  writeBalances(store);
-  return store[wallet];
+// ── Write ─────────────────────────────────────────────────────────────────────
+
+/**
+ * Credit playable balance and optionally apply welcome bonus (first deposit only).
+ * Returns the updated entry.
+ */
+export function credit(wallet: string, usdcUnits: number): BalanceEntry {
+  const store = read();
+  const entry = store[wallet] ?? defaultEntry();
+  entry.playable += usdcUnits;
+  store[wallet] = entry;
+  write(store);
+  return entry;
 }
 
-export function transfer(from: string, to: string, lamports: number): void {
-  const store = readBalances();
-  const fromBal = store[from] ?? 0;
-  if (fromBal < lamports) throw new Error("Insufficient balance");
-  store[from] = fromBal - lamports;
-  store[to] = (store[to] ?? 0) + lamports;
-  writeBalances(store);
+/**
+ * Apply welcome bonus on first deposit: 100% match up to $200 USDC.
+ * Requires 35× the bonus amount wagered before it converts to playable balance.
+ */
+export function applyWelcomeBonus(wallet: string, depositedUsdcUnits: number): BalanceEntry {
+  const store = read();
+  const entry = store[wallet] ?? defaultEntry();
+  if (entry.welcomeBonusClaimed) return entry;
+
+  const MAX_BONUS = 200 * USDC_UNIT; // $200
+  const bonusAmt  = Math.min(depositedUsdcUnits, MAX_BONUS);
+  if (bonusAmt <= 0) return entry;
+
+  entry.bonus               += bonusAmt;
+  entry.wageringRequired    += bonusAmt * BONUS_WAGER_MULTIPLIER;
+  entry.welcomeBonusClaimed  = true;
+  store[wallet] = entry;
+  write(store);
+  return entry;
+}
+
+export function debit(wallet: string, usdcUnits: number): BalanceEntry {
+  const store = read();
+  const entry = store[wallet] ?? defaultEntry();
+  const total  = entry.playable + entry.bonus;
+  if (total < usdcUnits) {
+    throw new Error(`Insufficient balance: have ${total} μUSDC, need ${usdcUnits}`);
+  }
+  // Debit playable first; if short, use bonus
+  if (entry.playable >= usdcUnits) {
+    entry.playable -= usdcUnits;
+  } else {
+    const fromBonus = usdcUnits - entry.playable;
+    entry.playable  = 0;
+    entry.bonus     = Math.max(0, entry.bonus - fromBonus);
+  }
+  store[wallet] = entry;
+  write(store);
+  return entry;
+}
+
+/**
+ * Record wagering. When wageringCompleted >= wageringRequired, convert bonus to playable.
+ */
+export function recordWagering(wallet: string, usdcUnits: number): BalanceEntry {
+  const store = read();
+  const entry = store[wallet] ?? defaultEntry();
+  if (entry.bonus <= 0) return entry;
+
+  entry.wageringCompleted += usdcUnits;
+  if (entry.wageringCompleted >= entry.wageringRequired && entry.wageringRequired > 0) {
+    entry.playable         += entry.bonus;
+    entry.bonus             = 0;
+    entry.wageringRequired  = 0;
+    entry.wageringCompleted = 0;
+  }
+  store[wallet] = entry;
+  write(store);
+  return entry;
+}
+
+export function transfer(from: string, to: string, usdcUnits: number): void {
+  const store = read();
+  const fromEntry = store[from] ?? defaultEntry();
+  if (fromEntry.playable < usdcUnits) throw new Error("Insufficient balance");
+  fromEntry.playable -= usdcUnits;
+  const toEntry = store[to] ?? defaultEntry();
+  toEntry.playable += usdcUnits;
+  store[from] = fromEntry;
+  store[to]   = toEntry;
+  write(store);
 }

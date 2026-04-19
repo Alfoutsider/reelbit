@@ -10,15 +10,14 @@ import { SlotMachine } from "@/components/slot/SlotMachine";
 import { BetControls } from "@/components/slot/BetControls";
 import { WalletModal } from "@/components/wallet/WalletModal";
 import { createSession, spin, generateClientSeed, type Session } from "@/lib/gameClient";
-import { fetchBalance } from "@/lib/balanceClient";
-import { formatSol, shortenAddress } from "@/lib/utils";
+import { fetchBalance, formatUsdc, USDC_UNIT, type BalanceEntry } from "@/lib/balanceClient";
+import { shortenAddress } from "@/lib/utils";
 import type { SpinResult } from "@/components/slot/types";
 
 const API_URL  = process.env.NEXT_PUBLIC_API_URL  ?? "http://localhost:3001";
 const RPC_URL  = process.env.NEXT_PUBLIC_RPC_URL  ?? "https://api.devnet.solana.com";
 const TOKEN_LAUNCH_PROGRAM = new PublicKey("5vy9vYy9A6wAy59nRvvpGd5drVwQU1JYqRuSg7xQZDD8");
-const DEFAULT_BET = 0.1 * LAMPORTS_PER_SOL;
-const SOL_PRICE_USD = 150; // replace with oracle in prod
+const DEFAULT_BET_USDC = 5 * 1_000_000; // $5 default bet
 
 function jackpotVaultPda(mint: PublicKey): PublicKey {
   return PublicKey.findProgramAddressSync(
@@ -62,8 +61,8 @@ export default function CasinoSlotPage({ params }: { params: { mint: string } })
   const [theme, setTheme] = useState<SlotTheme | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [clientSeed, setClientSeed] = useState(generateClientSeed);
-  const [betLamports, setBetLamports] = useState(DEFAULT_BET);
-  const [balance, setBalance] = useState(0);
+  const [betUsdc, setBetUsdc] = useState(DEFAULT_BET_USDC);
+  const [balance, setBalance] = useState<BalanceEntry | null>(null);
   const [spinResult, setSpinResult] = useState<SpinResult | null>(null);
   const [isSpinning, setIsSpinning] = useState(false);
   const [freeSpinsLeft, setFreeSpinsLeft] = useState(0);
@@ -89,8 +88,8 @@ export default function CasinoSlotPage({ params }: { params: { mint: string } })
   // Fetch internal balance
   const refreshBalance = useCallback(async () => {
     if (!walletAddress) return;
-    const bal = await fetchBalance(walletAddress);
-    setBalance(bal);
+    const entry = await fetchBalance(walletAddress);
+    setBalance(entry);
   }, [walletAddress]);
 
   useEffect(() => {
@@ -131,8 +130,8 @@ export default function CasinoSlotPage({ params }: { params: { mint: string } })
 
     try {
       const isFree       = freeSpinsLeft > 0;
-      const effectiveBet = isFree ? 0 : betLamports;
-      const result       = await spin(session.sessionId, clientSeed, effectiveBet || DEFAULT_BET);
+      const effectiveBet = isFree ? 0 : betUsdc;
+      const result       = await spin(session.sessionId, clientSeed, effectiveBet || DEFAULT_BET_USDC);
 
       setSpinResult(result);
       setClientSeed(generateClientSeed());
@@ -140,20 +139,19 @@ export default function CasinoSlotPage({ params }: { params: { mint: string } })
       if (isFree) setFreeSpinsLeft((p) => p - 1);
       if (result.freeSpinsAwarded > 0) setFreeSpinsLeft((p) => p + result.freeSpinsAwarded);
 
-      setTotalWagered((p) => p + (isFree ? 0 : betLamports));
+      setTotalWagered((p) => p + (isFree ? 0 : betUsdc));
       setTotalWon((p) => p + result.totalPayout);
       setRecentSpins((prev) => [{ result, ts: Date.now() }, ...prev].slice(0, 20));
 
       setTimeout(refreshBalance, 500);
-      // isSpinning stays true until SlotMachine animation calls onSpinComplete
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Spin failed";
       setError(msg);
-      setIsSpinning(false); // animation never starts on error — clear immediately
+      setIsSpinning(false);
       if (msg.toLowerCase().includes("insufficient")) setWalletOpen(true);
-      throw e; // re-throw so SwipeToConfirm shows its error state
+      throw e;
     }
-  }, [session, isSpinning, freeSpinsLeft, betLamports, clientSeed, refreshBalance]);
+  }, [session, isSpinning, freeSpinsLeft, betUsdc, clientSeed, refreshBalance]);
 
   function handleSpinComplete() {
     setIsSpinning(false);
@@ -196,7 +194,7 @@ export default function CasinoSlotPage({ params }: { params: { mint: string } })
                 className="flex items-center gap-1.5 text-white/50 hover:text-white transition-colors"
               >
                 <Wallet size={11} />
-                {formatSol(balance)}
+                {balance ? formatUsdc(balance.playable) : "$0.00"}
               </button>
             )}
             {authenticated ? (
@@ -240,13 +238,11 @@ export default function CasinoSlotPage({ params }: { params: { mint: string } })
                     transition={{ duration: 0.35 }}
                     className="font-orbitron text-2xl font-black text-gold tracking-tight"
                   >
-                    {jackpotLamports === 0
-                      ? "—"
-                      : `$${(jackpotLamports / LAMPORTS_PER_SOL * SOL_PRICE_USD).toLocaleString(undefined, { maximumFractionDigits: 2 })}`}
+                    {jackpotLamports === 0 ? "—" : `${(jackpotLamports / LAMPORTS_PER_SOL).toFixed(4)} SOL`}
                   </motion.p>
                 </AnimatePresence>
                 <p className="font-rajdhani text-[11px] text-gold/40 mt-0.5">
-                  {jackpotLamports === 0 ? "Building…" : `${(jackpotLamports / LAMPORTS_PER_SOL).toFixed(4)} SOL`}
+                  {jackpotLamports === 0 ? "Building…" : "live on-chain"}
                 </p>
               </div>
 
@@ -261,24 +257,6 @@ export default function CasinoSlotPage({ params }: { params: { mint: string } })
                 </motion.div>
               )}
             </div>
-
-            {/* Progress bar toward minimum jackpot target ($3k = 20 SOL @ $150) */}
-            {jackpotLamports > 0 && (
-              <div className="relative mt-3 h-1 rounded-full bg-gold/10 overflow-hidden">
-                <motion.div
-                  className="h-full rounded-full bg-gradient-to-r from-gold/60 to-yellow-400"
-                  initial={{ width: 0 }}
-                  animate={{ width: `${Math.min((jackpotLamports / LAMPORTS_PER_SOL / 20) * 100, 100)}%` }}
-                  transition={{ duration: 0.8, ease: "easeOut" }}
-                />
-              </div>
-            )}
-            {jackpotLamports > 0 && (
-              <div className="flex justify-between mt-1 text-[9px] font-orbitron text-gold/25">
-                <span>{(jackpotLamports / LAMPORTS_PER_SOL).toFixed(3)} SOL</span>
-                <span>20 SOL target ($3K)</span>
-              </div>
-            )}
           </motion.div>
 
           {/* Slot machine */}
@@ -298,7 +276,7 @@ export default function CasinoSlotPage({ params }: { params: { mint: string } })
                     onClick={() => setWalletOpen(true)}
                     className="ml-2 underline text-purple-400 text-xs"
                   >
-                    Deposit SOL
+                    Deposit USDC
                   </button>
                 )}
               </div>
@@ -306,9 +284,9 @@ export default function CasinoSlotPage({ params }: { params: { mint: string } })
 
             {authenticated ? (
               <BetControls
-                betLamports={betLamports}
-                onBetChange={setBetLamports}
-                balance={balance}
+                betUsdc={betUsdc}
+                onBetChange={setBetUsdc}
+                balance={balance?.playable ?? 0}
                 isSpinning={isSpinning}
                 onSpin={handleSpin}
                 freeSpinsLeft={freeSpinsLeft}
@@ -332,7 +310,7 @@ export default function CasinoSlotPage({ params }: { params: { mint: string } })
             <div className="grid grid-cols-3 gap-4">
               {[
                 { label: "Session RTP", value: `${sessionRtp}%` },
-                { label: "Total Won",   value: formatSol(totalWon) },
+                { label: "Total Won",   value: formatUsdc(totalWon) },
                 { label: "Spins",       value: String(recentSpins.length) },
               ].map(({ label, value }) => (
                 <div key={label} className="stat-box text-center">
@@ -356,7 +334,7 @@ export default function CasinoSlotPage({ params }: { params: { mint: string } })
                       {s.result.reels.map((r) => SYMBOL_EMOJI[r[1] as keyof typeof SYMBOL_EMOJI] ?? "?").join(" ")}
                     </div>
                     <div className={s.result.totalPayout > 0 ? "text-green-400" : "text-white/25"}>
-                      {s.result.totalPayout > 0 ? `+${formatSol(s.result.totalPayout)}` : `−${formatSol(s.result.betAmount)}`}
+                      {s.result.totalPayout > 0 ? `+${formatUsdc(s.result.totalPayout)}` : `−${formatUsdc(s.result.betAmount)}`}
                     </div>
                   </div>
                 ))}
@@ -381,7 +359,7 @@ export default function CasinoSlotPage({ params }: { params: { mint: string } })
         open={walletOpen}
         onClose={() => setWalletOpen(false)}
         walletAddress={walletAddress}
-        onBalanceChange={setBalance}
+        onBalanceChange={(playable) => setBalance((prev) => prev ? { ...prev, playable } : null)}
       />
     </>
   );

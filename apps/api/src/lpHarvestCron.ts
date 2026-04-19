@@ -46,14 +46,15 @@ const DLMM_CLUSTER = (config.rpcUrl.includes("mainnet") ? "mainnet-beta" : "devn
   | "mainnet-beta"
   | "devnet";
 
-// 6-way LP fee split (basis points, must sum to 10_000)
+// Post-graduation LP fee split (basis points, must sum to 10_000)
+// Creator 25% / Platform 25% / Jackpot 20% / Holder Dividend 15% / Legal+Licensing 15%
 const LP_SPLIT = {
   creator:         2_500,
-  platform:        2_000,
-  jackpot:         2_500,
-  legal:           1_000,
-  license:         1_000,
-  holderDividend:  1_000, // stays in authority wallet, forwarded by holderDividendCron
+  platform:        2_500,
+  jackpot:         2_000,
+  legal:             750, // legal wallet   (7.5%)
+  license:           750, // license wallet (7.5%)
+  holderDividend:  1_500, // earmarked; forwarded by holderDividendCron
 } as const;
 
 // ── PDA helpers ───────────────────────────────────────────────────────────────

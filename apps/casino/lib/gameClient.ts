@@ -26,12 +26,12 @@ export async function createSession(
 export async function spin(
   sessionId: string,
   clientSeed: string,
-  betLamports: number,
+  betUsdc: number,
 ): Promise<SpinResult> {
   const res = await fetch(`${GAME_SERVER}/spin`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ sessionId, clientSeed, betLamports }),
+    body: JSON.stringify({ sessionId, clientSeed, betUsdc }),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: "Unknown error" }));

@@ -16,11 +16,11 @@ import type { SlotModel } from "./engine";
 const API_URL         = process.env.API_URL             ?? "http://localhost:3001";
 const INTERNAL_SECRET = process.env.INTERNAL_API_SECRET ?? "dev-secret-change-in-prod";
 
-async function debitBalance(wallet: string, lamports: number): Promise<void> {
+async function debitBalance(wallet: string, usdcUnits: number): Promise<void> {
   const res = await fetch(`${API_URL}/internal/debit`, {
     method:  "POST",
     headers: { "Content-Type": "application/json", "x-internal-secret": INTERNAL_SECRET },
-    body:    JSON.stringify({ wallet, lamports }),
+    body:    JSON.stringify({ wallet, usdcUnits }),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: "Balance error" }));
@@ -28,11 +28,11 @@ async function debitBalance(wallet: string, lamports: number): Promise<void> {
   }
 }
 
-async function creditBalance(wallet: string, lamports: number): Promise<void> {
+async function creditBalance(wallet: string, usdcUnits: number): Promise<void> {
   await fetch(`${API_URL}/internal/credit`, {
     method:  "POST",
     headers: { "Content-Type": "application/json", "x-internal-secret": INTERNAL_SECRET },
-    body:    JSON.stringify({ wallet, lamports }),
+    body:    JSON.stringify({ wallet, usdcUnits }),
   }).catch((err) => console.error("[game-server] Failed to credit payout:", err));
 }
 
@@ -71,25 +71,27 @@ async function main() {
 
   // ── POST /spin ────────────────────────────────────────────────────────────
 
-  app.post<{ Body: { sessionId: string; clientSeed: string; betLamports: number } }>(
+  // Bet amounts are in USDC micro-units (1 USDC = 1_000_000).
+  // Range: $0.50 minimum (500_000) to $100 maximum (100_000_000).
+  app.post<{ Body: { sessionId: string; clientSeed: string; betUsdc: number } }>(
     "/spin",
     async (req, reply) => {
-      const { sessionId, clientSeed, betLamports } = req.body;
-      if (!sessionId || !clientSeed || betLamports === undefined) {
-        return reply.code(400).send({ error: "sessionId, clientSeed, betLamports required" });
+      const { sessionId, clientSeed, betUsdc } = req.body;
+      if (!sessionId || !clientSeed || betUsdc === undefined) {
+        return reply.code(400).send({ error: "sessionId, clientSeed, betUsdc required" });
       }
 
       const session = getSession(sessionId);
       if (!session) return reply.code(404).send({ error: "Session not found" });
 
-      const isFree = betLamports === 0;
-      if (!isFree && (betLamports < 1_000_000 || betLamports > 10_000_000_000)) {
-        return reply.code(400).send({ error: "Bet out of range (0.001 – 10 SOL)" });
+      const isFree = betUsdc === 0;
+      if (!isFree && (betUsdc < 500_000 || betUsdc > 100_000_000)) {
+        return reply.code(400).send({ error: "Bet out of range ($0.50 – $100)" });
       }
 
       if (!isFree) {
         try {
-          await debitBalance(session.wallet, betLamports);
+          await debitBalance(session.wallet, betUsdc);
         } catch (err) {
           return reply.code(402).send({ error: (err as Error).message });
         }
@@ -105,7 +107,7 @@ async function main() {
           updated.serverSeedHash,
           updated.nonce,
           clientSeed,
-          betLamports,
+          betUsdc,
           updated.model,
         );
 
@@ -121,10 +123,10 @@ async function main() {
           }).catch((err) => app.log.error("[game-server] jackpot-won call failed:", err));
         }
 
-        app.log.info({ wallet: updated.wallet, bet: betLamports, payout: result.totalPayout, nonce: updated.nonce });
+        app.log.info({ wallet: updated.wallet, bet: betUsdc, payout: result.totalPayout, nonce: updated.nonce });
         return reply.send(result);
       } catch (err) {
-        if (!isFree) creditBalance(session.wallet, betLamports);
+        if (!isFree) creditBalance(session.wallet, betUsdc);
         app.log.error(err);
         return reply.code(500).send({ error: "Spin failed" });
       }

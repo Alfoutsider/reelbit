@@ -2,27 +2,29 @@
 
 import { motion } from "framer-motion";
 import { Zap, ChevronUp, ChevronDown } from "lucide-react";
-import { LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { cn } from "@/lib/utils";
 
-const BET_STEPS = [
-  0.01, 0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10,
-].map((sol) => sol * LAMPORTS_PER_SOL);
+// Bet steps in USDC micro-units ($0.50, $1, $2, $5, $10, $25, $50, $100)
+const BET_STEPS = [0.5, 1, 2, 5, 10, 25, 50, 100].map((d) => Math.round(d * 1_000_000));
+
+function fmtBet(usdcUnits: number): string {
+  const dollars = usdcUnits / 1_000_000;
+  return dollars < 1 ? `$${dollars.toFixed(2)}` : `$${dollars % 1 === 0 ? dollars : dollars.toFixed(2)}`;
+}
 
 interface Props {
-  betLamports:   number;
-  onBetChange:   (lamports: number) => void;
-  balance:       number;
+  betUsdc:       number;
+  onBetChange:   (usdcUnits: number) => void;
+  balance:       number; // USDC micro-units (playable only)
   isSpinning:    boolean;
   onSpin:        () => Promise<void>;
   freeSpinsLeft: number;
 }
 
-export function BetControls({ betLamports, onBetChange, balance, isSpinning, onSpin, freeSpinsLeft }: Props) {
-  const betSol     = betLamports / LAMPORTS_PER_SOL;
-  const currentIdx = BET_STEPS.indexOf(betLamports);
+export function BetControls({ betUsdc, onBetChange, balance, isSpinning, onSpin, freeSpinsLeft }: Props) {
+  const currentIdx = BET_STEPS.indexOf(betUsdc);
   const isFree     = freeSpinsLeft > 0;
-  const canSpin    = !isSpinning && (isFree || betLamports <= balance);
+  const canSpin    = !isSpinning && (isFree || betUsdc <= balance);
 
   function stepBet(dir: 1 | -1) {
     const next = BET_STEPS[currentIdx + dir];
@@ -39,28 +41,23 @@ export function BetControls({ betLamports, onBetChange, balance, isSpinning, onS
 
       {/* Bet adjuster row */}
       <div className="flex items-center gap-3">
-        {/* ½ step down */}
         <button
           onClick={() => stepBet(-1)}
           disabled={currentIdx <= 0 || isSpinning}
           className="w-8 h-8 rounded-full bg-white/[0.04] border border-white/8 flex items-center justify-center text-white/35 hover:text-white hover:bg-white/[0.08] disabled:opacity-20 transition-all"
-          title="Bet down"
         >
           <ChevronDown size={15} />
         </button>
 
-        {/* Bet amount display */}
         <div className="bg-[#07071a] border border-white/8 rounded-2xl px-5 py-3 text-center min-w-[110px]">
-          <div className="font-mono font-bold text-white text-base leading-none">{betSol} SOL</div>
+          <div className="font-mono font-bold text-white text-base leading-none">{fmtBet(betUsdc)}</div>
           <div className="font-orbitron text-[9px] text-white/20 tracking-widest mt-1">PER SPIN</div>
         </div>
 
-        {/* Step up */}
         <button
           onClick={() => stepBet(1)}
           disabled={currentIdx >= BET_STEPS.length - 1 || BET_STEPS[currentIdx + 1] > balance || isSpinning}
           className="w-8 h-8 rounded-full bg-white/[0.04] border border-white/8 flex items-center justify-center text-white/35 hover:text-white hover:bg-white/[0.08] disabled:opacity-20 transition-all"
-          title="Bet up"
         >
           <ChevronUp size={15} />
         </button>
@@ -68,7 +65,6 @@ export function BetControls({ betLamports, onBetChange, balance, isSpinning, onS
 
       {/* Spin button + MAX */}
       <div className="flex items-center gap-5">
-        {/* MAX BET shortcut */}
         <button
           onClick={maxBet}
           disabled={isSpinning || balance === 0}
@@ -77,7 +73,6 @@ export function BetControls({ betLamports, onBetChange, balance, isSpinning, onS
           MAX
         </button>
 
-        {/* Round casino-style spin button */}
         <motion.button
           whileHover={canSpin ? { scale: 1.07 } : {}}
           whileTap={canSpin ? { scale: 0.91 } : {}}
@@ -114,7 +109,7 @@ export function BetControls({ betLamports, onBetChange, balance, isSpinning, onS
         <div className="text-center">
           <div className="font-orbitron text-[9px] text-white/15 tracking-widest">BAL</div>
           <div className="font-mono text-xs text-white/30 mt-0.5">
-            {(balance / LAMPORTS_PER_SOL).toFixed(2)}
+            ${(balance / 1_000_000).toFixed(2)}
           </div>
         </div>
       </div>

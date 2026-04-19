@@ -52,18 +52,20 @@ const GRADUATION_LAMPORTS: u64    = 85_000_000_000;           // 85 SOL
 // Fee split (applied at every claim_fees call):
 //   Creator    25%  — always paid, even if token never graduates
 //   Platform   25%  — platform treasury
-//   Jackpot    30%  — per-token jackpot vault (slot machine reads this)
-//   Legal      10%  — legal/compliance wallet
-//   Licensing  10%  — licensing wallet
+//   Jackpot    45%  — per-token jackpot vault (seeded heavily to attract players at launch)
+//   Legal       5%  — legal/compliance (combined legal + licensing, split 2.5% each)
 //
-// 30-day expiry: if not graduated after JACKPOT_EXPIRY_SECS, the 30% jackpot
-// allocation redirects to platform. Creator and legal/licensing still paid.
+// Graduation: triggered off-chain by MCap watcher (Pyth SOL/USD) when virtual MCap
+// reaches $100k. GRADUATION_LAMPORTS is the on-chain safety net / fee-tier reference.
+//
+// 30-day expiry: if not graduated after JACKPOT_EXPIRY_SECS, the jackpot share
+// redirects to platform. Creator and legal/licensing still paid.
 
 const CREATOR_SHARE_BPS:   u64 = 2_500;
 const PLATFORM_SHARE_BPS:  u64 = 2_500;
-const JACKPOT_SHARE_BPS:   u64 = 3_000;
-const LEGAL_SHARE_BPS:     u64 = 1_000;
-const LICENSE_SHARE_BPS:   u64 = 1_000;
+const JACKPOT_SHARE_BPS:   u64 = 4_500;
+const LEGAL_SHARE_BPS:     u64 =   250; // legal
+const LICENSE_SHARE_BPS:   u64 =   250; // licensing (same combined bucket, separate wallet)
 
 const JACKPOT_EXPIRY_SECS:    i64 = 30 * 24 * 60 * 60; // 30 days
 const DISTRIBUTION_INTERVAL:  i64 = 30 * 60;            // 30 minutes minimum between claims

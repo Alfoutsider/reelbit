@@ -37,12 +37,13 @@ const PROGRAM_ID = new PublicKey(config.tokenLaunchProgramId);
 const DISTRIBUTION_INTERVAL_MS = 30 * 60 * 1_000; // 30 minutes
 
 // Fee split (must mirror on-chain constants)
+// Pre-bond: Creator 25% / Platform 25% / Jackpot 45% / Legal+Licensing 5%
 export const FEE_SPLIT = {
   creator:   0.25,
   platform:  0.25,
-  jackpot:   0.30,
-  legal:     0.10,
-  licensing: 0.10,
+  jackpot:   0.45,
+  legal:     0.025, // legal wallet  (2.5%)
+  licensing: 0.025, // license wallet (2.5%)
 } as const;
 
 // ── Discriminator ─────────────────────────────────────────────────────────────
