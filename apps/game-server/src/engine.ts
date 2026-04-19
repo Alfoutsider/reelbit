@@ -99,7 +99,6 @@ function getVisibleRows(strip: SymbolId[], position: number): [SymbolId, SymbolI
 
 export class SlotEngine {
   private strips: Map<string, SymbolId[][]> = new Map();
-  private sessions: Map<string, { serverSeed: string; nonce: number; serverSeedHash: string }> = new Map();
 
   getStrips(model: SlotModel): SymbolId[][] {
     if (!this.strips.has(model)) {
@@ -108,21 +107,18 @@ export class SlotEngine {
     return this.strips.get(model)!;
   }
 
-  createSession(sessionId: string, serverSeed: string, serverSeedHash: string): void {
-    this.sessions.set(sessionId, { serverSeed, nonce: 0, serverSeedHash });
-  }
-
+  /**
+   * Pure spin — no internal state. Caller is responsible for persisting
+   * and incrementing the nonce (via sessionStore.incrementNonce).
+   */
   spin(
-    sessionId: string,
+    serverSeed: string,
+    serverSeedHash: string,
+    nonce: number,
     clientSeed: string,
     betLamports: number,
     model: SlotModel,
   ): SpinResult {
-    const session = this.sessions.get(sessionId);
-    if (!session) throw new Error("Session not found");
-
-    const { serverSeed, nonce, serverSeedHash } = session;
-    session.nonce++;
 
     const seed: SpinSeed = { serverSeed, clientSeed, nonce };
     const strips = this.getStrips(model);

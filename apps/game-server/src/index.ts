@@ -4,121 +4,137 @@ import cors from "@fastify/cors";
 import { randomBytes } from "crypto";
 import { SlotEngine } from "./engine";
 import { newServerSeed, hashServerSeed } from "./rng";
+import {
+  initSessionStore,
+  createSession,
+  getSession,
+  incrementNonce,
+  consumeSession,
+} from "./sessionStore";
 import type { SlotModel } from "./engine";
 
-interface SessionStore {
-  serverSeed: string;
-  serverSeedHash: string;
-  nonce: number;
-  wallet: string;
-  model: SlotModel;
-}
-
-const sessions = new Map<string, SessionStore>();
-
-const API_URL = process.env.API_URL ?? "http://localhost:3001";
+const API_URL         = process.env.API_URL             ?? "http://localhost:3001";
 const INTERNAL_SECRET = process.env.INTERNAL_API_SECRET ?? "dev-secret-change-in-prod";
 
 async function debitBalance(wallet: string, lamports: number): Promise<void> {
   const res = await fetch(`${API_URL}/internal/debit`, {
-    method: "POST",
+    method:  "POST",
     headers: { "Content-Type": "application/json", "x-internal-secret": INTERNAL_SECRET },
-    body: JSON.stringify({ wallet, lamports }),
+    body:    JSON.stringify({ wallet, lamports }),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: "Balance error" }));
-    throw new Error(err.error ?? "Failed to debit balance");
+    throw new Error((err as { error: string }).error ?? "Failed to debit balance");
   }
 }
 
 async function creditBalance(wallet: string, lamports: number): Promise<void> {
   await fetch(`${API_URL}/internal/credit`, {
-    method: "POST",
+    method:  "POST",
     headers: { "Content-Type": "application/json", "x-internal-secret": INTERNAL_SECRET },
-    body: JSON.stringify({ wallet, lamports }),
+    body:    JSON.stringify({ wallet, lamports }),
   }).catch((err) => console.error("[game-server] Failed to credit payout:", err));
 }
 
 async function main() {
-  const app = Fastify({ logger: true });
+  // Load persisted sessions from disk before accepting requests
+  initSessionStore();
+
+  const app    = Fastify({ logger: true });
   const engine = new SlotEngine();
 
   await app.register(cors, {
-    origin: process.env.CASINO_ORIGIN ?? "http://localhost:3002",
+    origin:  process.env.CASINO_ORIGIN ?? "http://localhost:3002",
     methods: ["GET", "POST"],
   });
 
-  app.post<{
-    Body: { wallet: string; model: SlotModel };
-  }>("/session/create", async (req, reply) => {
-    const { wallet, model } = req.body;
-    if (!wallet || !model) return reply.code(400).send({ error: "wallet and model required" });
+  // ── POST /session/create ──────────────────────────────────────────────────
 
-    const sessionId = randomBytes(16).toString("hex");
-    const serverSeed = newServerSeed();
-    const serverSeedHash = hashServerSeed(serverSeed);
+  app.post<{ Body: { wallet: string; model: SlotModel } }>(
+    "/session/create",
+    async (req, reply) => {
+      const { wallet, model } = req.body;
+      if (!wallet || !model) {
+        return reply.code(400).send({ error: "wallet and model required" });
+      }
 
-    sessions.set(sessionId, { serverSeed, serverSeedHash, nonce: 0, wallet, model });
-    engine.createSession(sessionId, serverSeed, serverSeedHash);
+      const id             = randomBytes(16).toString("hex");
+      const serverSeed     = newServerSeed();
+      const serverSeedHash = hashServerSeed(serverSeed);
+      const now            = Date.now();
 
-    return reply.send({ sessionId, serverSeedHash });
-  });
+      createSession({ id, wallet, model, serverSeed, serverSeedHash, nonce: 0, createdAt: now, lastSpinAt: now });
 
-  app.post<{
-    Body: { sessionId: string; clientSeed: string; betLamports: number };
-  }>("/spin", async (req, reply) => {
-    const { sessionId, clientSeed, betLamports } = req.body;
-    if (!sessionId || !clientSeed || betLamports === undefined) {
-      return reply.code(400).send({ error: "sessionId, clientSeed, betLamports required" });
-    }
+      return reply.send({ sessionId: id, serverSeedHash });
+    },
+  );
 
-    const session = sessions.get(sessionId);
-    if (!session) return reply.code(404).send({ error: "Session not found" });
+  // ── POST /spin ────────────────────────────────────────────────────────────
 
-    const isFree = betLamports === 0;
+  app.post<{ Body: { sessionId: string; clientSeed: string; betLamports: number } }>(
+    "/spin",
+    async (req, reply) => {
+      const { sessionId, clientSeed, betLamports } = req.body;
+      if (!sessionId || !clientSeed || betLamports === undefined) {
+        return reply.code(400).send({ error: "sessionId, clientSeed, betLamports required" });
+      }
 
-    if (!isFree && (betLamports < 1_000_000 || betLamports > 10_000_000_000)) {
-      return reply.code(400).send({ error: "Bet out of range (0.001 – 10 SOL)" });
-    }
+      const session = getSession(sessionId);
+      if (!session) return reply.code(404).send({ error: "Session not found" });
 
-    // Debit bet from internal balance before spinning
-    if (!isFree) {
+      const isFree = betLamports === 0;
+      if (!isFree && (betLamports < 1_000_000 || betLamports > 10_000_000_000)) {
+        return reply.code(400).send({ error: "Bet out of range (0.001 – 10 SOL)" });
+      }
+
+      if (!isFree) {
+        try {
+          await debitBalance(session.wallet, betLamports);
+        } catch (err) {
+          return reply.code(402).send({ error: (err as Error).message });
+        }
+      }
+
+      // Persist nonce increment before spinning — if server crashes mid-spin
+      // the nonce is already advanced, preventing any replay attack.
+      const updated = incrementNonce(sessionId);
+
       try {
-        await debitBalance(session.wallet, betLamports);
+        const result = engine.spin(
+          updated.serverSeed,
+          updated.serverSeedHash,
+          updated.nonce,
+          clientSeed,
+          betLamports,
+          updated.model,
+        );
+
+        if (result.totalPayout > 0) {
+          creditBalance(updated.wallet, result.totalPayout);
+        }
+
+        app.log.info({ wallet: updated.wallet, bet: betLamports, payout: result.totalPayout, nonce: updated.nonce });
+        return reply.send(result);
       } catch (err) {
-        return reply.code(402).send({ error: (err as Error).message });
+        if (!isFree) creditBalance(session.wallet, betLamports);
+        app.log.error(err);
+        return reply.code(500).send({ error: "Spin failed" });
       }
-    }
+    },
+  );
 
-    try {
-      const result = engine.spin(sessionId, clientSeed, betLamports, session.model);
+  // ── POST /session/reveal ──────────────────────────────────────────────────
 
-      // Credit payout (fire-and-forget — spin result is already returned)
-      if (result.totalPayout > 0) {
-        creditBalance(session.wallet, result.totalPayout);
-      }
+  app.post<{ Body: { sessionId: string } }>(
+    "/session/reveal",
+    async (req, reply) => {
+      const session = consumeSession(req.body.sessionId);
+      if (!session) return reply.code(404).send({ error: "Session not found" });
+      return reply.send({ serverSeed: session.serverSeed, serverSeedHash: session.serverSeedHash, nonce: session.nonce });
+    },
+  );
 
-      app.log.info({ wallet: session.wallet, bet: betLamports, payout: result.totalPayout });
-      return reply.send(result);
-    } catch (err) {
-      // Spin failed after debit — refund the bet
-      if (!isFree) creditBalance(session.wallet, betLamports);
-      app.log.error(err);
-      return reply.code(500).send({ error: "Spin failed" });
-    }
-  });
-
-  app.post<{
-    Body: { sessionId: string };
-  }>("/session/reveal", async (req, reply) => {
-    const { sessionId } = req.body;
-    const session = sessions.get(sessionId);
-    if (!session) return reply.code(404).send({ error: "Session not found" });
-
-    const { serverSeed, serverSeedHash, nonce } = session;
-    sessions.delete(sessionId);
-    return reply.send({ serverSeed, serverSeedHash, nonce });
-  });
+  // ── GET /health ───────────────────────────────────────────────────────────
 
   app.get("/health", async () => ({ status: "ok", ts: Date.now() }));
 
