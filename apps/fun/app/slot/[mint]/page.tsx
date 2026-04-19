@@ -338,10 +338,6 @@ export default function SlotPage({ params }: { params: { mint: string } }) {
                   const estDailyCreator  = estDailyVolUsd * avgFeePct * creatorCut;
                   const estWeeklyCreator = estDailyCreator * 7;
 
-                  // Post-graduation: LP fee from casino volume
-                  // Assume $10k/day casino volume at 4% house edge (GGR) distributed as LP
-                  const estMonthlyPostGrad = 10_000 * 0.04 * 0.25 * 30; // $3,000/month creator LP share
-
                   const pctToGrad = Math.max(0, 100 - progress).toFixed(0);
 
                   return [

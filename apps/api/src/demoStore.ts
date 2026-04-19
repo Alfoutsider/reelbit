@@ -64,7 +64,7 @@ export function apply(
 ): DemoApplication {
   const store = read();
   const existing = store.applications[wallet];
-  if (existing && existing.status === "approved") return existing;
+  if (existing && (existing.status === "approved" || existing.status === "pending")) return existing;
 
   const app: DemoApplication = {
     wallet,

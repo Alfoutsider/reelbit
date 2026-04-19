@@ -82,6 +82,10 @@ export async function swapSolToUsdc(
 
   console.log(`[jupiter] Swapped ${lamports} lamports → USDC  tx: ${sig}`);
 
-  // Return USDC micro-units received
-  return parseInt(quote.outAmount, 10);
+  // Apply worst-case slippage deduction to quoted outAmount so we never over-credit.
+  // The actual on-chain received amount may be better, but quoting the floor guarantees
+  // the house is never short. Difference is < slippageBps of the swap value.
+  const quotedOut  = parseInt(quote.outAmount, 10);
+  const floorOut   = Math.floor(quotedOut * (10_000 - slippageBps) / 10_000);
+  return floorOut;
 }

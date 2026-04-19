@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { useState, useEffect } from "react";
+import { motion } from "framer-motion";
 import { Search, Flame, Star, Trophy, Loader2, Zap, TrendingUp, User, Gift } from "lucide-react";
 import Link from "next/link";
 import { usePrivy, useWallets } from "@privy-io/react-auth";

@@ -272,14 +272,16 @@ app.post("/deposit/confirm", async (req: Request, res: Response) => {
     const entry        = credit(wallet, usdcCredited);
 
     // Welcome bonus — one-time, first deposit only
-    const bonusEntry = applyWelcomeBonus(wallet, usdcCredited);
+    const wasAlreadyClaimed = (getBalance(wallet)).welcomeBonusClaimed;
+    const bonusEntry        = applyWelcomeBonus(wallet, usdcCredited);
+    const bonusJustClaimed  = !wasAlreadyClaimed && bonusEntry.welcomeBonusClaimed;
 
     res.json({
       deposited:    usdcCredited,
       depositFee,
       balance:      bonusEntry.playable,
       bonus:        bonusEntry.bonus,
-      bonusClaimed: bonusEntry.welcomeBonusClaimed && bonusEntry.bonus > 0,
+      bonusClaimed: bonusJustClaimed,
     });
   } catch (err) {
     res.status(400).json({ error: (err as Error).message });
@@ -327,6 +329,9 @@ app.post("/transfer", (req: Request, res: Response) => {
   const { from, toUserId, usdcUnits } = req.body as { from: string; toUserId: string; usdcUnits: number };
   if (!from || !toUserId || !usdcUnits) {
     return res.status(400).json({ error: "from, toUserId, usdcUnits required" });
+  }
+  if (isDemoUser(from)) {
+    return res.status(403).json({ error: "Demo balances cannot be transferred. Deposit real funds to unlock transfers." });
   }
   const recipient = getProfileByUserId(toUserId);
   if (!recipient) return res.status(404).json({ error: `User #${toUserId.replace(/^#/, "")} not found` });
