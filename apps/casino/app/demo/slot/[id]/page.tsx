@@ -155,7 +155,7 @@ export default function DemoSlotPage({ params }: { params: { id: string } }) {
       const { tokensReceived, graduated } = demoBuySlot(id, usdcUnits, SOL_PRICE_USD);
       const solSpent = usdcFloat / SOL_PRICE_USD;
       addEvent({ kind: "buy", wallet: "You", solAmount: solSpent, tokens: tokensReceived, ts: Date.now() });
-      setTxMsg({ ok: true, text: `Bought ${formatTokens(tokensReceived)} $${slot.ticker}` });
+      setTxMsg({ ok: true, text: `Bought ${formatTokens(tokensReceived)} $${slot?.ticker ?? ""}` });
       if (graduated) addEvent({ kind: "graduated", wallet: "System", solAmount: 0, tokens: 0, ts: Date.now() });
     } catch (e) {
       setTxMsg({ ok: false, text: (e as Error).message });
@@ -165,7 +165,7 @@ export default function DemoSlotPage({ params }: { params: { id: string } }) {
 
   // ── Sell handler ───────────────────────────────────────────────────────────
   function handleSell() {
-    if (slot.tokensHeld <= 0) { setTxMsg({ ok: false, text: "You have no tokens to sell" }); return; }
+    if (!slot || slot.tokensHeld <= 0) { setTxMsg({ ok: false, text: "You have no tokens to sell" }); return; }
     const tokenAmount = Math.floor(slot.tokensHeld * (sellPct / 100));
     if (tokenAmount <= 0) return;
     try {
