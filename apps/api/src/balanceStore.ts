@@ -12,6 +12,7 @@
 
 import fs from "fs";
 import path from "path";
+import { config } from "./config";
 
 export const USDC_DECIMALS = 6;
 export const USDC_UNIT     = 1_000_000;   // 1 USDC in micro-units
@@ -25,9 +26,10 @@ export interface BalanceEntry {
   welcomeBonusClaimed:  boolean;
 }
 
-const BALANCE_PATH  = path.resolve(process.cwd(), "data/balances.json");
+const DATA_DIR      = path.resolve(config.dataDir);
+const BALANCE_PATH  = path.join(DATA_DIR, "balances.json");
 const BALANCE_TMP   = BALANCE_PATH + ".tmp";
-const DEPOSITS_PATH = path.resolve(process.cwd(), "data/deposits.json");
+const DEPOSITS_PATH = path.join(DATA_DIR, "deposits.json");
 
 function read(): Record<string, BalanceEntry> {
   try { return JSON.parse(fs.readFileSync(BALANCE_PATH, "utf-8")); }

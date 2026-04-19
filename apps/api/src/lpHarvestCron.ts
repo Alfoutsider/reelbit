@@ -79,7 +79,9 @@ let _migrationKeypair: Keypair | null = null;
 
 function getMigrationKeypair(): Keypair {
   if (_migrationKeypair) return _migrationKeypair;
-  const raw = JSON.parse(fs.readFileSync(config.migrationKeypairPath, "utf-8"));
+  const raw = config.migrationKeypairJson
+    ? JSON.parse(config.migrationKeypairJson)
+    : JSON.parse(fs.readFileSync(config.migrationKeypairPath, "utf-8"));
   _migrationKeypair = Keypair.fromSecretKey(Uint8Array.from(raw));
   return _migrationKeypair;
 }

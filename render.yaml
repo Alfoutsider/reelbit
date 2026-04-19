@@ -1,0 +1,64 @@
+services:
+  # ── ReelBit API ──────────────────────────────────────────────────────────────
+  - type: web
+    name: reelbit-api
+    runtime: node
+    region: oregon
+    plan: starter
+    rootDir: apps/api
+    buildCommand: npm install && npm run build
+    startCommand: npm run start
+    healthCheckPath: /health
+    disk:
+      name: api-data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3001
+      - key: DATA_DIR
+        value: /data
+      - key: RPC_URL
+        sync: false        # set in Render dashboard
+      - key: HELIUS_API_KEY
+        sync: false
+      - key: HELIUS_WEBHOOK_SECRET
+        sync: false
+      - key: MIGRATION_KEYPAIR_JSON
+        sync: false        # paste keypair JSON array e.g. [1,2,3,...]
+      - key: INTERNAL_API_SECRET
+        sync: false
+      - key: ADMIN_API_KEY
+        sync: false
+      - key: SERVER_BASE_URL
+        sync: false        # set to https://reelbit-api.onrender.com
+
+  # ── Game Server ──────────────────────────────────────────────────────────────
+  - type: web
+    name: reelbit-game-server
+    runtime: node
+    region: oregon
+    plan: starter
+    rootDir: apps/game-server
+    buildCommand: npm install && npm run build
+    startCommand: npm run start
+    healthCheckPath: /health
+    disk:
+      name: game-data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3003
+      - key: DATA_DIR
+        value: /data
+      - key: CASINO_ORIGIN
+        sync: false        # set to https://reelbit-casino.vercel.app
+      - key: API_URL
+        sync: false        # set to https://reelbit-api.onrender.com
+      - key: INTERNAL_API_SECRET
+        sync: false        # must match API's INTERNAL_API_SECRET

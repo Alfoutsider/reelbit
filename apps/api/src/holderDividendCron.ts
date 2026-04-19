@@ -67,7 +67,9 @@ let _authorityKeypair: Keypair | null = null;
 
 function getAuthority(): Keypair {
   if (_authorityKeypair) return _authorityKeypair;
-  const raw = JSON.parse(fs.readFileSync(config.migrationKeypairPath, "utf-8"));
+  const raw = config.migrationKeypairJson
+    ? JSON.parse(config.migrationKeypairJson)
+    : JSON.parse(fs.readFileSync(config.migrationKeypairPath, "utf-8"));
   _authorityKeypair = Keypair.fromSecretKey(Uint8Array.from(raw));
   return _authorityKeypair;
 }

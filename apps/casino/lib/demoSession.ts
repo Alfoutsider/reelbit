@@ -18,8 +18,45 @@ export interface DemoSession {
   createdAt:  number;
 }
 
+export interface DemoSlot {
+  id:           string;
+  name:         string;
+  ticker:       string;
+  model:        "Classic3Reel" | "Standard5Reel" | "FiveReelFreeSpins";
+  description:  string;
+  imageUri:     string;
+  realSolSim:   number; // fake SOL raised (float, SOL units)
+  tokensHeld:   number; // raw token units held by demo user (cosmetic)
+  graduated:    boolean;
+  primaryColor: string;
+  accentColor:  string;
+  createdAt:    number;
+}
+
 const STORAGE_KEY  = "reelbit_demo_session";
+const SLOTS_KEY    = "reelbit_demo_slots";
 const DEMO_BALANCE = 100 * 1_000_000; // $100 in μUSDC
+
+// Bonding curve constants (mirrors tokenLaunch.ts)
+const VIRTUAL_SOL    = 30;
+const VIRTUAL_TOKENS = 1_073_000_191_000_000;
+export const GRADUATION_SOL = 85;
+
+const PALETTE: [string, string][] = [
+  ["#d4a017", "#8b5cf6"],
+  ["#06b6d4", "#8b5cf6"],
+  ["#ef4444", "#d4a017"],
+  ["#60a5fa", "#e2e8f0"],
+  ["#a855f7", "#ec4899"],
+  ["#22c55e", "#06b6d4"],
+];
+
+// Map each model to a pre-built demo casino slot mint for "play" routing
+export const DEMO_PLAY_MINTS: Record<DemoSlot["model"], string> = {
+  Classic3Reel:      "So11111111111111111111111111111111111111112",
+  Standard5Reel:     "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+  FiveReelFreeSpins: "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB",
+};
 
 export function createDemoSession(username: string): DemoSession {
   const session: DemoSession = {
@@ -45,6 +82,118 @@ export function isDemoMode(): boolean {
 
 export function exitDemo(): void {
   localStorage.removeItem(STORAGE_KEY);
+  localStorage.removeItem(SLOTS_KEY);
+}
+
+// ── Demo slot store ───────────────────────────────────────────────────────────
+
+function getDemoSlotsRaw(): DemoSlot[] {
+  try {
+    const raw = localStorage.getItem(SLOTS_KEY);
+    return raw ? (JSON.parse(raw) as DemoSlot[]) : [];
+  } catch { return []; }
+}
+
+function saveDemoSlots(slots: DemoSlot[]): void {
+  localStorage.setItem(SLOTS_KEY, JSON.stringify(slots));
+}
+
+export function createDemoSlot(data: Pick<DemoSlot, "name" | "ticker" | "model" | "description" | "imageUri">): DemoSlot {
+  const id = `demo_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+  const [primaryColor, accentColor] = PALETTE[Math.floor(Math.random() * PALETTE.length)];
+  const slot: DemoSlot = {
+    ...data,
+    id,
+    realSolSim: 2 + Math.random() * 3, // start 2–5 SOL (shows initial traction)
+    tokensHeld: 0,
+    graduated:  false,
+    primaryColor,
+    accentColor,
+    createdAt: Date.now(),
+  };
+  const slots = getDemoSlotsRaw();
+  slots.push(slot);
+  saveDemoSlots(slots);
+  return slot;
+}
+
+export function getDemoSlots(): DemoSlot[] {
+  return getDemoSlotsRaw();
+}
+
+export function getDemoSlot(id: string): DemoSlot | null {
+  return getDemoSlotsRaw().find((s) => s.id === id) ?? null;
+}
+
+export function updateDemoSlot(id: string, patch: Partial<DemoSlot>): DemoSlot {
+  const slots = getDemoSlotsRaw();
+  const idx   = slots.findIndex((s) => s.id === id);
+  if (idx < 0) throw new Error("Demo slot not found");
+  slots[idx] = { ...slots[idx], ...patch };
+  saveDemoSlots(slots);
+  return slots[idx];
+}
+
+// Bonding curve price helpers
+export function bondingMcapUsd(realSolSim: number, solPriceUsd = 150): number {
+  // Linear interpolation $5k → $100k over 0 → 85 SOL
+  const pct = Math.min(realSolSim / GRADUATION_SOL, 1);
+  return 5_000 + pct * 95_000;
+}
+
+export function bondingPricePerToken(realSolSim: number, solPriceUsd = 150): number {
+  return bondingMcapUsd(realSolSim, solPriceUsd) / 1_000_000_000;
+}
+
+// Buy: user spends USDC, adds to realSolSim, receives simulated tokens
+export function demoBuySlot(
+  id: string,
+  usdcUnits: number,
+  solPriceUsd = 150,
+): { tokensReceived: number; newSolSim: number; graduated: boolean } {
+  const slot = getDemoSlot(id);
+  if (!slot) throw new Error("Demo slot not found");
+  const solSpent   = usdcUnits / 1_000_000 / solPriceUsd;
+  const curSol     = VIRTUAL_SOL + slot.realSolSim;
+  const k          = VIRTUAL_SOL * VIRTUAL_TOKENS;
+  const newSol     = curSol + solSpent;
+  const tokensOut  = Math.floor(k / curSol - k / newSol);
+  const newSolSim  = Math.min(slot.realSolSim + solSpent, GRADUATION_SOL);
+  const graduated  = newSolSim >= GRADUATION_SOL;
+  debitDemo(usdcUnits);
+  updateDemoSlot(id, { realSolSim: newSolSim, tokensHeld: slot.tokensHeld + tokensOut, graduated });
+  return { tokensReceived: tokensOut, newSolSim, graduated };
+}
+
+// Sell: user returns tokens, receives USDC (5% slippage sim)
+export function demoSellSlot(
+  id: string,
+  tokenAmount: number,
+  solPriceUsd = 150,
+): { usdcReceived: number; newSolSim: number } {
+  const slot = getDemoSlot(id);
+  if (!slot) throw new Error("Demo slot not found");
+  if (slot.tokensHeld < tokenAmount) throw new Error("Insufficient tokens");
+  const curSol     = VIRTUAL_SOL + slot.realSolSim;
+  const k          = VIRTUAL_SOL * VIRTUAL_TOKENS;
+  const curTokens  = k / curSol;
+  const newTokens  = curTokens + tokenAmount;
+  const solOut     = curSol - k / newTokens;
+  const usdcRaw    = Math.floor(solOut * solPriceUsd * 0.95 * 1_000_000);
+  const newSolSim  = Math.max(0, slot.realSolSim - solOut);
+  updateDemoSlot(id, { realSolSim: newSolSim, tokensHeld: slot.tokensHeld - tokenAmount });
+  creditDemo(usdcRaw);
+  return { usdcReceived: usdcRaw, newSolSim };
+}
+
+// Tick fake bot activity (call from setInterval on the slot page)
+export function tickDemoBots(id: string): DemoSlot | null {
+  const slot = getDemoSlot(id);
+  if (!slot || slot.graduated) return slot;
+  const increment  = 0.15 + Math.random() * 0.85; // 0.15–1 SOL per tick
+  const newSolSim  = Math.min(slot.realSolSim + increment, GRADUATION_SOL);
+  const graduated  = newSolSim >= GRADUATION_SOL;
+  return updateDemoSlot(id, { realSolSim: newSolSim, graduated });
 }
 
 function saveSession(session: DemoSession): void {

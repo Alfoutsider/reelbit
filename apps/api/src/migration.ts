@@ -19,10 +19,10 @@ import {
 import DLMM, { StrategyType, ActivationType } from "@meteora-ag/dlmm";
 import { BN } from "@coral-xyz/anchor";
 import fs from "fs";
-import path from "path";
 import { config } from "./config";
 import { recordPoolAddress } from "./themeStore";
 import type { SlotGraduatedEvent } from "./types";
+import TOKEN_LAUNCH_IDL from "./idl/token_launch.json";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -39,14 +39,10 @@ const DLMM_CLUSTER = (config.rpcUrl.includes("mainnet") ? "mainnet-beta" : "devn
 
 // ── IDL discriminator helper ──────────────────────────────────────────────────
 
+import TOKEN_LAUNCH_IDL from "./idl/token_launch.json";
+
 function loadIdlDiscriminator(instructionName: string): Buffer {
-  const idlPath = path.resolve(__dirname, "../../../target/idl/token_launch.json");
-  if (!fs.existsSync(idlPath)) {
-    throw new Error(`IDL not found at ${idlPath} — run anchor build first`);
-  }
-  const idl = JSON.parse(fs.readFileSync(idlPath, "utf-8")) as {
-    instructions: Array<{ name: string; discriminator: number[] }>;
-  };
+  const idl = TOKEN_LAUNCH_IDL as { instructions: Array<{ name: string; discriminator: number[] }> };
   const ix = idl.instructions.find((i) => i.name === instructionName);
   if (!ix) throw new Error(`Instruction "${instructionName}" not found in IDL`);
   return Buffer.from(ix.discriminator);
@@ -81,7 +77,9 @@ let _migrationKeypair: Keypair | null = null;
 
 function getMigrationKeypair(): Keypair {
   if (_migrationKeypair) return _migrationKeypair;
-  const raw = JSON.parse(fs.readFileSync(config.migrationKeypairPath, "utf-8"));
+  const raw = config.migrationKeypairJson
+    ? JSON.parse(config.migrationKeypairJson)
+    : JSON.parse(fs.readFileSync(config.migrationKeypairPath, "utf-8"));
   _migrationKeypair = Keypair.fromSecretKey(Uint8Array.from(raw));
   return _migrationKeypair;
 }

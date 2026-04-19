@@ -35,8 +35,8 @@ import { USDC_UNIT, applyWelcomeBonus, recordWagering, getBalance } from "./bala
 const app = express();
 app.use(express.json({ limit: "10mb" }));
 
-app.use("/images", express.static(path.resolve(process.cwd(), "data/images")));
-app.use("/pfp",    express.static(path.resolve(process.cwd(), "data/pfp")));
+app.use("/images", express.static(path.join(config.dataDir, "images")));
+app.use("/pfp",    express.static(path.join(config.dataDir, "pfp")));
 
 const connection = new Connection(config.rpcUrl, "confirmed");
 

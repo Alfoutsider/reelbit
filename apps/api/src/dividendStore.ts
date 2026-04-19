@@ -10,7 +10,8 @@
 import fs from "fs";
 import path from "path";
 
-const STORE_PATH = path.resolve(process.cwd(), "data/dividends.json");
+import { config } from "./config";
+const STORE_PATH = path.join(config.dataDir, "dividends.json");
 
 export interface DividendEntry {
   accumulated:     number; // lamports waiting to be distributed to holders

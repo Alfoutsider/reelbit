@@ -20,7 +20,8 @@ export interface DemoApplication {
   reviewedAt?: number;
 }
 
-const STORE_PATH = path.resolve(process.cwd(), "data/demo.json");
+import { config } from "./config";
+const STORE_PATH = path.join(config.dataDir, "demo.json");
 const DEMO_TMP   = STORE_PATH + ".tmp";
 
 /** $100 USDC in micro-units credited on approval */

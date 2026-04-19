@@ -1,8 +1,9 @@
 import fs from "fs";
 import path from "path";
 
-const STORE_PATH = path.resolve(process.cwd(), "data/profiles.json");
-const PFP_DIR    = path.resolve(process.cwd(), "data/pfp");
+import { config } from "./config";
+const STORE_PATH = path.join(config.dataDir, "profiles.json");
+const PFP_DIR = path.join(config.dataDir, "pfp");
 
 export interface UserProfile {
   userId:    string;          // permanent — randomly assigned at creation

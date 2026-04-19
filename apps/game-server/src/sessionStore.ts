@@ -26,7 +26,8 @@ export interface Session {
   lastSpinAt:     number;  // ms timestamp — used for TTL
 }
 
-const STORE_PATH = path.resolve(process.cwd(), "data/sessions.json");
+const DATA_DIR   = process.env.DATA_DIR ?? "./data";
+const STORE_PATH = path.join(DATA_DIR, "sessions.json");
 const STORE_TMP  = STORE_PATH + ".tmp";
 const SESSION_TTL_MS   = 4 * 60 * 60 * 1_000; // 4 hours idle → expire
 const PRUNE_INTERVAL_MS = 30 * 60 * 1_000;     // prune every 30 min

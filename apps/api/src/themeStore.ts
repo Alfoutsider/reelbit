@@ -19,7 +19,8 @@ export interface SlotTheme {
   updatedAt: number;
 }
 
-const STORE_PATH = path.resolve(process.cwd(), "data/themes.json");
+import { config } from "./config";
+const STORE_PATH = path.join(config.dataDir, "themes.json");
 
 function readStore(): Record<string, SlotTheme> {
   try {

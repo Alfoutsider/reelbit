@@ -13,7 +13,9 @@ let _keypair: Keypair | null = null;
 
 export function getHouseKeypair(): Keypair {
   if (_keypair) return _keypair;
-  const raw = JSON.parse(fs.readFileSync(config.migrationKeypairPath, "utf-8"));
+  const raw = config.migrationKeypairJson
+    ? JSON.parse(config.migrationKeypairJson)
+    : JSON.parse(fs.readFileSync(config.migrationKeypairPath, "utf-8"));
   _keypair = Keypair.fromSecretKey(Uint8Array.from(raw));
   return _keypair;
 }

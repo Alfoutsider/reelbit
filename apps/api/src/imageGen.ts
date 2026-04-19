@@ -1,5 +1,6 @@
 import fs from "fs";
 import path from "path";
+import { config } from "./config";
 
 const POLLINATIONS_BASE = "https://image.pollinations.ai/prompt";
 
@@ -15,7 +16,7 @@ function encodePrompt(prompt: string): string {
 }
 
 async function downloadImage(imageUrl: string, filename: string): Promise<string> {
-  const dir = path.resolve(process.cwd(), "data/images");
+  const dir = path.join(config.dataDir, "images");
   fs.mkdirSync(dir, { recursive: true });
   const localPath = path.join(dir, filename);
   const res = await fetch(imageUrl, { signal: AbortSignal.timeout(90_000) });

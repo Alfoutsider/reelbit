@@ -2,10 +2,11 @@
 
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Search, Flame, Star, Trophy, Loader2, Zap, TrendingUp, User } from "lucide-react";
+import { Search, Flame, Star, Trophy, Loader2, Zap, TrendingUp, User, Rocket } from "lucide-react";
 import Link from "next/link";
 import { usePrivy, useWallets } from "@privy-io/react-auth";
 import { cn } from "@/lib/utils";
+import { getDemoSession, getDemoSlots, type DemoSlot } from "@/lib/demoSession";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
 
@@ -92,11 +93,26 @@ export default function CasinoLobby() {
   const [tab,           setTab]           = useState<Tab>("lobby");
   const [graduatedSlots, setGraduatedSlots] = useState<SlotEntry[]>([]);
   const [mySlots,       setMySlots]       = useState<SlotEntry[]>([]);
+  const [demoSlots,     setDemoSlots]     = useState<DemoSlot[]>([]);
+  const [isDemo,        setIsDemo]        = useState(false);
   const [loading,       setLoading]       = useState(true);
   const [myLoading,     setMyLoading]     = useState(false);
   const [search,        setSearch]        = useState("");
   const [filter,        setFilter]        = useState<Filter>("all");
   const [sort,          setSort]          = useState<SortMode>("featured");
+
+  // Detect demo session
+  useEffect(() => {
+    const sess = getDemoSession();
+    setIsDemo(sess !== null);
+    if (sess) setDemoSlots(getDemoSlots());
+    const timer = setInterval(() => {
+      const s = getDemoSession();
+      setIsDemo(s !== null);
+      if (s) setDemoSlots(getDemoSlots());
+    }, 1_000);
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     fetch(`${API_URL}/themes/graduated`)
@@ -165,7 +181,7 @@ export default function CasinoLobby() {
           ]).map(({ id, label, icon }) => (
             <button
               key={id}
-              onClick={() => { if (id === "my-slots" && !authenticated) { login(); return; } setTab(id); }}
+              onClick={() => { if (id === "my-slots" && !authenticated && !isDemo) { login(); return; } setTab(id); }}
               className={cn(
                 "flex items-center gap-1.5 px-4 py-3 text-xs font-orbitron font-bold tracking-wide border-b-2 transition-all -mb-px",
                 tab === id
@@ -177,12 +193,21 @@ export default function CasinoLobby() {
             </button>
           ))}
           <div className="ml-auto">
-            <Link
-              href="/demo"
-              className="flex items-center gap-1.5 text-[10px] font-orbitron font-bold text-purple-400/60 hover:text-purple-400 transition-colors px-3 py-3"
-            >
-              <Zap size={11} /> Try Demo
-            </Link>
+            {isDemo ? (
+              <Link
+                href="/demo/launch"
+                className="flex items-center gap-1.5 text-[10px] font-orbitron font-bold text-purple-400/60 hover:text-purple-400 transition-colors px-3 py-3"
+              >
+                <Rocket size={11} /> Launch a Slot
+              </Link>
+            ) : (
+              <Link
+                href="/demo"
+                className="flex items-center gap-1.5 text-[10px] font-orbitron font-bold text-purple-400/60 hover:text-purple-400 transition-colors px-3 py-3"
+              >
+                <Zap size={11} /> Try Demo
+              </Link>
+            )}
           </div>
         </div>
       </div>
@@ -227,7 +252,42 @@ export default function CasinoLobby() {
         {/* My Slots tab content */}
         {tab === "my-slots" && (
           <div className="space-y-6">
-            {myLoading ? (
+            {/* Demo mode: show localStorage slots */}
+            {isDemo ? (
+              <>
+                <div className="flex items-center justify-between">
+                  <p className="font-orbitron text-[10px] text-white/30 tracking-widest">YOUR DEMO SLOTS</p>
+                  <Link href="/demo/launch">
+                    <motion.button
+                      whileHover={{ scale: 1.03 }}
+                      whileTap={{ scale: 0.97 }}
+                      className="btn-launch flex items-center gap-1.5 py-2 px-4 text-[11px]"
+                    >
+                      <Rocket size={12} /> LAUNCH A SLOT
+                    </motion.button>
+                  </Link>
+                </div>
+                {demoSlots.length === 0 ? (
+                  <div className="text-center py-20 space-y-4">
+                    <p className="font-orbitron text-sm text-white/15 tracking-widest">NO DEMO SLOTS YET</p>
+                    <p className="text-white/25 text-sm font-rajdhani">
+                      Launch your first simulated slot token and watch the bonding curve fill up.
+                    </p>
+                    <Link href="/demo/launch">
+                      <button className="btn-launch flex items-center gap-2 mx-auto py-2.5 px-6 text-[12px]">
+                        <Rocket size={13} /> LAUNCH YOUR FIRST SLOT
+                      </button>
+                    </Link>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                    {demoSlots.map((slot, i) => (
+                      <DemoSlotCard key={slot.id} slot={slot} index={i} />
+                    ))}
+                  </div>
+                )}
+              </>
+            ) : myLoading ? (
               <div className="flex items-center justify-center py-28 text-white/25">
                 <Loader2 size={20} className="animate-spin mr-2" /> Loading your slots…
               </div>
@@ -345,20 +405,39 @@ export default function CasinoLobby() {
           className="relative overflow-hidden rounded-2xl border border-purple-500/15 bg-gradient-to-r from-purple-900/20 via-purple-800/10 to-purple-900/20 px-8 py-7 text-center"
         >
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(139,92,246,0.08),transparent_70%)]" />
-          <p className="relative font-orbitron text-sm font-bold text-white/80 tracking-wide mb-1">
-            Have a token on reelbit.fun?
-          </p>
-          <p className="relative text-white/30 text-sm font-rajdhani mb-4">
-            Reach 85 SOL on the bonding curve and your slot graduates here automatically.
-          </p>
-          <a
-            href="https://reelbit.fun"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="relative inline-flex items-center gap-2 btn-launch py-2.5 px-6 text-[11px]"
-          >
-            <TrendingUp size={13} /> Launch on reelbit.fun
-          </a>
+          {isDemo ? (
+            <>
+              <p className="relative font-orbitron text-sm font-bold text-white/80 tracking-wide mb-1">
+                Want to try the creator side?
+              </p>
+              <p className="relative text-white/30 text-sm font-rajdhani mb-4">
+                Launch a simulated slot token and watch bots drive it to $100k.
+              </p>
+              <Link
+                href="/demo/launch"
+                className="relative inline-flex items-center gap-2 btn-launch py-2.5 px-6 text-[11px]"
+              >
+                <Rocket size={13} /> Launch a Demo Slot
+              </Link>
+            </>
+          ) : (
+            <>
+              <p className="relative font-orbitron text-sm font-bold text-white/80 tracking-wide mb-1">
+                Have a token on reelbit.fun?
+              </p>
+              <p className="relative text-white/30 text-sm font-rajdhani mb-4">
+                Reach 85 SOL on the bonding curve and your slot graduates here automatically.
+              </p>
+              <a
+                href="https://reelbit.fun"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="relative inline-flex items-center gap-2 btn-launch py-2.5 px-6 text-[11px]"
+              >
+                <TrendingUp size={13} /> Launch on reelbit.fun
+              </a>
+            </>
+          )}
         </motion.div>
       </div>
     </div>
@@ -498,5 +577,127 @@ function PlaceholderArt({ slot }: { slot: SlotEntry }) {
         {slot.tokenSymbol}
       </div>
     </div>
+  );
+}
+
+// ── Demo Slot Card ────────────────────────────────────────────────────────────
+
+const DEMO_SLOT_ICONS: Record<string, string[]> = {
+  Classic3Reel:      ["🍒", "🍋", "7️⃣"],
+  Standard5Reel:     ["💎", "🃏", "⭐", "🔔", "💫"],
+  FiveReelFreeSpins: ["🐉", "🔥", "🔔", "💫", "🃏"],
+};
+
+const DEMO_MODEL_LABEL: Record<string, string> = {
+  Classic3Reel: "3-Reel", Standard5Reel: "5-Reel", FiveReelFreeSpins: "Free Spins",
+};
+
+function DemoSlotCard({ slot, index }: { slot: DemoSlot; index: number }) {
+  const progress  = Math.min(slot.realSolSim / 85, 1);
+  const icons     = DEMO_SLOT_ICONS[slot.model] ?? ["🎰"];
+  const modelColor = slot.primaryColor;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: index * 0.04, ease: "easeOut" }}
+    >
+      <Link href={`/demo/slot/${slot.id}`} className="block h-full group">
+        <div
+          className="card-slot h-full cursor-pointer"
+          style={{ "--hover-color": slot.primaryColor } as React.CSSProperties}
+        >
+          {/* Art area */}
+          <div
+            className="h-44 relative overflow-hidden slot-img-placeholder"
+            style={{
+              background: `linear-gradient(135deg, ${slot.primaryColor}22 0%, ${slot.accentColor}14 50%, #080818 100%)`,
+            }}
+          >
+            {slot.imageUri ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={slot.imageUri} alt={slot.name} className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+            ) : (
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
+                <div className="flex items-center gap-2">
+                  {icons.slice(0, slot.model === "Classic3Reel" ? 3 : 5).map((icon, i) => (
+                    <div key={i} className="w-10 h-10 rounded-lg flex items-center justify-center text-xl"
+                      style={{ background: `${slot.primaryColor}15`, border: `1px solid ${slot.primaryColor}25` }}>
+                      {icon}
+                    </div>
+                  ))}
+                </div>
+                <div className="font-orbitron text-xs font-black tracking-widest"
+                  style={{ color: slot.primaryColor, textShadow: `0 0 16px ${slot.primaryColor}80` }}>
+                  ${slot.ticker}
+                </div>
+              </div>
+            )}
+
+            {/* Badges */}
+            <div className="absolute top-2.5 left-2.5 flex gap-1.5">
+              {slot.graduated ? (
+                <span className="badge badge-graduated text-[9px]">
+                  <Trophy size={8} /> LIVE
+                </span>
+              ) : (
+                <span className="badge badge-gold text-[9px]">
+                  <Star size={8} /> DEMO
+                </span>
+              )}
+            </div>
+
+            {/* Model badge */}
+            <div className="absolute top-2.5 right-2.5">
+              <span className="badge text-[9px]"
+                style={{ background: `${modelColor}18`, border: `1px solid ${modelColor}35`, color: modelColor }}>
+                {DEMO_MODEL_LABEL[slot.model]}
+              </span>
+            </div>
+
+            {/* Bonding curve progress bar */}
+            <div className="absolute bottom-0 inset-x-0 px-3 pb-2">
+              <div className="h-1 rounded-full bg-white/10 overflow-hidden">
+                <div
+                  className="h-full rounded-full transition-all duration-700"
+                  style={{
+                    width: `${progress * 100}%`,
+                    background: slot.graduated
+                      ? "linear-gradient(90deg,#22c55e,#16a34a)"
+                      : `linear-gradient(90deg,${slot.primaryColor},${slot.accentColor})`,
+                  }}
+                />
+              </div>
+              <div className="flex justify-between mt-0.5 text-[8px] font-rajdhani text-white/25">
+                <span>{slot.realSolSim.toFixed(1)} SOL</span>
+                <span>85 SOL</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Info */}
+          <div className="p-4 space-y-3">
+            <div>
+              <p className="font-orbitron text-sm font-bold text-white/90 leading-tight">{slot.name}</p>
+              <p className="text-[11px] text-white/30 font-rajdhani mt-0.5">${slot.ticker}</p>
+            </div>
+
+            <motion.div
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
+              className="w-full py-2.5 rounded-xl text-center text-[11px] font-orbitron font-bold tracking-wider transition-all"
+              style={{
+                background: `${slot.primaryColor}18`,
+                color: slot.primaryColor,
+                border: `1px solid ${slot.primaryColor}30`,
+              }}
+            >
+              {slot.graduated ? "PLAY NOW →" : "VIEW CURVE →"}
+            </motion.div>
+          </div>
+        </div>
+      </Link>
+    </motion.div>
   );
 }
