@@ -4,8 +4,10 @@ import { Connection, PublicKey, Transaction, TransactionInstruction, sendAndConf
 import { config } from "./config";
 import { extractTokenLaunchEvents } from "./decoder";
 import { handleGraduation } from "./migration";
-import { getAllThemes, getTheme, getGraduatedThemes, setTheme, deriveColors } from "./themeStore";
+import { getAllThemes, getTheme, getGraduatedThemes, getThemesByCreator, setTheme, deriveColors } from "./themeStore";
 import type { SlotModel } from "./themeStore";
+import { apply as demoApply, approve as demoApprove, deny as demoDeny, getApplication, getAllApplications, isDemoUser, DEMO_CREDIT_USDC } from "./demoStore";
+import { getFakeActivity } from "./fakeBots";
 import { triggerThemeGeneration } from "./slotTheme";
 import { getPlayable, credit, debit, transfer, isSeenDeposit, markDepositSeen } from "./balanceStore";
 import { getHouseKeypair, getHouseWalletAddress, sendSol, verifyDepositTx } from "./houseWallet";
@@ -182,9 +184,9 @@ app.get("/metadata/:mint", (req: Request, res: Response) => {
 
 // Pre-register a token before launch so /metadata/:mint is ready for the Metaplex URI
 app.post("/themes/register", (req: Request, res: Response) => {
-  const { mint, tokenName, tokenSymbol, imageUri, description, model } = req.body as {
+  const { mint, tokenName, tokenSymbol, imageUri, description, model, creator } = req.body as {
     mint: string; tokenName: string; tokenSymbol: string;
-    imageUri?: string; description?: string; model?: string;
+    imageUri?: string; description?: string; model?: string; creator?: string;
   };
   if (!mint || !tokenName || !tokenSymbol) {
     return res.status(400).json({ error: "mint, tokenName, tokenSymbol required" });
@@ -197,6 +199,7 @@ app.post("/themes/register", (req: Request, res: Response) => {
     mint,
     tokenName,
     tokenSymbol,
+    creator: creator ?? undefined,
     slotModel: (model ?? "Classic3Reel") as SlotModel,
     graduated: false,
     status: "generating" as const,
@@ -208,6 +211,10 @@ app.post("/themes/register", (req: Request, res: Response) => {
   };
   setTheme(theme);
   res.status(201).json(theme);
+});
+
+app.get("/themes/by-creator/:wallet", (req: Request, res: Response) => {
+  res.json(getThemesByCreator(req.params.wallet));
 });
 
 // ── Fee constants ─────────────────────────────────────────────────────────────
@@ -292,6 +299,9 @@ app.post("/withdraw", async (req: Request, res: Response) => {
   };
   if (!wallet || !usdcUnits) {
     return res.status(400).json({ error: "wallet and usdcUnits required" });
+  }
+  if (isDemoUser(wallet)) {
+    return res.status(403).json({ error: "Demo balances cannot be withdrawn. Deposit real funds to unlock withdrawals." });
   }
   const to = destination ?? wallet;
   try {
@@ -624,6 +634,72 @@ app.post("/tokens/:mint/sell", async (req: Request, res: Response) => {
   const transaction = await buildUnsignedTx(connection, ix, seller);
 
   res.json({ transaction, solOut: netSol.toString(), minSolOut: minSolOut.toString() });
+});
+
+// ── Demo / beta-access endpoints ─────────────────────────────────────────────
+
+/** POST /demo/apply  { wallet, reason, twitter? } */
+app.post("/demo/apply", (req: Request, res: Response) => {
+  const { wallet, reason, twitter } = req.body as { wallet: string; reason: string; twitter?: string };
+  if (!wallet || !reason) return res.status(400).json({ error: "wallet and reason required" });
+  if (reason.length < 20 || reason.length > 500) {
+    return res.status(400).json({ error: "reason must be 20–500 characters" });
+  }
+  const existing = getApplication(wallet);
+  if (existing?.status === "approved") {
+    return res.json({ status: "approved", message: "Already approved — check your balance." });
+  }
+  const app = demoApply(wallet, reason, twitter ?? null);
+  res.status(201).json({ status: app.status, appliedAt: app.appliedAt });
+});
+
+/** GET /demo/status/:wallet */
+app.get("/demo/status/:wallet", (req: Request, res: Response) => {
+  const app = getApplication(req.params.wallet);
+  if (!app) return res.json({ status: "none" });
+  res.json({
+    status:    app.status,
+    appliedAt: app.appliedAt,
+    reviewedAt: app.reviewedAt ?? null,
+    isDemo: isDemoUser(req.params.wallet),
+  });
+});
+
+function requireAdmin(req: Request, res: Response, next: NextFunction) {
+  const key = req.headers["x-admin-key"];
+  if (!key || key !== config.adminKey) return res.status(403).json({ error: "Forbidden" });
+  next();
+}
+
+/** GET /demo/applications  (admin) */
+app.get("/demo/applications", requireAdmin, (_req: Request, res: Response) => {
+  res.json(getAllApplications());
+});
+
+/** POST /demo/approve  { wallet }  (admin) */
+app.post("/demo/approve", requireAdmin, (req: Request, res: Response) => {
+  const { wallet } = req.body as { wallet: string };
+  if (!wallet) return res.status(400).json({ error: "wallet required" });
+  try {
+    const app = demoApprove(wallet);
+    credit(wallet, DEMO_CREDIT_USDC);
+    res.json({ status: app.status, credited: DEMO_CREDIT_USDC });
+  } catch (err) { res.status(404).json({ error: (err as Error).message }); }
+});
+
+/** POST /demo/deny  { wallet }  (admin) */
+app.post("/demo/deny", requireAdmin, (req: Request, res: Response) => {
+  const { wallet } = req.body as { wallet: string };
+  if (!wallet) return res.status(400).json({ error: "wallet required" });
+  try {
+    const app = demoDeny(wallet);
+    res.json({ status: app.status });
+  } catch (err) { res.status(404).json({ error: (err as Error).message }); }
+});
+
+/** GET /demo/activity — simulated bot trades for demo display */
+app.get("/demo/activity", (_req: Request, res: Response) => {
+  res.json(getFakeActivity());
 });
 
 // ── Dividend endpoints ────────────────────────────────────────────────────────

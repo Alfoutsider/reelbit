@@ -300,26 +300,84 @@ export default function SlotPage({ params }: { params: { mint: string } }) {
               <BuySellPanel key={tradeKey} slot={slot} onTradeComplete={onTradeComplete} />
             </motion.div>
 
-            {/* Creator earnings */}
+            {/* Fee distribution */}
             <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }}
               className="card-panel p-5 space-y-3">
               <p className="font-orbitron text-[10px] font-bold text-white/40 tracking-widest">FEE DISTRIBUTION</p>
               <div className="space-y-2">
                 {[
-                  { k: "Creator",   v: "25%" },
-                  { k: "Platform",  v: "25%" },
-                  { k: "Jackpot",   v: "30%" },
-                  { k: "Legal",     v: "10%" },
-                  { k: "Licensing", v: "10%" },
-                ].map(({ k, v }) => (
+                  { k: "Creator",          v: "25%", highlight: true },
+                  { k: "Platform",         v: "25%", highlight: false },
+                  { k: "Jackpot Pool",     v: "45%", highlight: false },
+                  { k: "Legal+Licensing",  v: "5%",  highlight: false },
+                ].map(({ k, v, highlight }) => (
                   <div key={k} className="flex justify-between items-center">
                     <span className="font-rajdhani text-[12px] text-white/40">{k}</span>
-                    <span className="font-orbitron text-xs font-bold text-gold">{v}</span>
+                    <span className={`font-orbitron text-xs font-bold ${highlight ? "text-gold" : "text-white/50"}`}>{v}</span>
                   </div>
                 ))}
               </div>
               <p className="text-[11px] text-white/25 font-rajdhani border-t border-white/5 pt-3">
-                Distributed every 30 min from the fee vault. Jackpot funds the slot machine prize pool.
+                Distributed every 30 min from the fee vault. Jackpot seeds the casino prize pool at graduation.
+              </p>
+            </motion.div>
+
+            {/* Projection stats */}
+            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.16 }}
+              className="card-panel p-5 space-y-3">
+              <p className="font-orbitron text-[10px] font-bold text-white/40 tracking-widest">CREATOR PROJECTIONS</p>
+              <div className="space-y-2.5">
+                {(() => {
+                  const avgFeePct  = 0.015; // 1.5% mid-tier
+                  const creatorCut = 0.25;
+                  const mcapUsd    = slot.mcapUsd;
+                  const solLeft    = Math.max(0, 100_000 - mcapUsd);
+
+                  // Assume 1% daily turnover on remaining liquidity
+                  const estDailyVolUsd   = mcapUsd * 0.01;
+                  const estDailyCreator  = estDailyVolUsd * avgFeePct * creatorCut;
+                  const estWeeklyCreator = estDailyCreator * 7;
+
+                  // Post-graduation: LP fee from casino volume
+                  // Assume $10k/day casino volume at 4% house edge (GGR) distributed as LP
+                  const estMonthlyPostGrad = 10_000 * 0.04 * 0.25 * 30; // $3,000/month creator LP share
+
+                  const pctToGrad = Math.max(0, 100 - progress).toFixed(0);
+
+                  return [
+                    {
+                      label: "Est. daily creator fees",
+                      value: estDailyCreator > 0.01 ? `$${estDailyCreator.toFixed(2)}` : "—",
+                      sub: "at current MCap × 1% daily vol × 1.5% fee",
+                    },
+                    {
+                      label: "Est. weekly creator fees",
+                      value: estWeeklyCreator > 0.01 ? `$${estWeeklyCreator.toFixed(2)}` : "—",
+                      sub: "same velocity",
+                    },
+                    {
+                      label: slot.graduated ? "Post-grad LP share" : "At graduation — LP share",
+                      value: `~$3,000/mo`,
+                      sub: "25% of casino LP fees (est. $10k/day volume)",
+                    },
+                    {
+                      label: "Remaining to graduation",
+                      value: slot.graduated ? "✓ Graduated" : `${pctToGrad}% left`,
+                      sub: slot.graduated ? "Your slot is live in the casino" : `~$${(solLeft / 1000).toFixed(0)}K MCap to go`,
+                    },
+                  ].map(({ label, value, sub }) => (
+                    <div key={label} className="space-y-0.5">
+                      <div className="flex justify-between items-baseline">
+                        <span className="font-rajdhani text-[11px] text-white/35">{label}</span>
+                        <span className="font-orbitron text-xs font-bold text-purple-400">{value}</span>
+                      </div>
+                      <p className="text-[9px] text-white/20 font-rajdhani">{sub}</p>
+                    </div>
+                  ));
+                })()}
+              </div>
+              <p className="text-[9px] text-white/15 font-rajdhani border-t border-white/5 pt-3">
+                Projections are estimates based on current curve state and assumed trading velocity. Not financial advice.
               </p>
             </motion.div>
 

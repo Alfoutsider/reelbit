@@ -9,6 +9,7 @@ export interface SlotTheme {
   tokenSymbol: string;
   slotModel: SlotModel;
   graduated: boolean;
+  creator?: string;      // wallet that launched this slot (set during register)
   poolAddress?: string; // Meteora DLMM LB pair address (set after graduation migration)
   status: "generating" | "ready" | "failed";
   heroImageUrl: string | null;
@@ -68,6 +69,10 @@ export function getGraduatedWithPool(): SlotTheme[] {
   return Object.values(readStore()).filter(
     (t) => t.graduated && t.poolAddress != null,
   );
+}
+
+export function getThemesByCreator(creator: string): SlotTheme[] {
+  return Object.values(readStore()).filter((t) => t.creator === creator);
 }
 
 export function setTheme(theme: SlotTheme): void {

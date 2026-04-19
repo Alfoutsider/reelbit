@@ -18,6 +18,7 @@ import { getAllThemes } from "./themeStore";
 import type { SlotGraduatedEvent } from "./types";
 import { config } from "./config";
 import { fetchBondingCurveState } from "./tradingApi";
+import { tickFakeBots } from "./fakeBots";
 
 const MCAP_TARGET_USD    = 100_000;    // $100k
 const POLL_INTERVAL_MS   = 60_000;    // 60 seconds
@@ -51,6 +52,8 @@ async function checkGraduation(connection: Connection): Promise<void> {
         // price_per_token_usd = price_per_token_sol * solPrice
         // mcap_usd = price_per_token_usd * TOTAL_SUPPLY
         const mcapUsd = (virtualSolSol / virtualTokensRaw) * solPrice * TOTAL_SUPPLY;
+
+        tickFakeBots(mcapUsd);
 
         if (mcapUsd >= MCAP_TARGET_USD) {
           console.log(

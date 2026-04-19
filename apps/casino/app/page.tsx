@@ -2,8 +2,9 @@
 
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, Flame, Star, Trophy, Loader2, Zap, TrendingUp } from "lucide-react";
+import { Search, Flame, Star, Trophy, Loader2, Zap, TrendingUp, User, Gift } from "lucide-react";
 import Link from "next/link";
+import { usePrivy, useWallets } from "@privy-io/react-auth";
 import { cn } from "@/lib/utils";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
@@ -49,6 +50,7 @@ const SAMPLE_WINS = [
   { wallet: "9xQ…Fin", sol: "2.1",  slot: "Dragon's Fortune", mult: 21  },
 ];
 
+type Tab      = "lobby" | "my-slots";
 type Filter   = "all" | "demo" | "graduated";
 type SortMode = "featured" | "new" | "name";
 
@@ -83,11 +85,18 @@ function LiveTicker() {
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function CasinoLobby() {
+  const { authenticated, login } = usePrivy();
+  const { wallets } = useWallets();
+  const walletAddress = wallets[0]?.address ?? "";
+
+  const [tab,           setTab]           = useState<Tab>("lobby");
   const [graduatedSlots, setGraduatedSlots] = useState<SlotEntry[]>([]);
-  const [loading, setLoading]   = useState(true);
-  const [search,  setSearch]    = useState("");
-  const [filter,  setFilter]    = useState<Filter>("all");
-  const [sort,    setSort]      = useState<SortMode>("featured");
+  const [mySlots,       setMySlots]       = useState<SlotEntry[]>([]);
+  const [loading,       setLoading]       = useState(true);
+  const [myLoading,     setMyLoading]     = useState(false);
+  const [search,        setSearch]        = useState("");
+  const [filter,        setFilter]        = useState<Filter>("all");
+  const [sort,          setSort]          = useState<SortMode>("featured");
 
   useEffect(() => {
     fetch(`${API_URL}/themes/graduated`)
@@ -103,10 +112,28 @@ export default function CasinoLobby() {
       .finally(() => setLoading(false));
   }, []);
 
-  const allSlots: SlotEntry[] = [...graduatedSlots, ...DEMO_SLOTS];
+  useEffect(() => {
+    if (tab !== "my-slots" || !walletAddress) return;
+    setMyLoading(true);
+    fetch(`${API_URL}/themes/by-creator/${walletAddress}`)
+      .then((r) => r.json())
+      .then((data: Array<{ mint: string; tokenName: string; tokenSymbol: string; slotModel: string; heroImageUrl: string | null; primaryColor: string; accentColor: string; graduated: boolean }>) =>
+        setMySlots(data.map((t) => ({
+          ...t,
+          slotModel: t.slotModel as SlotEntry["slotModel"],
+          isDemo: false, isGraduated: t.graduated,
+        }))),
+      )
+      .catch(() => setMySlots([]))
+      .finally(() => setMyLoading(false));
+  }, [tab, walletAddress]);
 
-  const filtered = allSlots
+  const allSlots: SlotEntry[] = [...graduatedSlots, ...DEMO_SLOTS];
+  const activeSlots = tab === "my-slots" ? mySlots : allSlots;
+
+  const filtered = activeSlots
     .filter((s) => {
+      if (tab === "my-slots") return true; // no filter on My Slots
       const q = search.toLowerCase();
       const matchSearch = s.tokenName.toLowerCase().includes(q) || s.tokenSymbol.toLowerCase().includes(q);
       const matchFilter =
@@ -128,6 +155,37 @@ export default function CasinoLobby() {
       <div className="orb w-80 h-80 bg-cyan-500/4 bottom-40 right-10" style={{ animationDelay: "4s" }} />
 
       <LiveTicker />
+
+      {/* Tab bar */}
+      <div className="border-b border-white/5 bg-[#07070f]">
+        <div className="max-w-7xl mx-auto px-4 flex items-center gap-1">
+          {([
+            { id: "lobby" as Tab,    label: "Casino Lobby", icon: <Zap size={13} /> },
+            { id: "my-slots" as Tab, label: "My Slots",     icon: <User size={13} /> },
+          ]).map(({ id, label, icon }) => (
+            <button
+              key={id}
+              onClick={() => { if (id === "my-slots" && !authenticated) { login(); return; } setTab(id); }}
+              className={cn(
+                "flex items-center gap-1.5 px-4 py-3 text-xs font-orbitron font-bold tracking-wide border-b-2 transition-all -mb-px",
+                tab === id
+                  ? "border-purple-500 text-purple-400"
+                  : "border-transparent text-white/30 hover:text-white/60",
+              )}
+            >
+              {icon} {label}
+            </button>
+          ))}
+          <div className="ml-auto">
+            <Link
+              href="/demo"
+              className="flex items-center gap-1.5 text-[10px] font-orbitron font-bold text-purple-400/60 hover:text-purple-400 transition-colors px-3 py-3"
+            >
+              <Gift size={11} /> Beta Access
+            </Link>
+          </div>
+        </div>
+      </div>
 
       <div className="max-w-7xl mx-auto px-4 py-10 space-y-8">
 
@@ -166,8 +224,34 @@ export default function CasinoLobby() {
           </div>
         </motion.div>
 
-        {/* Filter / search controls */}
-        <div className="flex flex-col sm:flex-row gap-3">
+        {/* My Slots tab content */}
+        {tab === "my-slots" && (
+          <div className="space-y-6">
+            {myLoading ? (
+              <div className="flex items-center justify-center py-28 text-white/25">
+                <Loader2 size={20} className="animate-spin mr-2" /> Loading your slots…
+              </div>
+            ) : mySlots.length === 0 ? (
+              <div className="text-center py-28 space-y-3">
+                <p className="font-orbitron text-sm text-white/15 tracking-widest">NO SLOTS YET</p>
+                <p className="text-white/25 text-sm font-rajdhani">
+                  Launch your slot on{" "}
+                  <a href="https://reelbit.fun" target="_blank" rel="noopener noreferrer" className="text-purple-400 hover:underline">
+                    reelbit.fun
+                  </a>{" "}
+                  — when it graduates it appears here.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {mySlots.map((slot, i) => <SlotCard key={slot.mint} slot={slot} index={i} />)}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Filter / search controls — lobby tab only */}
+        {tab === "lobby" && <div className="flex flex-col sm:flex-row gap-3">
           <div className="relative flex-1">
             <Search size={13} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/25" />
             <input
@@ -214,10 +298,10 @@ export default function CasinoLobby() {
               ))}
             </div>
           </div>
-        </div>
+        </div>}
 
-        {/* Graduated section divider */}
-        {filter !== "demo" && graduatedSlots.length > 0 && (
+        {/* Graduated section divider — lobby only */}
+        {tab === "lobby" && filter !== "demo" && graduatedSlots.length > 0 && (
           <div className="flex items-center gap-3">
             <div className="h-px flex-1 bg-gradient-to-r from-transparent via-green-500/20 to-transparent" />
             <span className="badge badge-graduated font-orbitron text-[9px]">
@@ -227,8 +311,8 @@ export default function CasinoLobby() {
           </div>
         )}
 
-        {/* Slot grid */}
-        {loading ? (
+        {/* Slot grid — lobby only */}
+        {tab === "lobby" && (loading ? (
           <div className="flex items-center justify-center py-28 text-white/25">
             <Loader2 size={20} className="animate-spin mr-2" /> Loading slots…
           </div>
@@ -242,10 +326,10 @@ export default function CasinoLobby() {
               <SlotCard key={slot.mint} slot={slot} index={i} />
             ))}
           </div>
-        )}
+        ))}
 
-        {/* Demo section label */}
-        {filter !== "graduated" && !loading && (
+        {/* Demo section label — lobby only */}
+        {tab === "lobby" && filter !== "graduated" && !loading && (
           <div className="flex items-center gap-3 pt-2">
             <div className="h-px flex-1 bg-white/[0.04]" />
             <span className="text-[9px] font-orbitron text-white/15 tracking-widest">FEATURED DEMO SLOTS — NO DEPOSIT REQUIRED</span>
