@@ -37,6 +37,7 @@ body {
 
 /* ─── Typography ─────────────────────────────────────────────── */
 .font-orbitron { font-family: 'Orbitron', sans-serif; }
+.font-rajdhani { font-family: 'Rajdhani', sans-serif; }
 
 .gold-text {
   background: linear-gradient(135deg, var(--gold-light) 0%, var(--gold) 50%, var(--gold-dim) 100%);
@@ -45,15 +46,151 @@ body {
   background-clip: text;
 }
 
+.purple-text {
+  background: linear-gradient(135deg, #c084fc 0%, var(--purple) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ─── Card ───────────────────────────────────────────────────── */
+.card-slot {
+  background: linear-gradient(135deg, var(--bg-card) 0%, var(--bg-surface) 100%);
+  border: 1px solid rgba(255,255,255,0.05);
+  border-radius: 16px;
+  transition: border-color 0.25s, box-shadow 0.25s, transform 0.25s;
+  position: relative;
+  overflow: hidden;
+}
+
+.card-slot::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(212,160,23,0.05), transparent 60%);
+  opacity: 0;
+  transition: opacity 0.25s;
+  pointer-events: none;
+}
+
+.card-slot:hover {
+  border-color: rgba(212,160,23,0.3);
+  box-shadow: 0 8px 40px rgba(212,160,23,0.1), 0 0 0 1px rgba(212,160,23,0.08);
+  transform: translateY(-3px);
+}
+.card-slot:hover::before { opacity: 1; }
+
+/* ─── Shimmer on hover ───────────────────────────────────────── */
+.card-slot::after {
+  content: '';
+  position: absolute;
+  top: 0; left: -100%;
+  width: 60%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.04), transparent);
+  transition: left 0.6s ease;
+  pointer-events: none;
+}
+.card-slot:hover::after { left: 160%; }
+
+/* ─── Badges ─────────────────────────────────────────────────── */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: 20px;
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 700;
+  font-family: 'Orbitron', sans-serif;
+  letter-spacing: 0.04em;
+}
+.badge-graduated { background: rgba(34,197,94,0.12); border: 1px solid rgba(34,197,94,0.3); color: #4ade80; }
+.badge-model     { background: rgba(139,92,246,0.10); border: 1px solid rgba(139,92,246,0.25); color: #c084fc; }
+.badge-gold      { background: rgba(212,160,23,0.10); border: 1px solid rgba(212,160,23,0.3); color: var(--gold-light); }
+.badge-hot       { background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.3); color: #f87171; }
+
+/* ─── Inputs ─────────────────────────────────────────────────── */
+.input-casino {
+  width: 100%;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  color: #e8e8f4;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.input-casino::placeholder { color: rgba(255,255,255,0.2); }
+.input-casino:focus { border-color: rgba(139,92,246,0.5); box-shadow: 0 0 0 3px rgba(139,92,246,0.08); }
+
+/* ─── Stat box ───────────────────────────────────────────────── */
+.stat-box {
+  background: rgba(255,255,255,0.02);
+  border: 1px solid rgba(255,255,255,0.05);
+  border-radius: 12px;
+  padding: 12px 16px;
+}
+.stat-box .label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  color: rgba(255,255,255,0.3);
+  font-family: 'Orbitron', sans-serif;
+  text-transform: uppercase;
+}
+.stat-box .value {
+  font-size: 18px;
+  font-weight: 700;
+  font-family: 'Orbitron', sans-serif;
+  color: #e8e8f4;
+  margin-top: 2px;
+}
+
+/* ─── Buttons ────────────────────────────────────────────────── */
+.btn-launch {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  background: linear-gradient(135deg, #7c3aed 0%, var(--purple) 100%);
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  padding: 10px 20px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.btn-launch:hover { box-shadow: 0 0 24px rgba(139,92,246,0.5); }
+
+/* ─── Slot img placeholder ───────────────────────────────────── */
+.slot-img-placeholder {
+  background: linear-gradient(135deg, #0f0f28 0%, #1a0a2e 50%, #0a1428 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 /* ─── Symbol win animation ───────────────────────────────────── */
 @keyframes symbolPulse {
   from { filter: drop-shadow(0 0 6px rgba(255,215,0,0.6)); }
-  to   { filter: drop-shadow(0 0 18px rgba(255,215,0,1)) drop-shadow(0 0 32px rgba(255,215,0,0.4)); }
+  to   { filter: drop-shadow(0 0 20px rgba(255,215,0,1)) drop-shadow(0 0 40px rgba(255,215,0,0.5)); }
 }
+.symbol-win { animation: symbolPulse 0.5s ease-in-out infinite alternate; }
 
-.symbol-win {
-  animation: symbolPulse 0.6s ease-in-out infinite alternate;
+/* ─── Win flash ──────────────────────────────────────────────── */
+@keyframes winFlash {
+  0%   { opacity: 0; }
+  15%  { opacity: 0.6; }
+  50%  { opacity: 0.2; }
+  80%  { opacity: 0.5; }
+  100% { opacity: 0; }
 }
+.win-flash { animation: winFlash 0.7s ease-out forwards; pointer-events: none; }
 
 /* ─── LCD display ────────────────────────────────────────────── */
 .lcd-display {
@@ -66,31 +203,6 @@ body {
   letter-spacing: 0.1em;
 }
 
-/* ─── Spin button ────────────────────────────────────────────── */
-.spin-btn {
-  font-family: 'Orbitron', sans-serif;
-  font-weight: 900;
-  letter-spacing: 0.15em;
-  background: linear-gradient(135deg, var(--purple-dark), var(--purple));
-  border: 2px solid rgba(139,92,246,0.5);
-  border-radius: 50%;
-  color: #fff;
-  cursor: pointer;
-  transition: all 0.2s;
-  position: relative;
-  overflow: hidden;
-}
-
-.spin-btn:hover { box-shadow: 0 0 40px rgba(139,92,246,0.6); border-color: rgba(139,92,246,0.9); }
-.spin-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.spin-btn::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(circle at 40% 35%, rgba(255,255,255,0.15), transparent 60%);
-  border-radius: 50%;
-}
-
 /* ─── Ambient orb ────────────────────────────────────────────── */
 .orb {
   position: fixed;
@@ -99,29 +211,62 @@ body {
   filter: blur(80px);
   animation: orbFloat 12s ease-in-out infinite;
 }
-
 @keyframes orbFloat {
   0%, 100% { transform: translate(0, 0) scale(1); }
   33%       { transform: translate(20px, -30px) scale(1.05); }
   66%       { transform: translate(-15px, 15px) scale(0.95); }
 }
 
-/* ─── Bet controls ───────────────────────────────────────────── */
-.bet-btn {
+/* ─── Spin button ────────────────────────────────────────────── */
+.spin-btn {
   font-family: 'Orbitron', sans-serif;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  background: rgba(212,160,23,0.08);
-  border: 1px solid rgba(212,160,23,0.2);
-  border-radius: 8px;
-  color: var(--gold);
-  padding: 6px 12px;
+  font-weight: 900;
+  letter-spacing: 0.15em;
+  background: linear-gradient(180deg, var(--purple) 0%, var(--purple-dark) 100%);
+  border: 3px solid rgba(139,92,246,0.6);
+  border-radius: 50%;
+  color: #fff;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all 0.2s;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 0 32px rgba(139,92,246,0.4), inset 0 2px 0 rgba(255,255,255,0.2);
+}
+.spin-btn:hover { box-shadow: 0 0 56px rgba(139,92,246,0.7), inset 0 2px 0 rgba(255,255,255,0.2); }
+.spin-btn:disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; }
+.spin-btn::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 40% 30%, rgba(255,255,255,0.18), transparent 60%);
+  border-radius: 50%;
 }
 
-.bet-btn:hover { background: rgba(212,160,23,0.15); border-color: rgba(212,160,23,0.45); }
+@keyframes spinBtnPulse {
+  0%, 100% { box-shadow: 0 0 32px rgba(139,92,246,0.4), inset 0 2px 0 rgba(255,255,255,0.2); }
+  50%       { box-shadow: 0 0 56px rgba(139,92,246,0.65), inset 0 2px 0 rgba(255,255,255,0.2); }
+}
+.spin-btn-idle { animation: spinBtnPulse 2.5s ease-in-out infinite; }
+
+/* ─── Live ticker ────────────────────────────────────────────── */
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+.marquee-track { overflow: hidden; }
+.marquee-inner {
+  display: flex;
+  width: max-content;
+  animation: marquee 32s linear infinite;
+}
+.marquee-inner:hover { animation-play-state: paused; }
+
+/* ─── Gold pulse ─────────────────────────────────────────────── */
+@keyframes pulseGold {
+  0%, 100% { opacity: 1; box-shadow: 0 0 4px rgba(212,160,23,0.4); }
+  50%       { opacity: 0.7; box-shadow: 0 0 14px rgba(212,160,23,0.9); }
+}
+.animate-pulse-gold { animation: pulseGold 2s ease-in-out infinite; }
 
 /* ─── Glow helpers ───────────────────────────────────────────── */
 .glow-gold   { box-shadow: 0 0 24px rgba(212,160,23,0.3); }
