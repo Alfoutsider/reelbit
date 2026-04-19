@@ -3,10 +3,6 @@
   "buildCommand": "npm run build",
   "outputDirectory": ".next",
   "installCommand": "npm install",
-  "env": {
-    "NEXT_PUBLIC_API_URL": "@reelbit-api-url",
-    "NEXT_PUBLIC_PRIVY_APP_ID": "@reelbit-privy-app-id"
-  },
   "headers": [
     {
       "source": "/(.*)",
