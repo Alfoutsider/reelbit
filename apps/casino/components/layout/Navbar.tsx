@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { Wallet, LogOut, Zap, User, Gamepad2 } from "lucide-react";
+import { Wallet, LogOut, Zap, User, Gamepad2, TrendingUp } from "lucide-react";
 import { usePrivy, useWallets } from "@/lib/privy";
 import { useRouter } from "next/navigation";
 import { WalletModal } from "@/components/wallet/WalletModal";
@@ -66,6 +66,9 @@ export function Navbar() {
 
           {/* Right */}
           <div className="flex items-center gap-2">
+            <Link href="/calculator" className="hidden sm:flex items-center gap-1 text-[#d4a017]/40 hover:text-[#d4a017]/70 text-[10px] font-orbitron tracking-wider transition-colors">
+              <TrendingUp size={10} /> CALCULATOR
+            </Link>
             <div className="hidden sm:flex items-center gap-1 text-green-400/50 text-[10px] font-orbitron tracking-wider">
               <Zap size={10} /> 96% RTP
             </div>
