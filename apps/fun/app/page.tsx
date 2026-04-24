@@ -103,7 +103,7 @@ export default function HomePage() {
                 <Rocket size={16} /> LAUNCH YOUR SLOT
               </motion.button>
             </Link>
-            <a href="https://reelbit.casino" target="_blank" rel="noopener noreferrer">
+            <a href="https://reelbit-casino.vercel.app" target="_blank" rel="noopener noreferrer">
               <motion.button
                 whileHover={{ scale: 1.04 }}
                 whileTap={{ scale: 0.97 }}

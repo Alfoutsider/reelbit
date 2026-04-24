@@ -31,7 +31,7 @@ export function Navbar() {
               {label}
             </Link>
           ))}
-          <a href="https://reelbit.casino" target="_blank" rel="noopener noreferrer"
+          <a href="https://reelbit-casino.vercel.app" target="_blank" rel="noopener noreferrer"
             className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold text-gold/70 hover:text-gold hover:bg-gold/5 transition-all font-rajdhani">
             <Zap size={13} className="text-gold" />
             Casino
