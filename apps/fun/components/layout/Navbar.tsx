@@ -6,24 +6,6 @@ import { motion } from "framer-motion";
 import { Wallet, ExternalLink, Zap } from "lucide-react";
 import { shortenAddress } from "@/lib/utils";
 
-function LogoMark({ size = 34 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 34 34" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path d="M17 3 L30 10 L17 17 L4 10 Z" fill="#f0ebe0"/>
-      <path d="M4 10 L17 17 L17 31 L4 24 Z" fill="#d8d3c8"/>
-      <path d="M17 17 L30 10 L30 24 L17 31 Z" fill="#ccc8bc"/>
-      <line x1="17" y1="3" x2="17" y2="5.5" stroke="#c41e1e" strokeWidth="1.5" strokeLinecap="round"/>
-      <line x1="25.5" y1="5.5" x2="24" y2="7.3" stroke="#c41e1e" strokeWidth="1.5" strokeLinecap="round"/>
-      <line x1="30" y1="10" x2="27.5" y2="10" stroke="#c41e1e" strokeWidth="1.5" strokeLinecap="round"/>
-      <line x1="25.5" y1="14.5" x2="24" y2="12.7" stroke="#c41e1e" strokeWidth="1.5" strokeLinecap="round"/>
-      <line x1="8.5" y1="5.5" x2="10" y2="7.3" stroke="#c41e1e" strokeWidth="1.5" strokeLinecap="round"/>
-      <line x1="4" y1="10" x2="6.5" y2="10" stroke="#c41e1e" strokeWidth="1.5" strokeLinecap="round"/>
-      <line x1="8.5" y1="14.5" x2="10" y2="12.7" stroke="#c41e1e" strokeWidth="1.5" strokeLinecap="round"/>
-      <text x="6.5" y="26" fontFamily="Georgia, serif" fontWeight="bold" fontSize="8" fill="#1a1a1a">R</text>
-      <text x="20" y="26" fontFamily="Georgia, serif" fontWeight="bold" fontSize="8" fill="#c41e1e">B</text>
-    </svg>
-  );
-}
 
 export function Navbar() {
   const { ready, authenticated, user, login, logout } = usePrivy();
@@ -33,8 +15,9 @@ export function Navbar() {
     <nav className="sticky top-0 z-50 nav-border bg-[#06060a]/90 backdrop-blur-xl">
       <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3.5">
         <Link href="/" className="flex items-center gap-2.5 group">
-          <div className="relative flex items-center justify-center w-9 h-9 rounded-xl border border-[rgba(196,30,30,0.25)] bg-[rgba(196,30,30,0.05)] group-hover:border-[rgba(196,30,30,0.5)] transition-all">
-            <LogoMark size={28} />
+          <div className="relative flex items-center justify-center w-9 h-9 rounded-xl overflow-hidden border border-[rgba(196,30,30,0.25)] group-hover:border-[rgba(196,30,30,0.5)] transition-all">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo-icon.jpg" alt="ReelBit" className="w-full h-full object-cover" />
           </div>
           <span className="font-orbitron text-[15px] font-bold tracking-wider">
             <span style={{ color: "var(--brand-cream)" }}>Reel</span>
