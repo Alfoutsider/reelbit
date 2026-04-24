@@ -15,14 +15,12 @@ export function Navbar() {
     <nav className="sticky top-0 z-50 nav-border bg-[#06060a]/90 backdrop-blur-xl">
       <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3.5">
         <Link href="/" className="flex items-center gap-2.5 group">
-          <div className="relative flex items-center justify-center w-9 h-9 rounded-xl overflow-hidden border border-[rgba(196,30,30,0.25)] group-hover:border-[rgba(196,30,30,0.5)] transition-all">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logo-icon.jpg" alt="ReelBit" className="w-full h-full object-cover" />
-          </div>
-          <span className="font-orbitron text-[15px] font-bold tracking-wider">
-            <span style={{ color: "var(--brand-cream)" }}>Reel</span>
-            <span className="red-text">Bit</span>
-            <span style={{ color: "rgba(240,235,224,0.3)" }}>.fun</span>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo-icon.png" alt="ReelBit" className="w-10 h-10 object-contain" />
+          <span className="font-rajdhani text-[20px] font-bold leading-none">
+            <span className="text-white">Reel</span>
+            <span style={{ color: "var(--brand-red)" }}>Bit</span>
+            <span style={{ color: "rgba(255,255,255,0.3)" }}>.fun</span>
           </span>
         </Link>
 

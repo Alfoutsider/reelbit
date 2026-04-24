@@ -62,11 +62,9 @@ export function Navbar() {
 
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2 group">
-            <div className="flex items-center justify-center w-8 h-8 rounded-xl overflow-hidden border border-[rgba(212,160,23,0.2)] group-hover:border-[rgba(212,160,23,0.45)] transition-all">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/logo-icon.jpg" alt="ReelBit" className="w-full h-full object-cover" />
-            </div>
-            <span className="font-orbitron text-[14px] font-bold tracking-wider">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo-icon.png" alt="ReelBit" className="w-9 h-9 object-contain" />
+            <span className="font-rajdhani text-[20px] font-bold leading-none">
               <span className="text-white">Reel</span>
               <span className="gold-text">Bit</span>
               <span style={{ color: "rgba(212,160,23,0.4)" }}>.casino</span>
