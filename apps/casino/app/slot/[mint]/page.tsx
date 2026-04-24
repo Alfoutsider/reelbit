@@ -174,6 +174,7 @@ export default function CasinoSlotPage({ params }: { params: { mint: string } })
       }
 
       setSpinResult(result);
+      setIsSpinning(false);
       if (isFree) setFreeSpinsLeft((p) => p - 1);
       if (result.freeSpinsAwarded > 0) setFreeSpinsLeft((p) => p + result.freeSpinsAwarded);
       setTotalWagered((p) => p + (isFree ? 0 : betUsdc));
