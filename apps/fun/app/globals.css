@@ -5,16 +5,25 @@
 @tailwind utilities;
 
 :root {
+  /* Brand palette */
+  --brand-red:       #c41e1e;
+  --brand-red-dark:  #8b0000;
+  --brand-red-light: #e84444;
+  --brand-red-dim:   rgba(196,30,30,0.15);
+  --brand-cream:     #f0ebe0;
+  --brand-black:     #1a1a1a;
+
+  /* Neutral accents */
   --gold:        #d4a017;
   --gold-light:  #f5c842;
   --gold-dim:    #a07810;
-  --purple:      #8b5cf6;
-  --purple-dark: #5b21b6;
   --cyan:        #06b6d4;
-  --bg-deep:    #06060f;
-  --bg-dark:    #0a0a18;
-  --bg-surface: #0f0f22;
-  --bg-card:    #12122a;
+
+  /* Backgrounds */
+  --bg-deep:    #06060a;
+  --bg-dark:    #0a0a0f;
+  --bg-surface: #0f0f18;
+  --bg-card:    #131320;
 }
 
 * { box-sizing: border-box; }
@@ -28,13 +37,31 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* ─── Scrollbar ──────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(139,92,246,0.35); border-radius: 2px; }
+::-webkit-scrollbar-thumb { background: rgba(196,30,30,0.4); border-radius: 2px; }
 
+/* ─── Typography utilities ───────────────────────────────────── */
 .font-orbitron { font-family: 'Orbitron', sans-serif; }
 .font-rajdhani { font-family: 'Rajdhani', sans-serif; }
 
+.red-text {
+  background: linear-gradient(135deg, var(--brand-red-light) 0%, var(--brand-red) 50%, var(--brand-red-dark) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* grad-text: cream→red (hero headings) */
+.grad-text {
+  background: linear-gradient(135deg, var(--brand-cream) 0%, var(--brand-red-light) 50%, var(--brand-red) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* gold-text kept for graduated indicators */
 .gold-text {
   background: linear-gradient(135deg, var(--gold-light) 0%, var(--gold) 50%, var(--gold-dim) 100%);
   -webkit-background-clip: text;
@@ -42,67 +69,81 @@ body {
   background-clip: text;
 }
 
+/* purple-text kept as compat alias → now red */
 .purple-text {
-  background: linear-gradient(135deg, #c084fc 0%, var(--purple) 100%);
+  background: linear-gradient(135deg, var(--brand-red-light) 0%, var(--brand-red) 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
 
-.grad-text {
-  background: linear-gradient(135deg, var(--gold-light) 0%, #f472b6 50%, var(--purple) 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
+/* ─── Background helpers ─────────────────────────────────────── */
 .casino-bg {
   background: var(--bg-deep);
   background-image:
-    radial-gradient(ellipse 80% 40% at 50% -10%, rgba(139,92,246,0.08) 0%, transparent 70%),
-    radial-gradient(ellipse 60% 30% at 80% 80%, rgba(6,182,212,0.04) 0%, transparent 60%);
+    radial-gradient(ellipse 80% 40% at 50% -10%, rgba(196,30,30,0.06) 0%, transparent 70%),
+    radial-gradient(ellipse 60% 30% at 80% 80%, rgba(196,30,30,0.03) 0%, transparent 60%);
 }
 
+/* ─── Grid overlay ───────────────────────────────────────────── */
+.grid-overlay {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(240,235,224,0.012) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(240,235,224,0.012) 1px, transparent 1px);
+  background-size: 48px 48px;
+  pointer-events: none;
+}
+
+/* ─── Slot card (container shell) ───────────────────────────── */
 .card-slot {
-  background: linear-gradient(135deg, var(--bg-card) 0%, var(--bg-surface) 100%);
-  border: 1px solid rgba(255,255,255,0.05);
+  background: var(--bg-card);
+  border: 1px solid rgba(196,30,30,0.12);
   border-radius: 16px;
-  transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
+  transition: border-color 0.22s, box-shadow 0.22s, transform 0.22s;
   position: relative;
   overflow: hidden;
 }
 
-.card-slot::before {
+.card-slot:hover {
+  border-color: rgba(196,30,30,0.45);
+  box-shadow: 0 12px 40px rgba(196,30,30,0.18), 0 0 0 1px rgba(196,30,30,0.1);
+  transform: translateY(-4px);
+}
+
+/* Shimmer sweep on hover */
+.card-slot::after {
   content: '';
   position: absolute;
-  inset: 0;
-  border-radius: 16px;
-  background: linear-gradient(135deg, rgba(212,160,23,0.04), transparent 60%);
-  opacity: 0;
-  transition: opacity 0.2s;
+  top: 0; left: -100%;
+  width: 60%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(240,235,224,0.06), transparent);
+  transition: left 0.6s ease;
   pointer-events: none;
 }
+.card-slot:hover::after { left: 160%; }
 
-.card-slot:hover {
-  border-color: rgba(212,160,23,0.3);
-  box-shadow: 0 8px 40px rgba(212,160,23,0.08), 0 0 0 1px rgba(212,160,23,0.1);
-  transform: translateY(-3px);
+/* Cream body — applied to the card body section (below image) */
+.card-body-cream {
+  background: linear-gradient(150deg, var(--brand-cream) 0%, #e8e3d8 100%);
 }
 
-.card-slot:hover::before { opacity: 1; }
-
+/* ─── Panel card (dark, for detail page sections) ───────────── */
 .card-panel {
   background: var(--bg-surface);
   border: 1px solid rgba(255,255,255,0.05);
   border-radius: 16px;
 }
 
+/* ─── Buttons ────────────────────────────────────────────────── */
 .btn-launch {
   font-family: 'Orbitron', sans-serif;
   font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.08em;
-  background: linear-gradient(135deg, #7c3aed 0%, var(--purple) 100%);
+  background: linear-gradient(135deg, var(--brand-red-dark) 0%, var(--brand-red) 100%);
   color: #fff;
   border: none;
   border-radius: 12px;
@@ -111,9 +152,9 @@ body {
   transition: all 0.2s;
   position: relative;
   overflow: hidden;
+  box-shadow: 0 4px 20px rgba(196,30,30,0.3);
 }
-
-.btn-launch:hover { box-shadow: 0 0 24px rgba(139,92,246,0.5); }
+.btn-launch:hover { box-shadow: 0 0 32px rgba(196,30,30,0.55); filter: brightness(1.08); }
 
 .btn-gold {
   font-family: 'Orbitron', sans-serif;
@@ -129,40 +170,39 @@ body {
   transition: all 0.2s;
   box-shadow: 0 2px 16px rgba(212,160,23,0.25);
 }
-
 .btn-gold:hover { box-shadow: 0 0 28px rgba(212,160,23,0.5); filter: brightness(1.1); }
 
 .btn-ghost {
-  background: rgba(255,255,255,0.04);
-  color: rgba(255,255,255,0.6);
-  border: 1px solid rgba(255,255,255,0.07);
+  background: rgba(240,235,224,0.04);
+  color: rgba(240,235,224,0.55);
+  border: 1px solid rgba(240,235,224,0.1);
   border-radius: 10px;
   padding: 10px 20px;
   font-size: 13px;
   cursor: pointer;
   transition: all 0.2s;
 }
+.btn-ghost:hover { background: rgba(240,235,224,0.08); color: var(--brand-cream); border-color: rgba(240,235,224,0.25); }
 
-.btn-ghost:hover { background: rgba(255,255,255,0.08); color: #fff; }
-
+/* ─── Input ──────────────────────────────────────────────────── */
 .input-casino {
   width: 100%;
-  background: rgba(255,255,255,0.03);
-  border: 1px solid rgba(255,255,255,0.07);
+  background: rgba(240,235,224,0.03);
+  border: 1px solid rgba(240,235,224,0.07);
   border-radius: 10px;
   padding: 10px 14px;
   font-family: 'Rajdhani', sans-serif;
   font-size: 14px;
   font-weight: 500;
-  color: #e8e8f4;
+  color: var(--brand-cream);
   outline: none;
   transition: border-color 0.2s, box-shadow 0.2s;
 }
-
-.input-casino::placeholder { color: rgba(255,255,255,0.2); }
-.input-casino:focus { border-color: rgba(139,92,246,0.5); box-shadow: 0 0 0 3px rgba(139,92,246,0.08); }
+.input-casino::placeholder { color: rgba(240,235,224,0.2); }
+.input-casino:focus { border-color: rgba(196,30,30,0.55); box-shadow: 0 0 0 3px rgba(196,30,30,0.08); }
 .input-casino.error { border-color: rgba(239,68,68,0.5); }
 
+/* ─── Bonding bar ────────────────────────────────────────────── */
 .bonding-bar-track {
   width: 100%;
   height: 6px;
@@ -174,7 +214,7 @@ body {
 .bonding-bar-fill {
   height: 100%;
   border-radius: 3px;
-  background: linear-gradient(90deg, var(--purple-dark), var(--purple), #c084fc);
+  background: linear-gradient(90deg, var(--brand-red-dark), var(--brand-red), var(--brand-red-light));
   transition: width 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
   position: relative;
 }
@@ -182,25 +222,27 @@ body {
 .bonding-bar-fill::after {
   content: '';
   position: absolute;
-  right: 0;
-  top: -2px;
+  right: -2px;
+  top: 50%;
+  transform: translateY(-50%);
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: #c084fc;
-  box-shadow: 0 0 8px rgba(192,132,252,0.8);
+  background: var(--brand-red-light);
+  box-shadow: 0 0 8px rgba(196,30,30,0.8);
 }
 
 .bonding-bar-fill.near-grad {
-  background: linear-gradient(90deg, var(--purple), #ec4899, var(--gold));
+  background: linear-gradient(90deg, var(--brand-red), var(--brand-red-light), #ff6b6b);
   animation: nearGrad 1.5s ease-in-out infinite;
 }
 
 @keyframes nearGrad {
   0%, 100% { filter: brightness(1); }
-  50%       { filter: brightness(1.3) saturate(1.3); }
+  50%       { filter: brightness(1.3) saturate(1.2); }
 }
 
+/* ─── Badges ─────────────────────────────────────────────────── */
 .badge {
   display: inline-flex;
   align-items: center;
@@ -214,16 +256,18 @@ body {
 }
 
 .badge-graduated { background: rgba(34,197,94,0.12); border: 1px solid rgba(34,197,94,0.3); color: #4ade80; }
-.badge-model { background: rgba(139,92,246,0.1); border: 1px solid rgba(139,92,246,0.25); color: #c084fc; }
-.badge-gold { background: rgba(212,160,23,0.1); border: 1px solid rgba(212,160,23,0.3); color: var(--gold-light); }
+/* badge-model → red tint */
+.badge-model { background: rgba(196,30,30,0.1); border: 1px solid rgba(196,30,30,0.3); color: var(--brand-red-light); }
+.badge-gold  { background: rgba(212,160,23,0.1); border: 1px solid rgba(212,160,23,0.3); color: var(--gold-light); }
+.badge-hot   { background: rgba(196,30,30,0.12); border: 1px solid rgba(196,30,30,0.35); color: var(--brand-red-light); }
 
+/* ─── Stat box ───────────────────────────────────────────────── */
 .stat-box {
   background: rgba(255,255,255,0.02);
   border: 1px solid rgba(255,255,255,0.05);
   border-radius: 12px;
   padding: 12px 16px;
 }
-
 .stat-box .label {
   font-size: 10px;
   font-weight: 600;
@@ -232,7 +276,6 @@ body {
   font-family: 'Orbitron', sans-serif;
   text-transform: uppercase;
 }
-
 .stat-box .value {
   font-size: 18px;
   font-weight: 700;
@@ -241,55 +284,19 @@ body {
   margin-top: 2px;
 }
 
-.orb {
-  position: fixed;
-  border-radius: 50%;
-  pointer-events: none;
-  filter: blur(80px);
-  animation: orbFloat 12s ease-in-out infinite;
-}
-
-@keyframes orbFloat {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  33%       { transform: translate(20px, -30px) scale(1.05); }
-  66%       { transform: translate(-15px, 15px) scale(0.95); }
-}
-
-.grid-overlay {
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(255,255,255,0.015) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255,255,255,0.015) 1px, transparent 1px);
-  background-size: 40px 40px;
-  pointer-events: none;
-}
-
-.trade-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 16px;
-  border-bottom: 1px solid rgba(255,255,255,0.03);
-  transition: background 0.15s;
-}
-
-.trade-row:hover { background: rgba(255,255,255,0.02); }
-.trade-row:last-child { border-bottom: none; }
-
+/* ─── Model card (launch page slot picker) ───────────────────── */
 .model-card {
   border: 1px solid rgba(255,255,255,0.06);
   border-radius: 12px;
   padding: 14px;
-  text-align: center;
   cursor: pointer;
   transition: all 0.2s;
   background: rgba(255,255,255,0.02);
 }
+.model-card:hover { border-color: rgba(196,30,30,0.35); background: rgba(196,30,30,0.06); }
+.model-card.selected { border-color: rgba(196,30,30,0.6); background: rgba(196,30,30,0.1); box-shadow: 0 0 16px rgba(196,30,30,0.15); }
 
-.model-card:hover { border-color: rgba(139,92,246,0.3); background: rgba(139,92,246,0.05); }
-.model-card.selected { border-color: rgba(139,92,246,0.6); background: rgba(139,92,246,0.1); box-shadow: 0 0 16px rgba(139,92,246,0.15); }
-
+/* ─── Section label ──────────────────────────────────────────── */
 .section-label {
   font-family: 'Orbitron', sans-serif;
   font-size: 10px;
@@ -299,24 +306,52 @@ body {
   text-transform: uppercase;
 }
 
+/* ─── Navbar border ──────────────────────────────────────────── */
 .nav-border {
-  border-bottom: 1px solid rgba(255,255,255,0.04);
-  box-shadow: 0 1px 0 rgba(139,92,246,0.08);
+  border-bottom: 1px solid rgba(196,30,30,0.12);
+  box-shadow: 0 1px 0 rgba(196,30,30,0.06);
 }
 
+/* ─── Slot image placeholder ─────────────────────────────────── */
 .slot-img-placeholder {
-  background: linear-gradient(135deg, #0f0f28 0%, #1a0a2e 50%, #0a1428 100%);
+  background: linear-gradient(135deg, #0f0505 0%, #1f0808 50%, #0a0a14 100%);
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-@keyframes pulseGold {
-  0%, 100% { opacity: 1; }
-  50%       { opacity: 0.6; }
+/* ─── Trade row ──────────────────────────────────────────────── */
+.trade-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+  transition: background 0.15s;
+}
+.trade-row:hover { background: rgba(196,30,30,0.04); }
+.trade-row:last-child { border-bottom: none; }
+
+/* ─── Ambient orb ────────────────────────────────────────────── */
+.orb {
+  position: fixed;
+  border-radius: 50%;
+  pointer-events: none;
+  filter: blur(80px);
+  animation: orbFloat 12s ease-in-out infinite;
+}
+@keyframes orbFloat {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33%       { transform: translate(20px, -30px) scale(1.05); }
+  66%       { transform: translate(-15px, 15px) scale(0.95); }
 }
 
-.animate-pulse-gold { animation: pulseGold 2s ease-in-out infinite; }
+/* ─── Pulse / glow ───────────────────────────────────────────── */
+@keyframes pulseRed {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.55; }
+}
+.animate-pulse-gold { animation: pulseRed 2s ease-in-out infinite; }
 
-.glow-gold   { box-shadow: 0 0 24px rgba(212,160,23,0.3); }
-.glow-purple { box-shadow: 0 0 24px rgba(139,92,246,0.3); }
+.glow-red  { box-shadow: 0 0 24px rgba(196,30,30,0.35); }
+.glow-gold { box-shadow: 0 0 24px rgba(212,160,23,0.3); }

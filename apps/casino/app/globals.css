@@ -33,7 +33,7 @@ body {
 /* ─── Scrollbar ──────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(139,92,246,0.35); border-radius: 2px; }
+::-webkit-scrollbar-thumb { background: rgba(212,160,23,0.35); border-radius: 2px; }
 
 /* ─── Typography ─────────────────────────────────────────────── */
 .font-orbitron { font-family: 'Orbitron', sans-serif; }
@@ -157,15 +157,16 @@ body {
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.08em;
-  background: linear-gradient(135deg, #7c3aed 0%, var(--purple) 100%);
-  color: #fff;
+  background: linear-gradient(135deg, var(--gold-dim) 0%, var(--gold) 50%, var(--gold-light) 100%);
+  color: #0a0a18;
   border: none;
   border-radius: 12px;
   padding: 10px 20px;
   cursor: pointer;
   transition: all 0.2s;
+  box-shadow: 0 2px 16px rgba(212,160,23,0.25);
 }
-.btn-launch:hover { box-shadow: 0 0 24px rgba(139,92,246,0.5); }
+.btn-launch:hover { box-shadow: 0 0 28px rgba(212,160,23,0.55); filter: brightness(1.08); }
 
 /* ─── Slot img placeholder ───────────────────────────────────── */
 .slot-img-placeholder {
@@ -222,29 +223,29 @@ body {
   font-family: 'Orbitron', sans-serif;
   font-weight: 900;
   letter-spacing: 0.15em;
-  background: linear-gradient(180deg, var(--purple) 0%, var(--purple-dark) 100%);
-  border: 3px solid rgba(139,92,246,0.6);
+  background: linear-gradient(180deg, var(--gold-light) 0%, var(--gold) 50%, var(--gold-dim) 100%);
+  border: 3px solid rgba(212,160,23,0.7);
   border-radius: 50%;
-  color: #fff;
+  color: #0a0a18;
   cursor: pointer;
   transition: all 0.2s;
   position: relative;
   overflow: hidden;
-  box-shadow: 0 0 32px rgba(139,92,246,0.4), inset 0 2px 0 rgba(255,255,255,0.2);
+  box-shadow: 0 0 32px rgba(212,160,23,0.4), inset 0 2px 0 rgba(255,255,255,0.25);
 }
-.spin-btn:hover { box-shadow: 0 0 56px rgba(139,92,246,0.7), inset 0 2px 0 rgba(255,255,255,0.2); }
+.spin-btn:hover { box-shadow: 0 0 56px rgba(212,160,23,0.7), inset 0 2px 0 rgba(255,255,255,0.25); }
 .spin-btn:disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; }
 .spin-btn::after {
   content: '';
   position: absolute;
   inset: 0;
-  background: radial-gradient(circle at 40% 30%, rgba(255,255,255,0.18), transparent 60%);
+  background: radial-gradient(circle at 40% 30%, rgba(255,255,255,0.2), transparent 60%);
   border-radius: 50%;
 }
 
 @keyframes spinBtnPulse {
-  0%, 100% { box-shadow: 0 0 32px rgba(139,92,246,0.4), inset 0 2px 0 rgba(255,255,255,0.2); }
-  50%       { box-shadow: 0 0 56px rgba(139,92,246,0.65), inset 0 2px 0 rgba(255,255,255,0.2); }
+  0%, 100% { box-shadow: 0 0 32px rgba(212,160,23,0.4), inset 0 2px 0 rgba(255,255,255,0.25); }
+  50%       { box-shadow: 0 0 56px rgba(212,160,23,0.65), inset 0 2px 0 rgba(255,255,255,0.25); }
 }
 .spin-btn-idle { animation: spinBtnPulse 2.5s ease-in-out infinite; }
 

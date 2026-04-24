@@ -59,25 +59,25 @@ export function SlotCard({ slot, solPrice = 150, index = 0 }: Props) {
           </div>
         </div>
 
-        <div className="p-4 space-y-3.5">
+        <div className="card-body-cream p-4 space-y-3.5 rounded-b-2xl">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
-              <p className="font-rajdhani font-bold text-white text-[15px] leading-tight truncate">{slot.name}</p>
-              <p className="text-[11px] text-white/35 font-orbitron tracking-wider mt-0.5">${slot.ticker}</p>
+              <p className="font-rajdhani font-bold text-[15px] leading-tight truncate" style={{ color: "#1a1a1a" }}>{slot.name}</p>
+              <p className="text-[11px] font-orbitron tracking-wider mt-0.5" style={{ color: "rgba(26,26,26,0.45)" }}>${slot.ticker}</p>
             </div>
             <div className="text-right shrink-0">
-              <p className="font-orbitron text-sm font-bold text-white">{formatUsd(slot.mcapUsd / solPrice, solPrice)}</p>
-              <p className="text-[10px] text-white/30 font-orbitron">MCAP</p>
+              <p className="font-orbitron text-sm font-bold" style={{ color: "#1a1a1a" }}>{formatUsd(slot.mcapUsd / solPrice, solPrice)}</p>
+              <p className="text-[10px] font-orbitron" style={{ color: "rgba(26,26,26,0.4)" }}>MCAP</p>
             </div>
           </div>
 
           <div className="space-y-1.5">
             <div className="flex justify-between items-center">
-              <span className="section-label text-[9px]">Bonding Curve</span>
+              <span className="section-label text-[9px]" style={{ color: "rgba(26,26,26,0.4)" }}>Bonding Curve</span>
               <span className={cn(
                 "font-orbitron text-[10px] font-bold",
-                slot.graduated ? "text-green-400" : nearGrad ? "text-gold animate-pulse-gold" : "text-purple-400"
-              )}>
+                slot.graduated ? "text-green-600" : nearGrad ? "animate-pulse-gold" : ""
+              )} style={slot.graduated || nearGrad ? {} : { color: "var(--brand-red)" }}>
                 {slot.graduated ? "GRADUATED" : `${progress.toFixed(1)}%`}
               </span>
             </div>
@@ -92,12 +92,12 @@ export function SlotCard({ slot, solPrice = 150, index = 0 }: Props) {
             </div>
           </div>
 
-          <div className="flex items-center justify-between border-t border-white/5 pt-2.5">
-            <span className="flex items-center gap-1.5 text-[11px] text-white/35 font-rajdhani font-semibold">
-              <TrendingUp size={11} className="text-purple-400" />
+          <div className="flex items-center justify-between pt-2.5" style={{ borderTop: "1px solid rgba(26,26,26,0.08)" }}>
+            <span className="flex items-center gap-1.5 text-[11px] font-rajdhani font-semibold" style={{ color: "rgba(26,26,26,0.45)" }}>
+              <TrendingUp size={11} style={{ color: "var(--brand-red)" }} />
               {formatUsd(slot.volume24h / solPrice, solPrice)} vol
             </span>
-            <span className="text-[10px] text-white/25 font-mono">{shortenAddress(slot.creator)}</span>
+            <span className="text-[10px] font-mono" style={{ color: "rgba(26,26,26,0.35)" }}>{shortenAddress(slot.creator)}</span>
           </div>
         </div>
       </Link>

@@ -1,8 +1,27 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { Wallet, LogOut, Zap, User, Gamepad2, TrendingUp } from "lucide-react";
+
+function LogoMark({ size = 30 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 34 34" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M17 3 L30 10 L17 17 L4 10 Z" fill="#f0ebe0"/>
+      <path d="M4 10 L17 17 L17 31 L4 24 Z" fill="#d8d3c8"/>
+      <path d="M17 17 L30 10 L30 24 L17 31 Z" fill="#ccc8bc"/>
+      <line x1="17" y1="3" x2="17" y2="5.5" stroke="#c41e1e" strokeWidth="1.5" strokeLinecap="round"/>
+      <line x1="25.5" y1="5.5" x2="24" y2="7.3" stroke="#c41e1e" strokeWidth="1.5" strokeLinecap="round"/>
+      <line x1="30" y1="10" x2="27.5" y2="10" stroke="#c41e1e" strokeWidth="1.5" strokeLinecap="round"/>
+      <line x1="25.5" y1="14.5" x2="24" y2="12.7" stroke="#c41e1e" strokeWidth="1.5" strokeLinecap="round"/>
+      <line x1="8.5" y1="5.5" x2="10" y2="7.3" stroke="#c41e1e" strokeWidth="1.5" strokeLinecap="round"/>
+      <line x1="4" y1="10" x2="6.5" y2="10" stroke="#c41e1e" strokeWidth="1.5" strokeLinecap="round"/>
+      <line x1="8.5" y1="14.5" x2="10" y2="12.7" stroke="#c41e1e" strokeWidth="1.5" strokeLinecap="round"/>
+      <text x="6.5" y="26" fontFamily="Georgia, serif" fontWeight="bold" fontSize="8" fill="#1a1a1a">R</text>
+      <text x="20" y="26" fontFamily="Georgia, serif" fontWeight="bold" fontSize="8" fill="#c41e1e">B</text>
+    </svg>
+  );
+}
 import { usePrivy, useWallets } from "@/lib/privy";
 import { useRouter } from "next/navigation";
 import { WalletModal } from "@/components/wallet/WalletModal";
@@ -60,8 +79,15 @@ export function Navbar() {
         <div className="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between">
 
           {/* Logo */}
-          <Link href="/" className="font-orbitron text-base font-black bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent tracking-tight">
-            reelbit.casino
+          <Link href="/" className="flex items-center gap-2 group">
+            <div className="flex items-center justify-center w-8 h-8 rounded-xl border border-[rgba(212,160,23,0.2)] bg-[rgba(212,160,23,0.04)] group-hover:border-[rgba(212,160,23,0.45)] transition-all">
+              <LogoMark size={26} />
+            </div>
+            <span className="font-orbitron text-[14px] font-bold tracking-wider">
+              <span className="text-white">Reel</span>
+              <span className="gold-text">Bit</span>
+              <span style={{ color: "rgba(212,160,23,0.4)" }}>.casino</span>
+            </span>
           </Link>
 
           {/* Right */}
@@ -77,14 +103,14 @@ export function Navbar() {
               /* ── Demo mode ── */
               <>
                 {/* Demo badge */}
-                <div className="flex items-center gap-1.5 bg-purple-500/10 border border-purple-500/20 rounded-xl px-3 py-1.5">
-                  <Gamepad2 size={11} className="text-purple-400" />
-                  <span className="font-orbitron text-[10px] font-bold text-purple-300">DEMO</span>
+                <div className="flex items-center gap-1.5 rounded-xl px-3 py-1.5" style={{ background: "rgba(212,160,23,0.08)", border: "1px solid rgba(212,160,23,0.2)" }}>
+                  <Gamepad2 size={11} style={{ color: "#d4a017" }} />
+                  <span className="font-orbitron text-[10px] font-bold" style={{ color: "#f5c842" }}>DEMO</span>
                 </div>
 
                 {/* Demo balance */}
                 <div className="flex items-center gap-2 bg-white/[0.04] border border-white/10 rounded-xl px-3 py-1.5">
-                  <Wallet size={12} className="text-purple-400" />
+                  <Wallet size={12} style={{ color: "#d4a017" }} />
                   <span className="font-orbitron text-[11px] font-bold text-white">
                     {formatUsdc(demoSession.balance)}
                   </span>
@@ -110,23 +136,29 @@ export function Navbar() {
                 {/* Balance */}
                 <button
                   onClick={() => setWalletOpen(true)}
-                  className="flex items-center gap-2 bg-white/[0.04] hover:bg-white/[0.07] border border-white/10 hover:border-purple-500/30 rounded-xl px-3 py-1.5 transition-all"
+                  className="flex items-center gap-2 bg-white/[0.04] hover:bg-white/[0.07] border border-white/10 rounded-xl px-3 py-1.5 transition-all"
+                  style={{ "--hover-border": "rgba(212,160,23,0.3)" } as React.CSSProperties}
+                  onMouseEnter={(e) => (e.currentTarget.style.borderColor = "rgba(212,160,23,0.3)")}
+                  onMouseLeave={(e) => (e.currentTarget.style.borderColor = "rgba(255,255,255,0.1)")}
                 >
-                  <Wallet size={12} className="text-purple-400" />
+                  <Wallet size={12} style={{ color: "#d4a017" }} />
                   <span className="font-orbitron text-[11px] font-bold text-white">{formatUsdc(balance)}</span>
                 </button>
 
                 {/* Profile avatar */}
                 <button
                   onClick={() => setProfileOpen(true)}
-                  className="relative w-8 h-8 rounded-full ring-1 ring-white/10 hover:ring-purple-500/50 transition-all overflow-hidden flex-shrink-0"
+                  className="relative w-8 h-8 rounded-full ring-1 ring-white/10 transition-all overflow-hidden flex-shrink-0"
+                  onMouseEnter={(e) => (e.currentTarget.style.outlineColor = "rgba(212,160,23,0.5)")}
+                  onMouseLeave={(e) => (e.currentTarget.style.outlineColor = "")}
+                  style={{ outline: "1px solid transparent" }}
                   title={profile ? `${profile.username} · #${profile.userId}` : "Set up profile"}
                 >
                   {profile?.pfpUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={profile.pfpUrl} alt="pfp" className="w-full h-full object-cover" />
                   ) : (
-                    <div className="w-full h-full bg-gradient-to-br from-purple-700/60 to-purple-900/40 flex items-center justify-center">
+                    <div className="w-full h-full flex items-center justify-center" style={{ background: "linear-gradient(135deg, rgba(212,160,23,0.2), rgba(160,120,16,0.15))" }}>
                       {profile ? (
                         <span className="font-orbitron text-xs font-black text-white/70">
                           {profile.username[0].toUpperCase()}
@@ -154,14 +186,18 @@ export function Navbar() {
             ) : (
               /* ── Not connected ── */
               <div className="flex items-center gap-3">
-                <Link href="/demo" className="text-[10px] font-orbitron text-purple-400/60 hover:text-purple-400 transition-colors px-2">
+                <Link href="/demo" className="text-[10px] font-orbitron transition-colors px-2" style={{ color: "rgba(212,160,23,0.6)" }}
+                  onMouseEnter={(e) => (e.currentTarget.style.color = "#d4a017")}
+                  onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(212,160,23,0.6)")}>
                   Demo
                 </Link>
                 <div className="flex flex-col items-center gap-0.5">
                   <button onClick={login} className="btn-launch py-1.5 px-5 text-[11px]">
                     Login
                   </button>
-                  <button onClick={login} className="text-[9px] font-orbitron text-purple-400/50 hover:text-purple-400 transition-colors">
+                  <button onClick={login} className="text-[9px] font-orbitron transition-colors" style={{ color: "rgba(212,160,23,0.5)" }}
+                    onMouseEnter={(e) => (e.currentTarget.style.color = "#d4a017")}
+                    onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(212,160,23,0.5)")}>
                     Register
                   </button>
                 </div>

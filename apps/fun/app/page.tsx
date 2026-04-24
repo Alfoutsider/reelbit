@@ -57,7 +57,7 @@ export default function HomePage() {
 
       {/* Hero */}
       <section className="relative px-4 pt-20 pb-16 text-center overflow-hidden">
-        <div className="absolute inset-x-0 top-0 h-96 bg-gradient-to-b from-purple-900/10 via-transparent to-transparent pointer-events-none" />
+        <div className="absolute inset-x-0 top-0 h-96 bg-gradient-to-b from-[rgba(196,30,30,0.07)] via-transparent to-transparent pointer-events-none" />
 
         <motion.div
           initial={{ opacity: 0, y: -20 }}
@@ -69,10 +69,11 @@ export default function HomePage() {
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: 0.1 }}
-            className="inline-flex items-center gap-2 bg-gold/5 border border-gold/20 rounded-full px-4 py-1.5"
+            className="inline-flex items-center gap-2 rounded-full px-4 py-1.5"
+            style={{ background: "rgba(196,30,30,0.07)", border: "1px solid rgba(196,30,30,0.2)" }}
           >
-            <span className="w-1.5 h-1.5 rounded-full bg-gold animate-pulse-gold" />
-            <span className="font-orbitron text-[10px] font-bold text-gold/80 tracking-widest">
+            <span className="w-1.5 h-1.5 rounded-full animate-pulse-gold" style={{ background: "var(--brand-red)" }} />
+            <span className="font-orbitron text-[10px] font-bold tracking-widest" style={{ color: "var(--brand-red-light)" }}>
               PUMP.FUN MEETS VEGAS — ON SOLANA
             </span>
           </motion.div>
@@ -95,7 +96,7 @@ export default function HomePage() {
           <div className="flex items-center justify-center gap-4 flex-wrap pt-2">
             <Link href="/launch">
               <motion.button
-                whileHover={{ scale: 1.04, boxShadow: "0 0 32px rgba(139,92,246,0.6)" }}
+                whileHover={{ scale: 1.04, boxShadow: "0 0 32px rgba(196,30,30,0.6)" }}
                 whileTap={{ scale: 0.97 }}
                 className="btn-launch flex items-center gap-2.5 px-7 py-3.5 text-[13px]"
               >
@@ -144,8 +145,8 @@ export default function HomePage() {
               transition={{ delay: 0.2 + i * 0.07 }}
               className="flex gap-3 items-start p-4 rounded-xl bg-white/[0.02] border border-white/5 hover:border-white/10 transition-colors"
             >
-              <div className="shrink-0 w-8 h-8 rounded-lg bg-purple-500/10 border border-purple-500/20 flex items-center justify-center">
-                <Icon size={15} className="text-purple-400" />
+              <div className="shrink-0 w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: "rgba(196,30,30,0.08)", border: "1px solid rgba(196,30,30,0.2)" }}>
+                <Icon size={15} style={{ color: "var(--brand-red-light)" }} />
               </div>
               <div>
                 <p className="font-orbitron text-[11px] font-bold text-white/80 tracking-wide">{title}</p>
@@ -199,9 +200,10 @@ export default function HomePage() {
                 className={cn(
                   "flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-[12px] font-bold font-rajdhani transition-all",
                   sort === id
-                    ? "bg-purple-600 text-white"
+                    ? "text-white"
                     : "bg-white/[0.04] text-white/40 hover:text-white hover:bg-white/[0.07] border border-white/5",
                 )}
+                style={sort === id ? { background: "var(--brand-red)" } : {}}
               >
                 <Icon size={12} /> {label}
               </motion.button>
