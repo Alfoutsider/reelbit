@@ -157,7 +157,7 @@ export default function LaunchPage() {
                 <div className="lg:col-span-2 space-y-4">
                   <div className="card-panel p-5">
                     <p className="font-orbitron text-[10px] font-bold text-white/40 tracking-widest mb-3">BONDING CURVE PREVIEW</p>
-                    <BondingCurveChart currentMcapUsd={STARTING_MCAP_USD} />
+                    <BondingCurveChart chartData={[]} currentMcapUsd={STARTING_MCAP_USD} currentPriceUsd={STARTING_MCAP_USD / 1_000_000_000} />
                   </div>
 
                   <div className="card-panel p-5 space-y-4">
