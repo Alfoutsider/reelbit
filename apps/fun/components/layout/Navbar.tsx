@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePrivy } from "@/lib/privy";
 import { motion } from "framer-motion";
 import { Wallet, ExternalLink, Zap } from "lucide-react";
-import { cn, shortenAddress } from "@/lib/utils";
+import { shortenAddress } from "@/lib/utils";
 
 export function Navbar() {
   const { ready, authenticated, user, login, logout } = usePrivy();
