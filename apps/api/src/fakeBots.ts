@@ -1,11 +1,13 @@
 /**
  * Fake trader bots — simulated bonding curve activity for demo/staging.
  *
- * Generates a rolling window of fake buy/sell events that the /demo/activity
- * endpoint returns. No on-chain transactions are made.
+ * Generates a rolling window of fake buy/sell events and writes price history
+ * snapshots so the chart has data to display.
  *
  * Only active when ENABLE_FAKE_BOTS=true in env.
  */
+
+import { appendPricePoint } from "./priceHistoryStore";
 
 const FAKE_WALLETS = [
   { address: "7xK3gAs...", name: "whale_anon"   },
@@ -27,44 +29,76 @@ export interface FakeTradeEvent {
   ts:        number;
 }
 
-const ACTIVITY_WINDOW_MS = 10 * 60 * 1000; // keep last 10 min of events
+const ACTIVITY_WINDOW_MS = 10 * 60 * 1000;
 const recentActivity: FakeTradeEvent[] = [];
+
+// Per-mint simulated mcap state (starts at $5k, drifts toward graduation)
+const mintMcapState = new Map<string, number>();
+const SOL_PRICE_USD  = 150;
+const TOTAL_SUPPLY   = 1_000_000_000;
+const GRAD_TARGET    = 100_000;
+const START_MCAP     = 5_000;
+
+function getSimulatedMcap(mint: string): number {
+  return mintMcapState.get(mint) ?? START_MCAP;
+}
 
 function randBetween(min: number, max: number) {
   return Math.random() * (max - min) + min;
 }
 
-function generateEvent(currentMcapUsd: number): FakeTradeEvent {
+function generateEvent(mint: string): FakeTradeEvent {
   const bot = FAKE_WALLETS[Math.floor(Math.random() * FAKE_WALLETS.length)];
-  // 70% buy, 30% sell — simulate organic growth
   const type      = Math.random() < 0.7 ? "buy" : "sell";
   const solAmount = parseFloat(randBetween(0.05, 3.5).toFixed(3));
+
+  let mcap = getSimulatedMcap(mint);
+  const usdImpact = solAmount * SOL_PRICE_USD * 0.12;
+  if (type === "buy") {
+    mcap = Math.min(GRAD_TARGET, mcap + usdImpact);
+  } else {
+    mcap = Math.max(START_MCAP, mcap - usdImpact * 0.5);
+  }
+  mintMcapState.set(mint, mcap);
+
   return {
     wallet:    bot.address,
     name:      bot.name,
     type,
     solAmount,
-    mcapUsd:   currentMcapUsd,
+    mcapUsd:   mcap,
     ts:        Date.now(),
   };
 }
 
-export function tickFakeBots(currentMcapUsd: number) {
+export function tickFakeBots(mint: string, currentMcapUsd?: number) {
   if (process.env.ENABLE_FAKE_BOTS !== "true") return;
 
-  // Occasionally produce 1–3 events
-  const count = Math.random() < 0.3 ? 1 : Math.random() < 0.6 ? 2 : 3;
-  for (let i = 0; i < count; i++) {
-    recentActivity.unshift(generateEvent(currentMcapUsd));
+  // Seed from real curve state if provided and we have no prior simulation
+  if (currentMcapUsd && !mintMcapState.has(mint)) {
+    mintMcapState.set(mint, currentMcapUsd);
   }
 
-  // Evict events older than the window
+  const count = Math.random() < 0.3 ? 1 : Math.random() < 0.6 ? 2 : 3;
+  for (let i = 0; i < count; i++) {
+    const event = generateEvent(mint);
+    recentActivity.unshift(event);
+
+    // Write price snapshot for chart
+    const mcap = event.mcapUsd;
+    appendPricePoint(mint, {
+      ts:              event.ts + i * 200,
+      priceUsd:        mcap / TOTAL_SUPPLY,
+      mcapUsd:         mcap,
+      realSolLamports: Math.round((mcap / SOL_PRICE_USD) * 1_000_000_000),
+      progressPct:     Math.min(100, Math.round((mcap / GRAD_TARGET) * 100)),
+    });
+  }
+
   const cutoff = Date.now() - ACTIVITY_WINDOW_MS;
   while (recentActivity.length > 0 && recentActivity[recentActivity.length - 1].ts < cutoff) {
     recentActivity.pop();
   }
-
-  // Hard cap at 50 entries
   if (recentActivity.length > 50) recentActivity.splice(50);
 }
 

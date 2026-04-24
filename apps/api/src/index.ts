@@ -7,7 +7,8 @@ import { handleGraduation } from "./migration";
 import { getAllThemes, getTheme, getGraduatedThemes, getThemesByCreator, setTheme, deriveColors } from "./themeStore";
 import type { SlotModel } from "./themeStore";
 import { apply as demoApply, approve as demoApprove, deny as demoDeny, getApplication, getAllApplications, isDemoUser, DEMO_CREDIT_USDC } from "./demoStore";
-import { getFakeActivity } from "./fakeBots";
+import { getFakeActivity, tickFakeBots } from "./fakeBots";
+import { appendPricePoint, getPriceHistory } from "./priceHistoryStore";
 import { triggerThemeGeneration } from "./slotTheme";
 import { getPlayable, credit, debit, transfer, isSeenDeposit, markDepositSeen } from "./balanceStore";
 import { getHouseKeypair, getHouseWalletAddress, sendSol, verifyDepositTx } from "./houseWallet";
@@ -463,6 +464,25 @@ app.post("/webhooks/helius", async (req: Request, res: Response) => {
           `[buy] ${mint.slice(0, 8)} — ${Number(solIn) / 1e9} SOL → ` +
           `${Number(tokensOut) / 1e6} tokens (vault: ${Number(realSol) / 1e9} SOL)`,
         );
+        // Snapshot price history for chart on every confirmed trade
+        try {
+          const mintPk = new PublicKey(mint);
+          const curve = await fetchBondingCurveState(connection, mintPk);
+          if (curve) {
+            const vs = curve.virtualSol;
+            const vt = curve.virtualTokens;
+            const solPrice = 150; // TODO: replace with Pyth feed
+            const priceSol = pricePerToken(vs, vt);
+            const mcap = mcapSol(vs, vt) * solPrice;
+            appendPricePoint(mint, {
+              ts:              Date.now(),
+              priceUsd:        priceSol * solPrice * 1e9,
+              mcapUsd:         mcap,
+              realSolLamports: Number(curve.realSol),
+              progressPct:     Math.min(100, Math.round(Number(curve.realSol) / 85_000_000_000 * 100)),
+            });
+          }
+        } catch {}
       }
 
       if (events.graduated) {
@@ -569,6 +589,12 @@ app.get("/tokens/:mint", async (req: Request, res: Response) => {
       progressPct:       Math.min(100, Math.round(Number(rs) / 85_000_000_000 * 100)),
     } : null,
   });
+});
+
+/** GET /tokens/:mint/chart?limit=200 — price history time-series for chart */
+app.get("/tokens/:mint/chart", (req: Request, res: Response) => {
+  const limit = Math.min(500, Math.max(1, parseInt(req.query.limit as string) || 200));
+  res.json(getPriceHistory(req.params.mint, limit));
 });
 
 /**
@@ -732,4 +758,12 @@ app.listen(config.port, () => {
   startLpHarvestCron(connection);
   startHolderDividendCron(connection);
   startMcapWatcher(connection);
+
+  // Tick fake bots every 20s for all known tokens when demo mode is enabled
+  if (process.env.ENABLE_FAKE_BOTS === "true") {
+    setInterval(() => {
+      const themes = getAllThemes().filter((t) => !t.graduated);
+      for (const t of themes) tickFakeBots(t.mint);
+    }, 20_000);
+  }
 });

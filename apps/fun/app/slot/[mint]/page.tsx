@@ -5,14 +5,15 @@ import { motion } from "framer-motion";
 import { ArrowLeft, ExternalLink, Copy, Zap, TrendingUp, BarChart2, RefreshCw } from "lucide-react";
 import Link from "next/link";
 import { BuySellPanel } from "@/components/slot/BuySellPanel";
-import { BondingCurveChart } from "@/components/chart/BondingCurveChart";
+import { BondingCurveChart, type PricePoint } from "@/components/chart/BondingCurveChart";
 import { cn, shortenAddress, formatUsd, graduationProgress } from "@/lib/utils";
 import { SLOT_MODELS } from "@/lib/constants";
 import type { SlotToken, TradeEvent } from "@/types/slot";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
 const SOL_PRICE_USD = 150; // used for mcap/price display; replace with oracle feed in prod
-const POLL_INTERVAL_MS = 12_000; // refresh curve every 12s
+const POLL_INTERVAL_MS  = 12_000;
+const CHART_POLL_MS     = 15_000;
 
 // ── API response type ─────────────────────────────────────────────────────────
 
@@ -65,12 +66,13 @@ function timeAgo(ts: number) {
 export default function SlotPage({ params }: { params: { mint: string } }) {
   const { mint } = params;
 
-  const [slot,     setSlot]     = useState<SlotToken | null>(null);
-  const [progress, setProgress] = useState(0);
-  const [trades,   setTrades]   = useState<TradeEvent[]>([]); // eslint-disable-line @typescript-eslint/no-unused-vars
-  const [loading,  setLoading]  = useState(true);
-  const [error,    setError]    = useState<string | null>(null);
-  const [tradeKey, setTradeKey] = useState(0); // bumped after buy/sell to refresh BuySellPanel
+  const [slot,      setSlot]     = useState<SlotToken | null>(null);
+  const [progress,  setProgress] = useState(0);
+  const [trades,    setTrades]   = useState<TradeEvent[]>([]); // eslint-disable-line @typescript-eslint/no-unused-vars
+  const [chartData, setChartData] = useState<PricePoint[]>([]);
+  const [loading,   setLoading]  = useState(true);
+  const [error,     setError]    = useState<string | null>(null);
+  const [tradeKey,  setTradeKey] = useState(0);
 
   const fetchToken = useCallback(async () => {
     try {
@@ -91,12 +93,21 @@ export default function SlotPage({ params }: { params: { mint: string } }) {
     }
   }, [mint]);
 
+  const fetchChart = useCallback(async () => {
+    try {
+      const res = await fetch(`${API}/tokens/${mint}/chart?limit=200`);
+      if (res.ok) setChartData(await res.json());
+    } catch {}
+  }, [mint]);
+
   // Initial load + poll for live curve updates
   useEffect(() => {
     fetchToken();
-    const id = setInterval(fetchToken, POLL_INTERVAL_MS);
-    return () => clearInterval(id);
-  }, [fetchToken]);
+    fetchChart();
+    const tokenId = setInterval(fetchToken, POLL_INTERVAL_MS);
+    const chartId = setInterval(fetchChart, CHART_POLL_MS);
+    return () => { clearInterval(tokenId); clearInterval(chartId); };
+  }, [fetchToken, fetchChart]);
 
   function onTradeComplete() {
     setTradeKey((k) => k + 1);
@@ -250,7 +261,11 @@ export default function SlotPage({ params }: { params: { mint: string } }) {
                   <span>${(slot.mcapUsd / 1000).toFixed(1)}K current</span>
                   <span className="text-white/40">$100K graduation</span>
                 </div>
-                <BondingCurveChart currentMcapUsd={slot.mcapUsd} />
+                <BondingCurveChart
+                  chartData={chartData}
+                  currentMcapUsd={slot.mcapUsd}
+                  currentPriceUsd={slot.priceUsd}
+                />
               </motion.div>
             )}
 
