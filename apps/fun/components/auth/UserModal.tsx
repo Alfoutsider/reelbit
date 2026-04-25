@@ -46,9 +46,6 @@ interface Props {
 const PRESETS = [10, 30, 50, 100] as const;
 const USDC    = 1_000_000; // micro-units per USDC
 
-function fmt(usdcUnits: number) {
-  return (usdcUnits / USDC).toFixed(2);
-}
 
 function shortenAddr(addr: string) {
   return `${addr.slice(0, 4)}…${addr.slice(-4)}`;
@@ -617,7 +614,7 @@ export function UserModal({ profile: initialProfile, onClose, onUpdate, onLogout
                       placeholder="8-char player ID (e.g. AB3C7F2D)"
                       className="input-casino pl-7 text-sm font-mono uppercase tracking-widest" />
                   </div>
-                  <p className="text-[10px] font-rajdhani text-white/25">Find a player's ID in their profile.</p>
+                  <p className="text-[10px] font-rajdhani text-white/25">Find a player&apos;s ID in their profile.</p>
                 </div>
 
                 {transferAmt && transferAmt > 0 && (

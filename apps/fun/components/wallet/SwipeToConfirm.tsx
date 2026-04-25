@@ -74,13 +74,15 @@ export function SwipeToConfirm({
   const x = useMotionValue(0);
 
   // derived transforms — must reference maxX at call-time so we recompute when maxX changes
-  const progress      = useTransform(x, [0, maxX], [0, 1],    { clamp: true });
+  const _progress     = useTransform(x, [0, maxX], [0, 1],    { clamp: true });
   const fillOpacity   = useTransform(x, [0, maxX * 0.08], [0, 1], { clamp: true });
   const labelOpacity  = useTransform(x, [0, maxX * 0.28], [1, 0], { clamp: true });
   const glowStrength  = useTransform(x, [0, maxX], [0, 1],    { clamp: true });
 
   // fill width: thumb left-edge + thumb width tracks the progress
   const fillWidthPx   = useTransform(x, v => `${PAD + THUMB + v}px`);
+  const shimmerX      = useTransform(x, [0, maxX], ["-80px", `${maxX + 80}px`]);
+  const arrowOpacity  = useTransform(x, [0, maxX * 0.5], [1, 0.6], { clamp: true });
 
   // ── Track sizing ───────────────────────────────────────────────────────────
 
@@ -205,7 +207,7 @@ export function SwipeToConfirm({
             className="absolute inset-y-0 w-20 pointer-events-none"
             style={{
               background: `linear-gradient(90deg,transparent,${c.shimmer},transparent)`,
-              x: useTransform(x, [0, maxX], ["-80px", `${maxX + 80}px`]),
+              x: shimmerX,
             }}
           />
         )}
@@ -338,7 +340,7 @@ export function SwipeToConfirm({
                 initial="hidden"
                 animate="show"
                 exit="exit"
-                style={{ opacity: useTransform(x, [0, maxX * 0.5], [1, 0.6], { clamp: true }) }}
+                style={{ opacity: arrowOpacity }}
               >
                 <ChevronRight size={22} className="text-white" strokeWidth={2.5} />
               </motion.div>

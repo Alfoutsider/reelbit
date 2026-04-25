@@ -24,14 +24,6 @@ type Step = "dob" | "captcha" | "username" | "avatar" | "submit" | "success";
 
 const STEPS: Step[] = ["dob", "captcha", "username", "avatar", "submit"];
 
-const STEP_META: Record<Step, { icon: React.ReactNode; label: string }> = {
-  dob:      { icon: <Shield size={14} />,   label: "Age" },
-  captcha:  { icon: <Shield size={14} />,   label: "Verify" },
-  username: { icon: <User size={14} />,     label: "Username" },
-  avatar:   { icon: <Camera size={14} />,   label: "Avatar" },
-  submit:   { icon: <ChevronRight size={14} />, label: "Done" },
-  success:  { icon: null, label: "" },
-};
 
 interface Props {
   wallet:  string;
@@ -305,7 +297,7 @@ export function RegisterModal({ wallet, onClose, onDone }: Props) {
               <motion.div key="username" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-5">
                 <div>
                   <h3 className="font-orbitron font-bold text-white text-sm mb-1">Choose a Username</h3>
-                  <p className="font-rajdhani text-white/40 text-sm">Pick any name — it's just for display. Your unique ID links your account.</p>
+                  <p className="font-rajdhani text-white/40 text-sm">Pick any name — it&apos;s just for display. Your unique ID links your account.</p>
                 </div>
                 <div className="space-y-2">
                   <input value={username} onChange={(e) => { setUsername(e.target.value); setUsernameErr(null); }}
