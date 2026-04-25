@@ -72,7 +72,7 @@ export function ImageUploader({ value, onChange }: Props) {
     setDragging(false);
     const file = e.dataTransfer.files[0];
     if (file) uploadFile(file);
-  }, []);
+  }, [uploadFile]);
 
   function clearImage() {
     setPreview(null);
