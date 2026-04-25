@@ -53,7 +53,7 @@ async function checkGraduation(connection: Connection): Promise<void> {
         // mcap_usd = price_per_token_usd * TOTAL_SUPPLY
         const mcapUsd = (virtualSolSol / virtualTokensRaw) * solPrice * TOTAL_SUPPLY;
 
-        tickFakeBots(mcapUsd);
+        tickFakeBots(theme.mint, mcapUsd);
 
         if (mcapUsd >= MCAP_TARGET_USD) {
           console.log(
