@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, ChevronRight, User, Shield, Camera, AlertCircle } from "lucide-react";
+import { X, ChevronRight, AlertCircle } from "lucide-react";
 import { AvatarCropper } from "./AvatarCropper";
 import { SuccessAnimation } from "./SuccessAnimation";
 import { cn } from "@/lib/utils";

@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  X, Edit2, Check, Wallet, ArrowDownCircle, ArrowUpCircle, ArrowRightLeft,
+  X, Edit2, Check, ArrowDownCircle, ArrowUpCircle, ArrowRightLeft,
   Copy, AlertCircle, RefreshCw, User,
 } from "lucide-react";
 import { Connection, PublicKey, SystemProgram, Transaction, LAMPORTS_PER_SOL } from "@solana/web3.js";

@@ -74,7 +74,6 @@ export function SwipeToConfirm({
   const x = useMotionValue(0);
 
   // derived transforms — must reference maxX at call-time so we recompute when maxX changes
-  const _progress     = useTransform(x, [0, maxX], [0, 1],    { clamp: true });
   const fillOpacity   = useTransform(x, [0, maxX * 0.08], [0, 1], { clamp: true });
   const labelOpacity  = useTransform(x, [0, maxX * 0.28], [1, 0], { clamp: true });
   const glowStrength  = useTransform(x, [0, maxX], [0, 1],    { clamp: true });
