@@ -391,7 +391,7 @@ export function RegisterModal({ wallet, onClose, onDone }: Props) {
             <motion.button
               whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
               onClick={step === "avatar" ? () => setStep("submit") : step === "submit" ? handleSubmit : next}
-              {...{ disabled: submitting || (step === "captcha" && !cfToken) }}
+              disabled={submitting}
               className="btn-launch flex-1 flex items-center justify-center gap-2 py-3 text-[12px]">
               {submitting ? (
                 <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
