@@ -7,15 +7,6 @@ import { AvatarCropper } from "./AvatarCropper";
 import { SuccessAnimation } from "./SuccessAnimation";
 import { cn } from "@/lib/utils";
 
-declare global {
-  interface Window {
-    turnstile?: {
-      render:  (el: string | HTMLElement, opts: object) => string;
-      remove:  (id: string) => void;
-      reset:   (id: string) => void;
-    };
-  }
-}
 
 const API      = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
 const SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? "1x00000000000000000000AA";
@@ -62,9 +53,11 @@ export function RegisterModal({ wallet, onClose, onDone }: Props) {
   useEffect(() => {
     if (step !== "captcha") return;
     let retries = 0;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const ts = () => (window as any).turnstile;
     const tryMount = () => {
-      if (window.turnstile && cfRef.current) {
-        widgetRef.current = window.turnstile.render(cfRef.current, {
+      if (ts() && cfRef.current) {
+        widgetRef.current = ts().render(cfRef.current, {
           sitekey:  SITE_KEY,
           theme:    "dark",
           callback: (token: string) => {
@@ -79,8 +72,8 @@ export function RegisterModal({ wallet, onClose, onDone }: Props) {
     };
     tryMount();
     return () => {
-      if (widgetRef.current && window.turnstile) {
-        window.turnstile.remove(widgetRef.current);
+      if (widgetRef.current && ts()) {
+        ts().remove(widgetRef.current);
         widgetRef.current = null;
       }
     };
