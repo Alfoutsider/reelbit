@@ -51,7 +51,7 @@ export function Navbar() {
     setShowRegister(false);
   }
 
-  function onRegistered(_p: { username: string; pfpUrl: string | null }) {
+  function onRegistered() {
     if (!address) return;
     // Refetch full profile (to get userId etc)
     fetch(`${API}/profile/${address}`)

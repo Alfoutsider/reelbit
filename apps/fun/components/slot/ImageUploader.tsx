@@ -28,7 +28,7 @@ export function ImageUploader({ value, onChange }: Props) {
   const [error, setError]     = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  async function uploadFile(file: File) {
+  const uploadFile = useCallback(async function uploadFile(file: File) {
     if (!ACCEPTED.includes(file.type)) {
       setError("Only JPG, PNG, GIF, or WEBP allowed.");
       return;
@@ -56,7 +56,7 @@ export function ImageUploader({ value, onChange }: Props) {
     } finally {
       setUploading(false);
     }
-  }
+  }, [onChange]);
 
   function toBase64(file: File): Promise<string> {
     return new Promise((resolve, reject) => {
