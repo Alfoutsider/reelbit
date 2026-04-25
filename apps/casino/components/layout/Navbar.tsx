@@ -3,11 +3,13 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { Wallet, LogOut, Zap, User, Gamepad2, TrendingUp } from "lucide-react";
+import { AnimatePresence } from "framer-motion";
 
 import { usePrivy, useWallets } from "@/lib/privy";
 import { useRouter } from "next/navigation";
 import { WalletModal } from "@/components/wallet/WalletModal";
 import { ProfileModal } from "@/components/profile/ProfileModal";
+import { RegisterModal } from "@/components/auth/RegisterModal";
 import { fetchBalance, formatUsdc } from "@/lib/balanceClient";
 import { fetchProfile, type UserProfile } from "@/lib/profileClient";
 import { shortenAddress } from "@/lib/utils";
@@ -18,11 +20,12 @@ export function Navbar() {
   const { authenticated, login, logout } = usePrivy();
   const { wallets } = useWallets();
 
-  const [walletOpen,   setWalletOpen]   = useState(false);
-  const [profileOpen,  setProfileOpen]  = useState(false);
-  const [balance,      setBalance]      = useState(0);
-  const [profile,      setProfile]      = useState<UserProfile | null>(null);
-  const [demoSession,  setDemoSession]  = useState<DemoSession | null>(null);
+  const [walletOpen,    setWalletOpen]    = useState(false);
+  const [profileOpen,   setProfileOpen]   = useState(false);
+  const [registerOpen,  setRegisterOpen]  = useState(false);
+  const [balance,       setBalance]       = useState(0);
+  const [profile,       setProfile]       = useState<UserProfile | null>(null);
+  const [demoSession,   setDemoSession]   = useState<DemoSession | null>(null);
 
   const wallet        = wallets[0];
   const walletAddress = wallet?.address ?? "";
@@ -43,10 +46,15 @@ export function Navbar() {
     return () => clearInterval(id);
   }, [walletAddress, demoSession]);
 
-  // Load profile once wallet connects
+  // Load profile once wallet connects; open RegisterModal if first time
   useEffect(() => {
     if (!walletAddress || demoSession) { setProfile(null); return; }
-    fetchProfile(walletAddress).then(setProfile).catch(() => {});
+    fetchProfile(walletAddress)
+      .then((p) => {
+        setProfile(p);
+        if (!p) setRegisterOpen(true); // new user → registration gate
+      })
+      .catch(() => {});
   }, [walletAddress, demoSession]);
 
   function handleExitDemo() {
@@ -201,6 +209,21 @@ export function Navbar() {
         walletAddress={walletAddress}
         onProfileChange={setProfile}
       />
+
+      <AnimatePresence>
+        {registerOpen && walletAddress && (
+          <RegisterModal
+            key="register"
+            wallet={walletAddress}
+            onClose={() => setRegisterOpen(false)}
+            onDone={() => {
+              setRegisterOpen(false);
+              // Re-fetch full profile after registration
+              fetchProfile(walletAddress).then(setProfile).catch(() => {});
+            }}
+          />
+        )}
+      </AnimatePresence>
     </>
   );
 }

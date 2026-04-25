@@ -5,7 +5,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { usePrivy, useWallets } from "@/lib/privy";
 import type { AnchorWallet } from "@solana/wallet-adapter-react";
 import { launchSlot } from "@/lib/tokenLaunch";
-import { Upload, Rocket, CheckCircle, Info, ChevronRight, Sparkles } from "lucide-react";
+import { Rocket, CheckCircle, ChevronRight, Sparkles } from "lucide-react";
+import { ImageUploader } from "@/components/slot/ImageUploader";
 import { BondingCurveChart } from "@/components/chart/BondingCurveChart";
 import { cn } from "@/lib/utils";
 import { SLOT_MODELS, STARTING_MCAP_USD, RTP_PCT } from "@/lib/constants";
@@ -128,16 +129,11 @@ export default function LaunchPage() {
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="section-label">Image URL <span className="text-white/20 ml-1">(optional)</span></label>
-                    <div className="relative">
-                      <Upload size={13} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/25" />
-                      <input value={form.imageUri} onChange={(e) => setForm((f) => ({ ...f, imageUri: e.target.value }))}
-                        placeholder="https://… or leave blank for AI generation" className="input-casino pl-9" />
-                    </div>
-                    <p className="flex items-center gap-1.5 text-[11px] text-white/25 font-rajdhani">
-                      <Info size={10} className="text-gold/50" />
-                      Leave blank — AI generates slot art at graduation
-                    </p>
+                    <label className="section-label">Slot Image <span className="text-white/20 ml-1">(optional)</span></label>
+                    <ImageUploader
+                      value={form.imageUri}
+                      onChange={(url) => setForm((f) => ({ ...f, imageUri: url }))}
+                    />
                   </div>
 
                   <div className="space-y-1.5">

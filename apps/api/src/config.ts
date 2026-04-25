@@ -20,6 +20,7 @@ export const config = {
   internalSecret: process.env.INTERNAL_API_SECRET ?? "dev-secret-change-in-prod",
   adminKey:       process.env.ADMIN_API_KEY ?? "admin-dev-key",
   heliusApiKey:   process.env.HELIUS_API_KEY ?? "",
-  serverBaseUrl:  process.env.SERVER_BASE_URL ?? "http://localhost:3001",
-  dataDir:        process.env.DATA_DIR ?? "./data",
+  serverBaseUrl:       process.env.SERVER_BASE_URL ?? "http://localhost:3001",
+  dataDir:             process.env.DATA_DIR ?? "./data",
+  turnstileSecretKey:  process.env.TURNSTILE_SECRET_KEY ?? "",
 };

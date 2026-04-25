@@ -47,6 +47,59 @@ app.get("/health", (_req: Request, res: Response) => {
   res.json({ status: "ok", ts: Date.now() });
 });
 
+// ── House wallet ──────────────────────────────────────────────────────────────
+
+app.get("/house-wallet", (_req: Request, res: Response) => {
+  res.json({ address: getHouseWalletAddress() });
+});
+
+// ── Registration ──────────────────────────────────────────────────────────────
+
+app.post("/register", async (req: Request, res: Response) => {
+  const { wallet, username, dob, cfToken } = req.body as {
+    wallet: string; username: string; dob: string; cfToken?: string;
+  };
+  if (!wallet || !username || !dob)
+    return res.status(400).json({ error: "wallet, username, and dob required" });
+
+  // 18+ check
+  const birth = new Date(dob);
+  const now   = new Date();
+  let age = now.getFullYear() - birth.getFullYear();
+  const m = now.getMonth() - birth.getMonth();
+  if (m < 0 || (m === 0 && now.getDate() < birth.getDate())) age--;
+  if (age < 18) return res.status(403).json({ error: "Must be 18 or older to register" });
+
+  // Cloudflare Turnstile verification (skip in dev if key not configured)
+  if (config.turnstileSecretKey && cfToken) {
+    try {
+      const cfRes  = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
+        method:  "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body:    `secret=${config.turnstileSecretKey}&response=${cfToken}`,
+      });
+      const cfData = await cfRes.json() as { success: boolean };
+      if (!cfData.success) return res.status(403).json({ error: "Bot verification failed" });
+    } catch {
+      if (process.env.NODE_ENV === "production")
+        return res.status(503).json({ error: "Could not verify captcha" });
+    }
+  }
+
+  const clean = username.trim();
+  if (clean.length < 3 || clean.length > 32)
+    return res.status(400).json({ error: "Username must be 3–32 characters" });
+
+  if (getProfile(wallet)) return res.status(409).json({ error: "Already registered" });
+
+  try {
+    const profile = createProfile(wallet, clean);
+    res.status(201).json(profile);
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
 // ── Theme endpoints ───────────────────────────────────────────────────────────
 
 app.get("/themes", (_req: Request, res: Response) => {
@@ -105,6 +158,21 @@ app.patch("/profile/:wallet", (req: Request, res: Response) => {
     const profile = updateProfile(wallet, { username });
     res.json(profile);
   } catch (err) { res.status(404).json({ error: (err as Error).message }); }
+});
+
+app.post("/upload/slot-image", (req: Request, res: Response) => {
+  const { base64, ext } = req.body as { base64: string; ext: string };
+  if (!base64 || !ext) return res.status(400).json({ error: "base64 and ext required" });
+  if (base64.length > 5_000_000) return res.status(413).json({ error: "Image too large (max ~3.5 MB)" });
+  const safeExt = ["jpg", "jpeg", "png", "gif", "webp"].includes(ext.toLowerCase()) ? ext.toLowerCase() : "jpg";
+  try {
+    const fs = require("fs") as typeof import("fs");
+    const imagesDir = path.join(config.dataDir, "images");
+    fs.mkdirSync(imagesDir, { recursive: true });
+    const filename = `slot_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${safeExt}`;
+    fs.writeFileSync(path.join(imagesDir, filename), Buffer.from(base64, "base64"));
+    res.json({ url: `${config.serverBaseUrl}/images/${filename}` });
+  } catch (err) { res.status(500).json({ error: (err as Error).message }); }
 });
 
 app.post("/profile/:wallet/pfp/upload", (req: Request, res: Response) => {
