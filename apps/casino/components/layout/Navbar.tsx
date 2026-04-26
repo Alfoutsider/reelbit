@@ -17,7 +17,7 @@ import { getDemoSession, exitDemo, type DemoSession } from "@/lib/demoSession";
 
 export function Navbar() {
   const router = useRouter();
-  const { authenticated, login, logout } = usePrivy();
+  const { authenticated, user, login, logout } = usePrivy();
   const { wallets } = useWallets();
 
   const [walletOpen,    setWalletOpen]    = useState(false);
@@ -27,8 +27,8 @@ export function Navbar() {
   const [profile,       setProfile]       = useState<UserProfile | null>(null);
   const [demoSession,   setDemoSession]   = useState<DemoSession | null>(null);
 
-  const wallet        = wallets[0];
-  const walletAddress = wallet?.address ?? "";
+  // Prefer embedded wallet (available immediately after email OTP) over useWallets() which populates async
+  const walletAddress = user?.wallet?.address ?? wallets[0]?.address ?? "";
 
   // Detect demo session (re-check on every render tick via interval)
   useEffect(() => {
@@ -48,14 +48,14 @@ export function Navbar() {
 
   // Load profile once wallet connects; open RegisterModal if first time
   useEffect(() => {
-    if (!walletAddress || demoSession) { setProfile(null); return; }
+    if (!authenticated || !walletAddress || demoSession) { setProfile(null); return; }
     fetchProfile(walletAddress)
       .then((p) => {
         setProfile(p);
         if (!p) setRegisterOpen(true); // new user → registration gate
       })
       .catch(() => {});
-  }, [walletAddress, demoSession]);
+  }, [authenticated, walletAddress, demoSession]);
 
   function handleExitDemo() {
     exitDemo();
