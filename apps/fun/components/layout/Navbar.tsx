@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { usePrivy, useWallets } from "@/lib/privy";
-import { Wallet, ExternalLink, Zap, User } from "lucide-react";
+import { Wallet, ExternalLink, Zap } from "lucide-react";
 import { RegisterModal } from "@/components/auth/RegisterModal";
 import type { UserProfile } from "@/components/auth/RegisterModal";
 import { UserModal } from "@/components/auth/UserModal";
@@ -95,23 +95,22 @@ export function Navbar() {
               <motion.button
                 whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
                 onClick={() => setShowUser(true)}
-                className="flex items-center gap-2.5 rounded-xl px-3 py-2 transition-all"
+                className="flex items-center gap-2.5 rounded-xl px-2 py-1.5 transition-all"
                 style={{ background: "rgba(196,30,30,0.08)", border: "1px solid rgba(196,30,30,0.22)" }}>
-                <div className="w-7 h-7 rounded-full overflow-hidden border border-red-700/40 shrink-0"
+                <div className="w-[84px] h-[84px] rounded-full overflow-hidden border-2 border-red-700/40 shrink-0"
                   style={{ background: "var(--bg-deep)" }}>
                   {profile.pfpUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={profile.pfpUrl} alt="pfp" className="w-full h-full object-cover" />
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center font-orbitron font-black text-xs text-red-400">
+                    <div className="w-full h-full flex items-center justify-center font-orbitron font-black text-2xl text-red-400">
                       {profile.username[0].toUpperCase()}
                     </div>
                   )}
                 </div>
-                <span className="font-rajdhani font-bold text-sm text-white/80 max-w-[100px] truncate hidden sm:block">
+                <span className="font-orbitron font-bold text-sm text-white/80 max-w-[100px] truncate hidden sm:block uppercase">
                   {profile.username}
                 </span>
-                <User size={13} className="text-white/30 hidden sm:block" />
               </motion.button>
             ) : authenticated && !profile ? (
               /* ── Logged-in but not registered yet ── */

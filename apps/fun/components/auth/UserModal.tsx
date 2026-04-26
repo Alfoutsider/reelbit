@@ -172,7 +172,7 @@ export function UserModal({ profile: initialProfile, onClose, onUpdate, onLogout
               )}
             </div>
             <div>
-              <p className="font-rajdhani font-bold text-white text-base leading-none">{profile.username}</p>
+              <p className="font-orbitron font-bold text-white text-sm leading-none uppercase">{profile.username}</p>
               <button onClick={copyId} className="flex items-center gap-1 mt-0.5 group">
                 <span className="font-mono text-[11px] text-white/30 group-hover:text-white/50 transition-colors">#{profile.userId}</span>
                 {copiedId ? <Check size={10} className="text-green-400" /> : <Copy size={9} className="text-white/20 group-hover:text-white/40" />}
@@ -254,7 +254,7 @@ export function UserModal({ profile: initialProfile, onClose, onUpdate, onLogout
                   </div>
                 ) : (
                   <div className="flex items-center justify-between bg-white/[0.02] rounded-xl px-4 py-3 border border-white/5">
-                    <span className="font-rajdhani font-bold text-white text-sm">{profile.username}</span>
+                    <span className="font-orbitron font-bold text-white text-sm uppercase">{profile.username}</span>
                     <button onClick={() => setEditingName(true)} className="text-white/30 hover:text-white/60 transition-colors">
                       <Edit2 size={13} />
                     </button>

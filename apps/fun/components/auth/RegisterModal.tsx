@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, ChevronRight, AlertCircle, Wallet, Key, Copy, Check, AlertTriangle } from "lucide-react";
-import { Keypair } from "@solana/web3.js";
+import { X, ChevronRight, AlertCircle, Wallet, ExternalLink, Check, Copy } from "lucide-react";
+import { useConnectWallet } from "@privy-io/react-auth";
 import { AvatarCropper } from "./AvatarCropper";
 import { SuccessAnimation } from "./SuccessAnimation";
 import { cn } from "@/lib/utils";
@@ -30,50 +30,6 @@ interface Props {
   onDone:  (profile: UserProfile) => void;
 }
 
-// ── Private-key parser ────────────────────────────────────────────────────────
-
-function base58Decode(s: string): Uint8Array {
-  const ALPHA = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
-  const map = new Uint8Array(256).fill(255);
-  for (let i = 0; i < ALPHA.length; i++) map[ALPHA.charCodeAt(i)] = i;
-  const out: number[] = [];
-  for (const ch of s) {
-    let carry = map[ch.charCodeAt(0)];
-    if (carry === 255) throw new Error("Invalid base58 character");
-    for (let j = 0; j < out.length; j++) {
-      carry += out[j] * 58;
-      out[j] = carry & 0xff;
-      carry >>= 8;
-    }
-    while (carry > 0) { out.push(carry & 0xff); carry >>= 8; }
-  }
-  for (const ch of s) { if (ch === "1") out.push(0); else break; }
-  return new Uint8Array(out.reverse());
-}
-
-function parsePrivateKey(raw: string): Keypair {
-  const t = raw.trim();
-  // JSON array format: [1,2,...,64]
-  if (t.startsWith("[")) {
-    let arr: number[];
-    try { arr = JSON.parse(t) as number[]; } catch { throw new Error("Invalid JSON — expected [1,2,...,64]."); }
-    if (!Array.isArray(arr) || arr.length !== 64) throw new Error("Expected a 64-element byte array.");
-    return Keypair.fromSecretKey(Uint8Array.from(arr));
-  }
-  // Hex format: 128 chars
-  if (/^[0-9a-fA-F]{128}$/.test(t)) {
-    const b = new Uint8Array(64);
-    for (let i = 0; i < 64; i++) b[i] = parseInt(t.slice(i * 2, i * 2 + 2), 16);
-    return Keypair.fromSecretKey(b);
-  }
-  // Base58 (~88 chars)
-  const b = base58Decode(t);
-  if (b.length !== 64) throw new Error("Expected 64 bytes. Use JSON array, hex, or base58 format.");
-  return Keypair.fromSecretKey(b);
-}
-
-// ── Component ─────────────────────────────────────────────────────────────────
-
 export function RegisterModal({ wallet, onClose, onDone }: Props) {
   const [step, setStep]           = useState<Step>("dob");
   const [dob,  setDob]            = useState("");
@@ -82,12 +38,10 @@ export function RegisterModal({ wallet, onClose, onDone }: Props) {
   const [username, setUsername]   = useState("");
   const [usernameErr, setUsernameErr] = useState<string | null>(null);
 
-  // Wallet choice
-  const [walletMode, setWalletMode]     = useState<"privy" | "import">("privy");
-  const [importInput, setImportInput]   = useState("");
-  const [importErr, setImportErr]       = useState<string | null>(null);
-  const [importedAddr, setImportedAddr] = useState<string | null>(null);
-  const [copiedAddr, setCopiedAddr]     = useState(false);
+  // Wallet step
+  const [walletMode, setWalletMode]               = useState<"privy" | "connect">("privy");
+  const [connectedExtWallet, setConnectedExtWallet] = useState<string | null>(null);
+  const [copiedWallet, setCopiedWallet]             = useState(false);
 
   // Submit
   const [submitting, setSubmitting] = useState(false);
@@ -97,9 +51,17 @@ export function RegisterModal({ wallet, onClose, onDone }: Props) {
   const cfRef     = useRef<HTMLDivElement>(null);
   const widgetRef = useRef<string | null>(null);
 
-  const effectiveWallet = walletMode === "import" && importedAddr ? importedAddr : wallet;
+  const effectiveWallet = walletMode === "connect" && connectedExtWallet ? connectedExtWallet : wallet;
 
-  // ── Turnstile ─────────────────────────────────────────────────────────────
+  // ── Privy: connect external wallet ───────────────────────────────────────────
+
+  const handleConnectSuccess = useCallback(({ wallet: w }: { wallet: { address: string } }) => {
+    setConnectedExtWallet(w.address);
+  }, []);
+
+  const { connectWallet } = useConnectWallet({ onSuccess: handleConnectSuccess });
+
+  // ── Turnstile ─────────────────────────────────────────────────────────────────
 
   useEffect(() => {
     if (document.querySelector('script[src*="turnstile"]')) return;
@@ -129,7 +91,7 @@ export function RegisterModal({ wallet, onClose, onDone }: Props) {
     };
   }, [step]);
 
-  // ── Validators ────────────────────────────────────────────────────────────
+  // ── Validators ────────────────────────────────────────────────────────────────
 
   function validateDob() {
     if (!dob) { setDobError("Please enter your date of birth."); return false; }
@@ -148,29 +110,17 @@ export function RegisterModal({ wallet, onClose, onDone }: Props) {
     setUsernameErr(null); return true;
   }
 
-  function verifyImportedKey() {
-    setImportErr(null);
-    if (!importInput.trim()) { setImportErr("Paste your private key above."); return; }
-    try {
-      const kp   = parsePrivateKey(importInput);
-      const addr = kp.publicKey.toBase58();
-      setImportedAddr(addr);
-      // Stored only in sessionStorage — never sent to the server
-      sessionStorage.setItem("rb_imported_keypair", JSON.stringify(Array.from(kp.secretKey)));
-      sessionStorage.setItem("rb_imported_address", addr);
-    } catch (e) {
-      setImportErr((e as Error).message);
-      setImportedAddr(null);
-    }
-  }
-
-  // ── Navigation ────────────────────────────────────────────────────────────
+  // ── Navigation ────────────────────────────────────────────────────────────────
 
   function next() {
     if (step === "dob")       { if (!validateDob()) return; setStep("captcha"); }
     else if (step === "username") { if (!validateUsername()) return; setStep("wallet"); }
     else if (step === "wallet") {
-      if (walletMode === "import" && !importedAddr) { setImportErr("Verify your key first."); return; }
+      if (walletMode === "connect" && !connectedExtWallet) {
+        // prompt connection instead of advancing
+        connectWallet();
+        return;
+      }
       setStep("avatar");
     }
   }
@@ -180,7 +130,7 @@ export function RegisterModal({ wallet, onClose, onDone }: Props) {
     if (idx > 0) setStep(STEPS[idx - 1]);
   }
 
-  // ── Submit ────────────────────────────────────────────────────────────────
+  // ── Submit ────────────────────────────────────────────────────────────────────
 
   async function handleSubmit(pfpB64: string | null, pfpExt: string) {
     if (!validateUsername()) return;
@@ -190,7 +140,7 @@ export function RegisterModal({ wallet, onClose, onDone }: Props) {
       const regRes = await fetch(`${API}/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ wallet: effectiveWallet, username: username.trim(), dob, cfToken }),
+        body: JSON.stringify({ wallet: effectiveWallet, username: username.trim().toUpperCase(), dob, cfToken }),
       });
       const regData = await regRes.json() as UserProfile & { error?: string };
       if (!regRes.ok) throw new Error(regData.error ?? "Registration failed");
@@ -207,7 +157,6 @@ export function RegisterModal({ wallet, onClose, onDone }: Props) {
         if (pfpRes.ok && pfpData.userId) profile = pfpData;
       }
 
-      // Persist effective wallet so Navbar can look up the right profile on next load
       if (typeof window !== "undefined") localStorage.setItem("rb_wallet", effectiveWallet);
 
       setFinalProfile(profile);
@@ -218,14 +167,8 @@ export function RegisterModal({ wallet, onClose, onDone }: Props) {
     }
   }
 
-  // Called by AvatarCropper "USE THIS" — immediately submits with chosen avatar
-  function onCrop(b64: string, ext: string) {
-    handleSubmit(b64, ext);
-  }
-
-  function skipAvatar() {
-    handleSubmit(null, "jpg");
-  }
+  function onCrop(b64: string, ext: string) { handleSubmit(b64, ext); }
+  function skipAvatar()                     { handleSubmit(null, "jpg"); }
 
   const stepIdx = STEPS.indexOf(step);
   const maxDob  = (() => {
@@ -234,7 +177,7 @@ export function RegisterModal({ wallet, onClose, onDone }: Props) {
     return d.toISOString().split("T")[0];
   })();
 
-  // ── Render ────────────────────────────────────────────────────────────────
+  // ── Render ────────────────────────────────────────────────────────────────────
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
@@ -246,7 +189,6 @@ export function RegisterModal({ wallet, onClose, onDone }: Props) {
         className="w-full max-w-md relative"
         style={{ background: "var(--bg-surface)", border: "1px solid rgba(196,30,30,0.2)", borderRadius: 20, boxShadow: "0 32px 80px rgba(0,0,0,0.8), 0 0 0 1px rgba(196,30,30,0.06)" }}>
 
-        {/* Header */}
         {step !== "success" && (
           <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-white/5">
             <div>
@@ -259,7 +201,6 @@ export function RegisterModal({ wallet, onClose, onDone }: Props) {
           </div>
         )}
 
-        {/* Step dots */}
         {step !== "success" && (
           <div className="flex items-center justify-center gap-2 pt-4 px-6">
             {STEPS.map((s, i) => (
@@ -287,7 +228,7 @@ export function RegisterModal({ wallet, onClose, onDone }: Props) {
                     onChange={(e) => { setDob(e.target.value); setDobError(null); }}
                     className="input-casino text-sm w-full" style={{ colorScheme: "dark" }} />
                   {dobError && (
-                    <div className="flex items-center gap-1.5 mt-1">
+                    <div className="flex items-center gap-1.5">
                       <AlertCircle size={12} className="text-red-400 shrink-0" />
                       <p className="text-xs font-rajdhani text-red-400">{dobError}</p>
                     </div>
@@ -322,8 +263,8 @@ export function RegisterModal({ wallet, onClose, onDone }: Props) {
                 </div>
                 <div className="space-y-2">
                   <input value={username} onChange={(e) => { setUsername(e.target.value); setUsernameErr(null); }}
-                    placeholder="e.g. CryptoKing, LuckyMaria…" maxLength={32}
-                    className={cn("input-casino text-sm", usernameErr && "error")}
+                    placeholder="e.g. CRYPTOKING, LUCKYMARIA…" maxLength={32}
+                    className={cn("input-casino text-sm uppercase", usernameErr && "error")}
                     onKeyDown={(e) => e.key === "Enter" && next()} />
                   {usernameErr && (
                     <div className="flex items-center gap-1.5">
@@ -338,7 +279,7 @@ export function RegisterModal({ wallet, onClose, onDone }: Props) {
                         {username.trim()[0].toUpperCase()}
                       </div>
                       <div>
-                        <p className="font-rajdhani font-bold text-white text-sm leading-none">{username.trim()}</p>
+                        <p className="font-orbitron font-bold text-white text-sm leading-none uppercase">{username.trim()}</p>
                         <p className="font-mono text-[10px] text-white/25 mt-0.5">{wallet.slice(0, 8)}…</p>
                       </div>
                     </motion.div>
@@ -359,9 +300,8 @@ export function RegisterModal({ wallet, onClose, onDone }: Props) {
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
-                  {/* Generated (Privy) wallet */}
-                  <button type="button"
-                    onClick={() => { setWalletMode("privy"); setImportedAddr(null); setImportErr(null); setImportInput(""); }}
+                  {/* Generate wallet (Privy embedded) */}
+                  <button type="button" onClick={() => setWalletMode("privy")}
                     className={cn(
                       "flex flex-col items-center gap-3 rounded-2xl p-4 border-2 transition-all",
                       walletMode === "privy"
@@ -374,7 +314,7 @@ export function RegisterModal({ wallet, onClose, onDone }: Props) {
                     </div>
                     <div className="text-center">
                       <p className={cn("font-orbitron text-[11px] font-bold tracking-wide",
-                        walletMode === "privy" ? "text-white" : "text-white/40")}>GENERATED</p>
+                        walletMode === "privy" ? "text-white" : "text-white/40")}>GENERATE</p>
                       <p className="font-rajdhani text-[11px] text-white/30 mt-0.5">Auto-created by ReelBit</p>
                     </div>
                     {walletMode === "privy" && (
@@ -384,79 +324,70 @@ export function RegisterModal({ wallet, onClose, onDone }: Props) {
                     )}
                   </button>
 
-                  {/* Import wallet */}
-                  <button type="button"
-                    onClick={() => setWalletMode("import")}
+                  {/* Connect existing wallet */}
+                  <button type="button" onClick={() => { setWalletMode("connect"); if (!connectedExtWallet) connectWallet(); }}
                     className={cn(
                       "flex flex-col items-center gap-3 rounded-2xl p-4 border-2 transition-all",
-                      walletMode === "import"
-                        ? "border-amber-500/60 bg-amber-500/[0.08]"
+                      walletMode === "connect"
+                        ? "border-blue-500/60 bg-blue-500/[0.08]"
                         : "border-white/8 bg-white/[0.02] hover:border-white/15"
                     )}>
                     <div className={cn("w-10 h-10 rounded-full flex items-center justify-center",
-                      walletMode === "import" ? "bg-amber-500/20" : "bg-white/5")}>
-                      <Key size={18} className={walletMode === "import" ? "text-amber-400" : "text-white/30"} />
+                      walletMode === "connect" ? "bg-blue-500/20" : "bg-white/5")}>
+                      <ExternalLink size={16} className={walletMode === "connect" ? "text-blue-400" : "text-white/30"} />
                     </div>
                     <div className="text-center">
                       <p className={cn("font-orbitron text-[11px] font-bold tracking-wide",
-                        walletMode === "import" ? "text-amber-300" : "text-white/40")}>IMPORT</p>
-                      <p className="font-rajdhani text-[11px] text-white/30 mt-0.5">Bring your own wallet</p>
+                        walletMode === "connect" ? "text-blue-300" : "text-white/40")}>CONNECT</p>
+                      <p className="font-rajdhani text-[11px] text-white/30 mt-0.5">Phantom, Solflare…</p>
                     </div>
+                    {walletMode === "connect" && connectedExtWallet && (
+                      <div className="w-full bg-black/30 rounded-lg px-2 py-1.5">
+                        <p className="font-mono text-[9px] text-white/40 break-all text-center">{connectedExtWallet.slice(0, 20)}…</p>
+                      </div>
+                    )}
                   </button>
                 </div>
 
-                {/* Import section */}
-                {walletMode === "import" && (
-                  <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="space-y-3">
-                    <div className="flex items-start gap-2.5 bg-amber-500/[0.08] border border-amber-500/25 rounded-xl p-3">
-                      <AlertTriangle size={14} className="text-amber-400 shrink-0 mt-0.5" />
-                      <div>
-                        <p className="font-orbitron text-[10px] font-bold text-amber-400 tracking-wide mb-1">SECURITY WARNING</p>
-                        <p className="text-[11px] font-rajdhani text-amber-300/70 leading-relaxed">
-                          Your key is processed entirely in your browser — it is never sent to any server. Only import a wallet dedicated to this platform. Never reuse a key that holds significant funds.
-                        </p>
-                      </div>
+                {/* Generate wallet info */}
+                {walletMode === "privy" && (
+                  <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }}
+                    className="bg-white/[0.02] border border-white/5 rounded-xl p-3 space-y-1.5">
+                    <p className="font-orbitron text-[10px] font-bold text-white/50 tracking-wide">ABOUT YOUR GENERATED WALLET</p>
+                    <p className="text-[11px] font-rajdhani text-white/30 leading-relaxed">
+                      ReelBit creates a secure Solana wallet for you automatically. After registration you can export your private key from your profile settings to back it up or use it in Phantom.
+                    </p>
+                    <div className="flex items-center gap-2 pt-1">
+                      <div className="font-mono text-[10px] text-white/40 truncate flex-1">{wallet.slice(0, 24)}…</div>
+                      <button type="button" onClick={() => { navigator.clipboard.writeText(wallet); setCopiedWallet(true); setTimeout(() => setCopiedWallet(false), 1800); }}
+                        className="shrink-0 p-1 hover:bg-white/5 rounded transition-all">
+                        {copiedWallet ? <Check size={11} className="text-green-400" /> : <Copy size={11} className="text-white/25" />}
+                      </button>
                     </div>
+                  </motion.div>
+                )}
 
-                    <div className="space-y-1.5">
-                      <label className="section-label">Private Key</label>
-                      <textarea value={importInput}
-                        onChange={(e) => { setImportInput(e.target.value); setImportErr(null); setImportedAddr(null); }}
-                        placeholder={"Accepted formats:\n• JSON array: [1,2,...,64]\n• Base58 (~88 chars)\n• Hex (128 chars)"}
-                        rows={3} spellCheck={false} autoComplete="off"
-                        className="input-casino text-xs font-mono w-full resize-none"
-                        style={{ lineHeight: 1.6 }} />
+                {/* Connected wallet info */}
+                {walletMode === "connect" && connectedExtWallet && (
+                  <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }}
+                    className="bg-green-500/[0.06] border border-green-500/20 rounded-xl p-3 space-y-1">
+                    <p className="font-orbitron text-[10px] font-bold text-green-400 tracking-wide">✓ WALLET CONNECTED</p>
+                    <div className="flex items-center gap-2">
+                      <p className="font-mono text-[10px] text-white/50 truncate">{connectedExtWallet}</p>
+                      <button type="button" onClick={() => { navigator.clipboard.writeText(connectedExtWallet); setCopiedWallet(true); setTimeout(() => setCopiedWallet(false), 1800); }}
+                        className="shrink-0 p-1 hover:bg-white/5 rounded transition-all">
+                        {copiedWallet ? <Check size={11} className="text-green-400" /> : <Copy size={11} className="text-white/25" />}
+                      </button>
                     </div>
+                  </motion.div>
+                )}
 
-                    <button type="button" onClick={verifyImportedKey}
-                      className="btn-launch w-full py-2.5 font-orbitron text-[11px] tracking-wide">
-                      VERIFY KEY
+                {walletMode === "connect" && !connectedExtWallet && (
+                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                    <button type="button" onClick={() => connectWallet()}
+                      className="btn-launch w-full py-2.5 font-orbitron text-[11px] tracking-wide flex items-center justify-center gap-2">
+                      <ExternalLink size={13} /> CONNECT WALLET
                     </button>
-
-                    {importErr && (
-                      <div className="flex items-center gap-1.5">
-                        <AlertCircle size={12} className="text-red-400 shrink-0" />
-                        <p className="text-xs font-rajdhani text-red-400">{importErr}</p>
-                      </div>
-                    )}
-
-                    {importedAddr && (
-                      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-                        className="bg-green-500/[0.08] border border-green-500/25 rounded-xl p-3 space-y-1.5">
-                        <p className="font-orbitron text-[10px] font-bold text-green-400 tracking-wide">✓ KEY VERIFIED</p>
-                        <div className="flex items-center justify-between gap-2">
-                          <p className="font-mono text-[10px] text-white/50 truncate">{importedAddr}</p>
-                          <button type="button" onClick={() => {
-                            navigator.clipboard.writeText(importedAddr);
-                            setCopiedAddr(true);
-                            setTimeout(() => setCopiedAddr(false), 1800);
-                          }} className="shrink-0 p-1 hover:bg-white/5 rounded transition-all">
-                            {copiedAddr ? <Check size={11} className="text-green-400" /> : <Copy size={11} className="text-white/30" />}
-                          </button>
-                        </div>
-                        <p className="text-[10px] font-rajdhani text-white/30">This address will be linked to your account.</p>
-                      </motion.div>
-                    )}
                   </motion.div>
                 )}
               </motion.div>
@@ -499,7 +430,7 @@ export function RegisterModal({ wallet, onClose, onDone }: Props) {
           </AnimatePresence>
         </div>
 
-        {/* Footer — hidden during captcha, success, and avatar (avatar has its own) */}
+        {/* Footer */}
         {step !== "success" && step !== "captcha" && step !== "avatar" && (
           <div className="px-6 pb-6 flex gap-3">
             {stepIdx > 0 && (
@@ -509,17 +440,17 @@ export function RegisterModal({ wallet, onClose, onDone }: Props) {
             )}
             <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} onClick={next}
               className="btn-launch flex-1 flex items-center justify-center gap-2 py-3 text-[12px]">
-              CONTINUE <ChevronRight size={14} />
+              {walletMode === "connect" && step === "wallet" && !connectedExtWallet
+                ? <><ExternalLink size={13} /> CONNECT WALLET</>
+                : <>CONTINUE <ChevronRight size={14} /></>
+              }
             </motion.button>
           </div>
         )}
 
-        {/* Avatar footer — back + skip */}
         {step === "avatar" && !submitting && (
           <div className="px-6 pb-6 flex gap-3">
-            <button onClick={back} className="btn-ghost flex-1 py-3 font-orbitron text-[11px] tracking-wide">
-              BACK
-            </button>
+            <button onClick={back} className="btn-ghost flex-1 py-3 font-orbitron text-[11px] tracking-wide">BACK</button>
             <button onClick={skipAvatar}
               className="btn-ghost flex-1 py-3 font-orbitron text-[11px] tracking-wide text-white/35 hover:text-white/60">
               SKIP →
