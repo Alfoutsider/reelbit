@@ -6,24 +6,17 @@ import { motion, AnimatePresence } from "framer-motion";
 import { usePrivy, useWallets } from "@/lib/privy";
 import { Wallet, ExternalLink, Zap, User } from "lucide-react";
 import { RegisterModal } from "@/components/auth/RegisterModal";
+import type { UserProfile } from "@/components/auth/RegisterModal";
 import { UserModal } from "@/components/auth/UserModal";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
 
-interface UserProfile {
-  userId:   string;
-  wallet:   string;
-  username: string;
-  pfpUrl:   string | null;
-  pfpType:  "upload" | "nft" | null;
-  nftMint:  string | null;
-  createdAt: number;
-}
-
 export function Navbar() {
   const { ready, authenticated, user, login, logout } = usePrivy();
   const { wallets } = useWallets();
-  const address = user?.wallet?.address ?? wallets[0]?.address;
+  const privyAddress = user?.wallet?.address ?? wallets[0]?.address;
+  // If user registered with an imported wallet, use that address for profile lookup
+  const address = (typeof window !== "undefined" ? localStorage.getItem("rb_wallet") : null) ?? privyAddress;
 
   const [profile, setProfile]             = useState<UserProfile | null>(null);
   const [profileLoading, setProfileLoading] = useState(false);
@@ -51,12 +44,9 @@ export function Navbar() {
     setShowRegister(false);
   }
 
-  function onRegistered() {
-    if (!address) return;
-    // Refetch full profile (to get userId etc)
-    fetch(`${API}/profile/${address}`)
-      .then((r) => r.json())
-      .then((data) => { if (data?.userId) setProfile(data); });
+  function onRegistered(p: UserProfile) {
+    setProfile(p);
+    setShowRegister(false);
   }
 
   const navLinks = [
