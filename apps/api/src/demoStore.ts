@@ -1,13 +1,4 @@
-/**
- * Demo / beta-access store.
- *
- * Users apply with wallet + optional twitter + reason.
- * Admins approve or deny via POST /demo/approve|deny.
- * Approved users receive $100 USDC demo credit (non-withdrawable).
- */
-
-import fs from "fs";
-import path from "path";
+import { supabase } from "./supabase";
 
 export type DemoStatus = "pending" | "approved" | "denied";
 
@@ -20,91 +11,64 @@ export interface DemoApplication {
   reviewedAt?: number;
 }
 
-import { config } from "./config";
-const STORE_PATH = path.join(config.dataDir, "demo.json");
-const DEMO_TMP   = STORE_PATH + ".tmp";
-
-/** $100 USDC in micro-units credited on approval */
 export const DEMO_CREDIT_USDC = 100 * 1_000_000;
 
-interface DemoStore {
-  applications: Record<string, DemoApplication>; // keyed by wallet
-  demoUsers:    string[];                         // wallets approved; can play, cannot withdraw
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function toApp(row: any): DemoApplication {
+  return {
+    wallet:     row.wallet,
+    twitter:    row.twitter    ?? null,
+    reason:     row.reason,
+    status:     row.status     as DemoStatus,
+    appliedAt:  row.applied_at,
+    reviewedAt: row.reviewed_at ?? undefined,
+  };
 }
 
-function read(): DemoStore {
-  try { return JSON.parse(fs.readFileSync(STORE_PATH, "utf-8")); }
-  catch { return { applications: {}, demoUsers: [] }; }
+export async function getApplication(wallet: string): Promise<DemoApplication | null> {
+  const { data } = await supabase.from("demo_applications").select("*").eq("wallet", wallet).maybeSingle();
+  return data ? toApp(data) : null;
 }
 
-function write(store: DemoStore): void {
-  fs.mkdirSync(path.dirname(STORE_PATH), { recursive: true });
-  fs.writeFileSync(DEMO_TMP, JSON.stringify(store, null, 2));
-  fs.renameSync(DEMO_TMP, STORE_PATH);
+export async function getAllApplications(): Promise<DemoApplication[]> {
+  const { data } = await supabase.from("demo_applications").select("*").order("applied_at", { ascending: false });
+  return (data ?? []).map(toApp);
 }
 
-export function getApplication(wallet: string): DemoApplication | null {
-  return read().applications[wallet] ?? null;
+export async function isDemoUser(wallet: string): Promise<boolean> {
+  const { data } = await supabase.from("demo_users").select("wallet").eq("wallet", wallet).maybeSingle();
+  return !!data;
 }
 
-export function getAllApplications(): DemoApplication[] {
-  return Object.values(read().applications).sort((a, b) => b.appliedAt - a.appliedAt);
-}
-
-export function isDemoUser(wallet: string): boolean {
-  return read().demoUsers.includes(wallet);
-}
-
-/**
- * Submit a demo application. One per wallet; re-applying after denial resets to pending.
- */
-export function apply(
-  wallet: string,
-  reason: string,
-  twitter: string | null = null,
-): DemoApplication {
-  const store = read();
-  const existing = store.applications[wallet];
+export async function apply(wallet: string, reason: string, twitter: string | null = null): Promise<DemoApplication> {
+  const existing = await getApplication(wallet);
   if (existing && (existing.status === "approved" || existing.status === "pending")) return existing;
 
-  const app: DemoApplication = {
-    wallet,
-    twitter,
-    reason,
-    status:    "pending",
-    appliedAt: Date.now(),
-  };
-  store.applications[wallet] = app;
-  write(store);
-  return app;
+  const row = { wallet, twitter, reason, status: "pending", applied_at: Date.now() };
+  const { data, error } = await supabase.from("demo_applications").upsert(row, { onConflict: "wallet" }).select().single();
+  if (error) throw new Error(error.message);
+  return toApp(data);
 }
 
-/**
- * Approve an application. Returns the credited USDC amount so the endpoint can echo it.
- * The actual balance credit is done by the caller (index.ts) to avoid a circular dep.
- */
-export function approve(wallet: string): DemoApplication {
-  const store = read();
-  const app = store.applications[wallet];
-  if (!app) throw new Error("No application found for this wallet");
-
-  app.status     = "approved";
-  app.reviewedAt = Date.now();
-  store.applications[wallet] = app;
-
-  if (!store.demoUsers.includes(wallet)) store.demoUsers.push(wallet);
-  write(store);
-  return app;
+export async function approve(wallet: string): Promise<DemoApplication> {
+  const { data, error } = await supabase
+    .from("demo_applications")
+    .update({ status: "approved", reviewed_at: Date.now() })
+    .eq("wallet", wallet)
+    .select()
+    .single();
+  if (error) throw new Error(error.message ?? "No application found");
+  await supabase.from("demo_users").upsert({ wallet }, { onConflict: "wallet" });
+  return toApp(data);
 }
 
-export function deny(wallet: string): DemoApplication {
-  const store = read();
-  const app = store.applications[wallet];
-  if (!app) throw new Error("No application found for this wallet");
-
-  app.status     = "denied";
-  app.reviewedAt = Date.now();
-  store.applications[wallet] = app;
-  write(store);
-  return app;
+export async function deny(wallet: string): Promise<DemoApplication> {
+  const { data, error } = await supabase
+    .from("demo_applications")
+    .update({ status: "denied", reviewed_at: Date.now() })
+    .eq("wallet", wallet)
+    .select()
+    .single();
+  if (error) throw new Error(error.message ?? "No application found");
+  return toApp(data);
 }

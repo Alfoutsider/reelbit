@@ -25,4 +25,6 @@ export const config = {
   turnstileSecretKey:  process.env.TURNSTILE_SECRET_KEY ?? "",
   funUrl:              process.env.FUN_URL ?? "http://localhost:3000",
   frontendUrl:         process.env.FRONTEND_URL ?? "http://localhost:3002",
+  supabaseUrl:         process.env.SUPABASE_URL ?? "",
+  supabaseKey:         process.env.SUPABASE_KEY ?? "",
 };

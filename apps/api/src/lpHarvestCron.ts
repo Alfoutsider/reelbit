@@ -172,9 +172,6 @@ async function harvestPool(
     await sendAndConfirmTransaction(connection, closeTx, [authority], { commitment: "confirmed" });
   }
 
-  // Measure SOL gain
-  const balBefore = await connection.getBalance(authority.publicKey);
-
   // Distribute: read current authority balance above a minimum keep amount
   const KEEP_LAMPORTS = Math.floor(0.05 * LAMPORTS_PER_SOL); // keep 0.05 SOL for future tx fees
   const currentBal    = await connection.getBalance(authority.publicKey);
@@ -212,7 +209,7 @@ async function harvestPool(
 
   // Earmark holder dividend in store — holderDividendCron will distribute it
   if (holderDivShare > 0) {
-    addDividend(mintStr, holderDivShare);
+    await addDividend(mintStr, holderDivShare);
   }
 
   const fmtSol = (n: number) => (n / LAMPORTS_PER_SOL).toFixed(6);

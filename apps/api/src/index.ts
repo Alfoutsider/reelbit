@@ -112,10 +112,10 @@ app.post("/register", async (req: Request, res: Response) => {
   if (clean.length < 3 || clean.length > 32)
     return res.status(400).json({ error: "Username must be 3–32 characters" });
 
-  if (getProfile(wallet)) return res.status(409).json({ error: "Already registered" });
+  if (await getProfile(wallet)) return res.status(409).json({ error: "Already registered" });
 
   try {
-    const profile = createProfile(wallet, clean);
+    const profile = await createProfile(wallet, clean);
     res.status(201).json(profile);
   } catch (err) {
     res.status(500).json({ error: (err as Error).message });
@@ -149,35 +149,35 @@ app.post("/themes/trigger", async (req: Request, res: Response) => {
 
 // ── Profile endpoints ─────────────────────────────────────────────────────────
 
-app.get("/profile/by-id/:userId", (req: Request, res: Response) => {
-  const profile = getProfileByUserId(req.params.userId);
+app.get("/profile/by-id/:userId", async (req: Request, res: Response) => {
+  const profile = await getProfileByUserId(req.params.userId);
   if (!profile) return res.status(404).json({ error: "User ID not found" });
   res.json(profile);
 });
 
-app.get("/profile/:wallet", (req: Request, res: Response) => {
-  const profile = getProfile(req.params.wallet);
+app.get("/profile/:wallet", async (req: Request, res: Response) => {
+  const profile = await getProfile(req.params.wallet);
   if (!profile) return res.status(404).json({ error: "Profile not found" });
   res.json(profile);
 });
 
-app.post("/profile", (req: Request, res: Response) => {
+app.post("/profile", async (req: Request, res: Response) => {
   const { wallet, username } = req.body as { wallet: string; username: string };
   if (!wallet || !username) return res.status(400).json({ error: "wallet and username required" });
   if (username.length < 3 || username.length > 20) return res.status(400).json({ error: "Username must be 3–20 chars" });
   if (!/^[a-zA-Z0-9_]+$/.test(username)) return res.status(400).json({ error: "Username: letters, numbers, underscore only" });
-  const profile = createProfile(wallet, username);
+  const profile = await createProfile(wallet, username);
   res.status(201).json(profile);
 });
 
-app.patch("/profile/:wallet", (req: Request, res: Response) => {
+app.patch("/profile/:wallet", async (req: Request, res: Response) => {
   const { wallet } = req.params;
   const { username } = req.body as { username: string };
   if (!username) return res.status(400).json({ error: "username required" });
   if (username.length < 3 || username.length > 20) return res.status(400).json({ error: "Username must be 3–20 chars" });
   if (!/^[a-zA-Z0-9_]+$/.test(username)) return res.status(400).json({ error: "Username: letters, numbers, underscore only" });
   try {
-    const profile = updateProfile(wallet, { username });
+    const profile = await updateProfile(wallet, { username });
     res.json(profile);
   } catch (err) { res.status(404).json({ error: (err as Error).message }); }
 });
@@ -197,16 +197,15 @@ app.post("/upload/slot-image", (req: Request, res: Response) => {
   } catch (err) { res.status(500).json({ error: (err as Error).message }); }
 });
 
-app.post("/profile/:wallet/pfp/upload", (req: Request, res: Response) => {
+app.post("/profile/:wallet/pfp/upload", async (req: Request, res: Response) => {
   const { wallet } = req.params;
   const { base64, ext } = req.body as { base64: string; ext: string };
   if (!base64 || !ext) return res.status(400).json({ error: "base64 and ext required" });
   if (base64.length > 5_000_000) return res.status(413).json({ error: "Image too large (max ~3.5 MB)" });
-  if (!getProfile(wallet)) return res.status(404).json({ error: "Create a profile first" });
+  if (!await getProfile(wallet)) return res.status(404).json({ error: "Create a profile first" });
   try {
-    const filename = savePfpFile(wallet, base64, ext);
-    const pfpUrl = `${config.serverBaseUrl}/pfp/${filename}`;
-    const profile = updateProfile(wallet, { pfpUrl, pfpType: "upload", nftMint: null });
+    const pfpUrl = await savePfpFile(wallet, base64, ext);
+    const profile = await updateProfile(wallet, { pfpUrl, pfpType: "upload", nftMint: null });
     res.json(profile);
   } catch (err) { res.status(500).json({ error: (err as Error).message }); }
 });
@@ -215,10 +214,10 @@ app.post("/profile/:wallet/pfp/nft", async (req: Request, res: Response) => {
   const { wallet } = req.params;
   const { mint } = req.body as { mint: string };
   if (!mint) return res.status(400).json({ error: "mint required" });
-  if (!getProfile(wallet)) return res.status(404).json({ error: "Create a profile first" });
+  if (!await getProfile(wallet)) return res.status(404).json({ error: "Create a profile first" });
   try {
     const imageUrl = await fetchNftImage(mint);
-    const profile = updateProfile(wallet, { pfpUrl: imageUrl, pfpType: "nft", nftMint: mint });
+    const profile = await updateProfile(wallet, { pfpUrl: imageUrl, pfpType: "nft", nftMint: mint });
     res.json(profile);
   } catch (err) { res.status(400).json({ error: (err as Error).message }); }
 });
@@ -320,8 +319,8 @@ const PLATFORM_REVENUE_KEY = "PLATFORM_REVENUE"; // internal balance store key f
 // ── Balance endpoints ─────────────────────────────────────────────────────────
 // All internal balances are in USDC micro-units (1 USDC = 1_000_000).
 
-app.get("/balance/:wallet", (req: Request, res: Response) => {
-  const entry = getBalance(req.params.wallet);
+app.get("/balance/:wallet", async (req: Request, res: Response) => {
+  const entry = await getBalance(req.params.wallet);
   res.json({ wallet: req.params.wallet, ...entry });
 });
 
@@ -344,12 +343,12 @@ app.post("/deposit/confirm", async (req: Request, res: Response) => {
   if (!txSignature || !wallet) {
     return res.status(400).json({ error: "txSignature and wallet required" });
   }
-  if (isSeenDeposit(txSignature)) {
+  if (await isSeenDeposit(txSignature)) {
     return res.status(409).json({ error: "This transaction has already been credited" });
   }
   try {
     const { lamports } = await verifyDepositTx(connection, txSignature);
-    markDepositSeen(txSignature);
+    await markDepositSeen(txSignature);
 
     // Swap the received SOL to USDC (Jupiter routing fee already embedded in outAmount)
     const usdcSwapped  = await swapSolToUsdc(connection, lamports);
@@ -359,12 +358,12 @@ app.post("/deposit/confirm", async (req: Request, res: Response) => {
     const usdcCredited = usdcSwapped - depositFee;
 
     // Platform collects the fee
-    credit(PLATFORM_REVENUE_KEY, depositFee);
-    const entry        = credit(wallet, usdcCredited);
+    await credit(PLATFORM_REVENUE_KEY, depositFee);
+    await credit(wallet, usdcCredited);
 
     // Welcome bonus — one-time, first deposit only
-    const wasAlreadyClaimed = (getBalance(wallet)).welcomeBonusClaimed;
-    const bonusEntry        = applyWelcomeBonus(wallet, usdcCredited);
+    const wasAlreadyClaimed = (await getBalance(wallet)).welcomeBonusClaimed;
+    const bonusEntry        = await applyWelcomeBonus(wallet, usdcCredited);
     const bonusJustClaimed  = !wasAlreadyClaimed && bonusEntry.welcomeBonusClaimed;
 
     res.json({
@@ -393,15 +392,15 @@ app.post("/withdraw", async (req: Request, res: Response) => {
   if (!wallet || !usdcUnits) {
     return res.status(400).json({ error: "wallet and usdcUnits required" });
   }
-  if (isDemoUser(wallet)) {
+  if (await isDemoUser(wallet)) {
     return res.status(403).json({ error: "Demo balances cannot be withdrawn. Deposit real funds to unlock withdrawals." });
   }
   const to = destination ?? wallet;
   try {
     // Deduct flat withdrawal fee before converting — user pays the house gas cost
     const totalDebit     = usdcUnits + WITHDRAWAL_FEE_USDC;
-    const entry          = debit(wallet, totalDebit);
-    credit(PLATFORM_REVENUE_KEY, WITHDRAWAL_FEE_USDC);
+    const entry          = await debit(wallet, totalDebit);
+    await credit(PLATFORM_REVENUE_KEY, WITHDRAWAL_FEE_USDC);
 
     const lamports       = await usdcToLamports(connection, usdcUnits);
     const txSignature    = await sendSol(connection, to, lamports);
@@ -416,15 +415,15 @@ app.post("/withdraw", async (req: Request, res: Response) => {
  * Body: { from, toUserId, usdcUnits }
  * Instant internal transfer — no blockchain tx, no gas.
  */
-app.post("/transfer", (req: Request, res: Response) => {
+app.post("/transfer", async (req: Request, res: Response) => {
   const { from, toUserId, usdcUnits } = req.body as { from: string; toUserId: string; usdcUnits: number };
   if (!from || !toUserId || !usdcUnits) {
     return res.status(400).json({ error: "from, toUserId, usdcUnits required" });
   }
-  if (isDemoUser(from)) {
+  if (await isDemoUser(from)) {
     return res.status(403).json({ error: "Demo balances cannot be transferred. Deposit real funds to unlock transfers." });
   }
-  const recipient = getProfileByUserId(toUserId);
+  const recipient = await getProfileByUserId(toUserId);
   if (!recipient) return res.status(404).json({ error: `User #${toUserId.replace(/^#/, "")} not found` });
   if (recipient.wallet === from) return res.status(400).json({ error: "Cannot transfer to yourself" });
   try {
@@ -433,12 +432,12 @@ app.post("/transfer", (req: Request, res: Response) => {
     const netTransfer  = usdcUnits - platformCut;
 
     // Debit full amount from sender, credit net to recipient and fee to platform
-    debit(from, usdcUnits);
-    credit(recipient.wallet, netTransfer);
-    credit(PLATFORM_REVENUE_KEY, platformCut);
+    await debit(from, usdcUnits);
+    await credit(recipient.wallet, netTransfer);
+    await credit(PLATFORM_REVENUE_KEY, platformCut);
 
     res.json({
-      balance:     getPlayable(from),
+      balance:     await getPlayable(from),
       transferred: netTransfer,
       transferFee: platformCut,
       recipient:   { userId: recipient.userId, username: recipient.username },
@@ -457,20 +456,20 @@ function requireInternal(req: Request, res: Response, next: NextFunction) {
   next();
 }
 
-app.post("/internal/debit", requireInternal, (req: Request, res: Response) => {
+app.post("/internal/debit", requireInternal, async (req: Request, res: Response) => {
   const { wallet, usdcUnits } = req.body as { wallet: string; usdcUnits: number };
   try {
-    const entry = debit(wallet, usdcUnits);
-    recordWagering(wallet, usdcUnits); // track toward bonus wagering requirement
+    const entry = await debit(wallet, usdcUnits);
+    await recordWagering(wallet, usdcUnits); // track toward bonus wagering requirement
     res.json({ balance: entry.playable, bonus: entry.bonus });
   } catch (err) {
     res.status(402).json({ error: (err as Error).message });
   }
 });
 
-app.post("/internal/credit", requireInternal, (req: Request, res: Response) => {
+app.post("/internal/credit", requireInternal, async (req: Request, res: Response) => {
   const { wallet, usdcUnits } = req.body as { wallet: string; usdcUnits: number };
-  const entry = credit(wallet, usdcUnits);
+  const entry = await credit(wallet, usdcUnits);
   res.json({ balance: entry.playable, bonus: entry.bonus });
 });
 
@@ -760,29 +759,29 @@ app.post("/tokens/:mint/sell", async (req: Request, res: Response) => {
 // ── Demo / beta-access endpoints ─────────────────────────────────────────────
 
 /** POST /demo/apply  { wallet, reason, twitter? } */
-app.post("/demo/apply", (req: Request, res: Response) => {
+app.post("/demo/apply", async (req: Request, res: Response) => {
   const { wallet, reason, twitter } = req.body as { wallet: string; reason: string; twitter?: string };
   if (!wallet || !reason) return res.status(400).json({ error: "wallet and reason required" });
   if (reason.length < 20 || reason.length > 500) {
     return res.status(400).json({ error: "reason must be 20–500 characters" });
   }
-  const existing = getApplication(wallet);
+  const existing = await getApplication(wallet);
   if (existing?.status === "approved") {
     return res.json({ status: "approved", message: "Already approved — check your balance." });
   }
-  const app = demoApply(wallet, reason, twitter ?? null);
+  const app = await demoApply(wallet, reason, twitter ?? null);
   res.status(201).json({ status: app.status, appliedAt: app.appliedAt });
 });
 
 /** GET /demo/status/:wallet */
-app.get("/demo/status/:wallet", (req: Request, res: Response) => {
-  const app = getApplication(req.params.wallet);
+app.get("/demo/status/:wallet", async (req: Request, res: Response) => {
+  const app = await getApplication(req.params.wallet);
   if (!app) return res.json({ status: "none" });
   res.json({
     status:    app.status,
     appliedAt: app.appliedAt,
     reviewedAt: app.reviewedAt ?? null,
-    isDemo: isDemoUser(req.params.wallet),
+    isDemo: await isDemoUser(req.params.wallet),
   });
 });
 
@@ -793,27 +792,27 @@ function requireAdmin(req: Request, res: Response, next: NextFunction) {
 }
 
 /** GET /demo/applications  (admin) */
-app.get("/demo/applications", requireAdmin, (_req: Request, res: Response) => {
-  res.json(getAllApplications());
+app.get("/demo/applications", requireAdmin, async (_req: Request, res: Response) => {
+  res.json(await getAllApplications());
 });
 
 /** POST /demo/approve  { wallet }  (admin) */
-app.post("/demo/approve", requireAdmin, (req: Request, res: Response) => {
+app.post("/demo/approve", requireAdmin, async (req: Request, res: Response) => {
   const { wallet } = req.body as { wallet: string };
   if (!wallet) return res.status(400).json({ error: "wallet required" });
   try {
-    const app = demoApprove(wallet);
-    credit(wallet, DEMO_CREDIT_USDC);
+    const app = await demoApprove(wallet);
+    await credit(wallet, DEMO_CREDIT_USDC);
     res.json({ status: app.status, credited: DEMO_CREDIT_USDC });
   } catch (err) { res.status(404).json({ error: (err as Error).message }); }
 });
 
 /** POST /demo/deny  { wallet }  (admin) */
-app.post("/demo/deny", requireAdmin, (req: Request, res: Response) => {
+app.post("/demo/deny", requireAdmin, async (req: Request, res: Response) => {
   const { wallet } = req.body as { wallet: string };
   if (!wallet) return res.status(400).json({ error: "wallet required" });
   try {
-    const app = demoDeny(wallet);
+    const app = await demoDeny(wallet);
     res.json({ status: app.status });
   } catch (err) { res.status(404).json({ error: (err as Error).message }); }
 });
@@ -825,12 +824,12 @@ app.get("/demo/activity", (_req: Request, res: Response) => {
 
 // ── Dividend endpoints ────────────────────────────────────────────────────────
 
-app.get("/dividends", (_req: Request, res: Response) => {
-  res.json(getAllDividends());
+app.get("/dividends", async (_req: Request, res: Response) => {
+  res.json(await getAllDividends());
 });
 
-app.get("/dividends/:mint", (req: Request, res: Response) => {
-  const entry = getDividend(req.params.mint);
+app.get("/dividends/:mint", async (req: Request, res: Response) => {
+  const entry = await getDividend(req.params.mint);
   if (!entry) return res.status(404).json({ error: "No dividend record for this mint" });
   res.json({ mint: req.params.mint, ...entry });
 });

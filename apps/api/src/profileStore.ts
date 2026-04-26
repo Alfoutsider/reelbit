@@ -1,78 +1,95 @@
-import fs from "fs";
-import path from "path";
-
-import { config } from "./config";
-const STORE_PATH = path.join(config.dataDir, "profiles.json");
-const PFP_DIR = path.join(config.dataDir, "pfp");
+import { supabase } from "./supabase";
 
 export interface UserProfile {
-  userId:    string;          // permanent — randomly assigned at creation
-  wallet:    string;          // permanent — the owning wallet
-  username:  string;          // changeable
-  pfpUrl:    string | null;   // changeable
+  userId:    string;
+  wallet:    string;
+  username:  string;
+  pfpUrl:    string | null;
   pfpType:   "upload" | "nft" | null;
   nftMint:   string | null;
   createdAt: number;
 }
 
 function generateUserId(): string {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no ambiguous 0/O 1/I
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   return Array.from({ length: 8 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
 }
 
-function readStore(): Record<string, UserProfile> {
-  try { return JSON.parse(fs.readFileSync(STORE_PATH, "utf-8")); }
-  catch { return {}; }
-}
-
-function writeStore(s: Record<string, UserProfile>): void {
-  fs.mkdirSync(path.dirname(STORE_PATH), { recursive: true });
-  fs.writeFileSync(STORE_PATH, JSON.stringify(s, null, 2));
-}
-
-export function getProfile(wallet: string): UserProfile | null {
-  return readStore()[wallet] ?? null;
-}
-
-export function getProfileByUserId(userId: string): UserProfile | null {
-  const clean = userId.replace(/^#/, "").toUpperCase();
-  return Object.values(readStore()).find((p) => p.userId === clean) ?? null;
-}
-
-export function createProfile(wallet: string, username: string): UserProfile {
-  const store = readStore();
-  if (store[wallet]) return store[wallet];
-
-  const existingIds = new Set(Object.values(store).map((p) => p.userId));
-  let userId: string;
-  do { userId = generateUserId(); } while (existingIds.has(userId));
-
-  const profile: UserProfile = {
-    userId, wallet, username,
-    pfpUrl: null, pfpType: null, nftMint: null,
-    createdAt: Date.now(),
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function toProfile(row: any): UserProfile {
+  return {
+    userId:    row.user_id,
+    wallet:    row.wallet,
+    username:  row.username,
+    pfpUrl:    row.pfp_url   ?? null,
+    pfpType:   row.pfp_type  ?? null,
+    nftMint:   row.nft_mint  ?? null,
+    createdAt: row.created_at,
   };
-  store[wallet] = profile;
-  writeStore(store);
-  return profile;
 }
 
-export function updateProfile(
+export async function getProfile(wallet: string): Promise<UserProfile | null> {
+  const { data } = await supabase.from("profiles").select("*").eq("wallet", wallet).maybeSingle();
+  return data ? toProfile(data) : null;
+}
+
+export async function getProfileByUserId(userId: string): Promise<UserProfile | null> {
+  const clean = userId.replace(/^#/, "").toUpperCase();
+  const { data } = await supabase.from("profiles").select("*").eq("user_id", clean).maybeSingle();
+  return data ? toProfile(data) : null;
+}
+
+export async function createProfile(wallet: string, username: string): Promise<UserProfile> {
+  const existing = await getProfile(wallet);
+  if (existing) return existing;
+
+  let userId: string;
+  let taken = true;
+  do {
+    userId = generateUserId();
+    const { data } = await supabase.from("profiles").select("user_id").eq("user_id", userId).maybeSingle();
+    taken = !!data;
+  } while (taken);
+
+  const row = {
+    wallet,
+    user_id:    userId,
+    username,
+    pfp_url:    null,
+    pfp_type:   null,
+    nft_mint:   null,
+    created_at: Date.now(),
+  };
+
+  const { data, error } = await supabase.from("profiles").insert(row).select().single();
+  if (error) throw new Error(error.message);
+  return toProfile(data);
+}
+
+export async function updateProfile(
   wallet: string,
   updates: Partial<Pick<UserProfile, "username" | "pfpUrl" | "pfpType" | "nftMint">>,
-): UserProfile {
-  const store = readStore();
-  if (!store[wallet]) throw new Error("Profile not found — create one first");
-  store[wallet] = { ...store[wallet], ...updates };
-  writeStore(store);
-  return store[wallet];
+): Promise<UserProfile> {
+  const row: Record<string, unknown> = {};
+  if (updates.username !== undefined) row.username = updates.username;
+  if (updates.pfpUrl   !== undefined) row.pfp_url  = updates.pfpUrl;
+  if (updates.pfpType  !== undefined) row.pfp_type = updates.pfpType;
+  if (updates.nftMint  !== undefined) row.nft_mint = updates.nftMint;
+
+  const { data, error } = await supabase.from("profiles").update(row).eq("wallet", wallet).select().single();
+  if (error) throw new Error(error.message);
+  return toProfile(data);
 }
 
-/** Save base64 image data to disk, return the filename. */
-export function savePfpFile(wallet: string, base64Data: string, ext: string): string {
-  fs.mkdirSync(PFP_DIR, { recursive: true });
-  const safeExt  = ["jpg", "jpeg", "png", "gif", "webp"].includes(ext.toLowerCase()) ? ext.toLowerCase() : "jpg";
+export async function savePfpFile(wallet: string, base64Data: string, ext: string): Promise<string> {
+  const safeExt  = ["jpg","jpeg","png","gif","webp"].includes(ext.toLowerCase()) ? ext.toLowerCase() : "jpg";
   const filename  = `${wallet.slice(0, 16)}_${Date.now()}.${safeExt}`;
-  fs.writeFileSync(path.join(PFP_DIR, filename), Buffer.from(base64Data, "base64"));
-  return filename;
+  const buffer    = Buffer.from(base64Data, "base64");
+  const mime      = safeExt === "jpg" ? "image/jpeg" : `image/${safeExt}`;
+
+  const { error } = await supabase.storage.from("pfp").upload(filename, buffer, { contentType: mime, upsert: true });
+  if (error) throw new Error(error.message);
+
+  const { data } = supabase.storage.from("pfp").getPublicUrl(filename);
+  return data.publicUrl;
 }

@@ -1,61 +1,46 @@
-/**
- * Dividend store — tracks accumulated holder dividend lamports per mint.
- *
- * The LP harvest cron carves out 10% of LP fees into this store rather than
- * transferring them out. The holder dividend cron reads and drains it every 24h.
- *
- * Data persisted to data/dividends.json so it survives server restarts.
- */
-
-import fs from "fs";
-import path from "path";
-
-import { config } from "./config";
-const STORE_PATH = path.join(config.dataDir, "dividends.json");
+import { supabase } from "./supabase";
 
 export interface DividendEntry {
-  accumulated:     number; // lamports waiting to be distributed to holders
-  lastDistributed: number; // unix ms timestamp of last completed distribution
-  totalDistributed: number; // lifetime total lamports distributed
+  accumulated:      number;
+  lastDistributed:  number;
+  totalDistributed: number;
 }
 
-function readStore(): Record<string, DividendEntry> {
-  try {
-    return JSON.parse(fs.readFileSync(STORE_PATH, "utf-8"));
-  } catch {
-    return {};
-  }
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function toEntry(row: any): DividendEntry {
+  return {
+    accumulated:      Number(row.accumulated),
+    lastDistributed:  Number(row.last_distributed),
+    totalDistributed: Number(row.total_distributed),
+  };
 }
 
-function writeStore(store: Record<string, DividendEntry>): void {
-  fs.mkdirSync(path.dirname(STORE_PATH), { recursive: true });
-  fs.writeFileSync(STORE_PATH, JSON.stringify(store, null, 2));
-}
-
-export function addDividend(mint: string, lamports: number): void {
+export async function addDividend(mint: string, lamports: number): Promise<void> {
   if (lamports <= 0) return;
-  const store = readStore();
-  if (!store[mint]) {
-    store[mint] = { accumulated: 0, lastDistributed: 0, totalDistributed: 0 };
+  const { data } = await supabase.from("dividends").select("*").eq("mint", mint).maybeSingle();
+  if (data) {
+    await supabase.from("dividends").update({ accumulated: Number(data.accumulated) + lamports }).eq("mint", mint);
+  } else {
+    await supabase.from("dividends").insert({ mint, accumulated: lamports, last_distributed: 0, total_distributed: 0 });
   }
-  store[mint].accumulated += lamports;
-  writeStore(store);
 }
 
-export function getDividend(mint: string): DividendEntry | null {
-  return readStore()[mint] ?? null;
+export async function getDividend(mint: string): Promise<DividendEntry | null> {
+  const { data } = await supabase.from("dividends").select("*").eq("mint", mint).maybeSingle();
+  return data ? toEntry(data) : null;
 }
 
-export function getAllDividends(): Array<{ mint: string } & DividendEntry> {
-  return Object.entries(readStore()).map(([mint, entry]) => ({ mint, ...entry }));
+export async function getAllDividends(): Promise<Array<{ mint: string } & DividendEntry>> {
+  const { data } = await supabase.from("dividends").select("*");
+  return (data ?? []).map((row) => ({ mint: row.mint, ...toEntry(row) }));
 }
 
-/** Call after a successful distribution to clear the accumulator. */
-export function recordDistribution(mint: string, lamportsDistributed: number): void {
-  const store = readStore();
-  if (!store[mint]) return;
-  store[mint].accumulated     -= lamportsDistributed;
-  store[mint].lastDistributed  = Date.now();
-  store[mint].totalDistributed += lamportsDistributed;
-  writeStore(store);
+export async function recordDistribution(mint: string, lamportsDistributed: number): Promise<void> {
+  const { data } = await supabase.from("dividends").select("*").eq("mint", mint).maybeSingle();
+  if (!data) return;
+  await supabase.from("dividends").update({
+    accumulated:       Math.max(0, Number(data.accumulated) - lamportsDistributed),
+    last_distributed:  Date.now(),
+    total_distributed: Number(data.total_distributed) + lamportsDistributed,
+  }).eq("mint", mint);
 }

@@ -216,7 +216,7 @@ function chunk<T>(arr: T[], size: number): T[][] {
 
 async function runDividendRound(connection: Connection): Promise<void> {
   const authority       = getAuthority();
-  const dividendEntries = getAllDividends();
+  const dividendEntries = await getAllDividends();
 
   // Only process mints that have graduated AND have accumulated lamports
   const graduatedMints = new Set(getGraduatedWithPool().map((t) => t.mint));
@@ -247,7 +247,7 @@ async function runDividendRound(connection: Connection): Promise<void> {
       );
 
       if (sent > 0) {
-        recordDistribution(entry.mint, sent);
+        await recordDistribution(entry.mint, sent);
         console.log(
           `[dividend] ✅ ${entry.mint.slice(0, 8)}… — sent ${(sent / LAMPORTS_PER_SOL).toFixed(6)} SOL`,
         );
