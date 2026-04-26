@@ -23,4 +23,6 @@ export const config = {
   serverBaseUrl:       process.env.SERVER_BASE_URL ?? "http://localhost:3001",
   dataDir:             process.env.DATA_DIR ?? "./data",
   turnstileSecretKey:  process.env.TURNSTILE_SECRET_KEY ?? "",
+  funUrl:              process.env.FUN_URL ?? "http://localhost:3000",
+  frontendUrl:         process.env.FRONTEND_URL ?? "http://localhost:3002",
 };

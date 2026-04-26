@@ -34,6 +34,28 @@ import { swapSolToUsdc, USDC_MINT } from "./jupiterSwap";
 import { USDC_UNIT, applyWelcomeBonus, recordWagering, getBalance } from "./balanceStore";
 
 const app = express();
+
+const ALLOWED_ORIGINS = [
+  "https://reelbit-fun.vercel.app",
+  "https://reelbit-casino.vercel.app",
+  config.funUrl,
+  config.frontendUrl,
+  "http://localhost:3000",
+  "http://localhost:3002",
+].filter(Boolean);
+
+app.use((req: Request, res: Response, next: NextFunction) => {
+  const origin = req.headers.origin ?? "";
+  if (ALLOWED_ORIGINS.includes(origin) || origin.endsWith(".vercel.app")) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type,Authorization");
+    res.setHeader("Access-Control-Allow-Credentials", "true");
+  }
+  if (req.method === "OPTIONS") { res.sendStatus(204); return; }
+  next();
+});
+
 app.use(express.json({ limit: "10mb" }));
 
 app.use("/images", express.static(path.join(config.dataDir, "images")));
