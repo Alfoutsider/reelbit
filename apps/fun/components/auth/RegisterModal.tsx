@@ -24,7 +24,7 @@ interface Props {
 
 export function RegisterModal({ wallet, onClose, onDone }: Props) {
   const [step, setStep]       = useState<Step>("dob");
-  const [dob,  setDob]        = useState({ day: "", month: "", year: "" });
+  const [dob,  setDob]        = useState("");
   const [dobError, setDobError] = useState<string | null>(null);
   const [cfToken, setCfToken] = useState<string | null>(null);
   const [username, setUsername] = useState("");
@@ -82,9 +82,8 @@ export function RegisterModal({ wallet, onClose, onDone }: Props) {
   // ── Step validators ──────────────────────────────────────────────────────────
 
   function validateDob() {
-    const { day, month, year } = dob;
-    if (!day || !month || !year) { setDobError("Please fill in your date of birth."); return false; }
-    const birth = new Date(+year, +month - 1, +day);
+    if (!dob) { setDobError("Please enter your date of birth."); return false; }
+    const birth = new Date(dob);
     const now   = new Date();
     let age = now.getFullYear() - birth.getFullYear();
     const m = now.getMonth() - birth.getMonth();
@@ -130,7 +129,7 @@ export function RegisterModal({ wallet, onClose, onDone }: Props) {
     setSubmitting(true);
     setSubmitErr(null);
     try {
-      const dobStr = `${dob.year}-${dob.month.padStart(2, "0")}-${dob.day.padStart(2, "0")}`;
+      const dobStr = dob; // already YYYY-MM-DD from input[type=date]
 
       // 1. Register profile
       const regRes = await fetch(`${API}/register`, {
@@ -167,9 +166,12 @@ export function RegisterModal({ wallet, onClose, onDone }: Props) {
 
   // ── Render helpers ───────────────────────────────────────────────────────────
 
-  const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-  const curYear = new Date().getFullYear();
-  const years   = Array.from({ length: 100 }, (_, i) => curYear - i);
+  // Max selectable date = today minus 18 years
+  const maxDob = (() => {
+    const d = new Date();
+    d.setFullYear(d.getFullYear() - 18);
+    return d.toISOString().split("T")[0];
+  })();
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
@@ -224,35 +226,15 @@ export function RegisterModal({ wallet, onClose, onDone }: Props) {
 
                 <div className="space-y-2">
                   <label className="section-label">Date of Birth</label>
-                  <div className="grid grid-cols-3 gap-2">
-                    <div>
-                      <label className="text-[10px] font-rajdhani text-white/30 block mb-1">Day</label>
-                      <select value={dob.day} onChange={(e) => setDob((d) => ({ ...d, day: e.target.value }))} className="input-casino text-sm">
-                        <option value="">--</option>
-                        {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => (
-                          <option key={d} value={d}>{d}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-rajdhani text-white/30 block mb-1">Month</label>
-                      <select value={dob.month} onChange={(e) => setDob((d) => ({ ...d, month: e.target.value }))} className="input-casino text-sm">
-                        <option value="">--</option>
-                        {MONTHS.map((m, i) => (
-                          <option key={m} value={i + 1}>{m}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-rajdhani text-white/30 block mb-1">Year</label>
-                      <select value={dob.year} onChange={(e) => setDob((d) => ({ ...d, year: e.target.value }))} className="input-casino text-sm">
-                        <option value="">----</option>
-                        {years.map((y) => (
-                          <option key={y} value={y}>{y}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
+                  <input
+                    type="date"
+                    value={dob}
+                    max={maxDob}
+                    min="1900-01-01"
+                    onChange={(e) => { setDob(e.target.value); setDobError(null); }}
+                    className="input-casino text-sm w-full"
+                    style={{ colorScheme: "dark" }}
+                  />
                   {dobError && (
                     <div className="flex items-center gap-1.5 mt-1">
                       <AlertCircle size={12} className="text-red-400 shrink-0" />

@@ -30,17 +30,17 @@ export function Navbar() {
   const [showRegister, setShowRegister]   = useState(false);
   const [showUser, setShowUser]           = useState(false);
 
-  // Fetch profile whenever wallet changes
+  // Fetch profile whenever wallet changes; auto-open register for new users
   useEffect(() => {
     if (!authenticated || !address) { setProfile(null); return; }
     setProfileLoading(true);
     fetch(`${API}/profile/${address}`)
       .then((r) => {
-        if (r.status === 404) { setProfile(null); setShowRegister(true); return; }
+        if (r.status === 404) { setProfile(null); setShowRegister(true); return null; }
         return r.json();
       })
       .then((data) => { if (data?.userId) setProfile(data); })
-      .catch(() => setProfile(null))
+      .catch(() => { setProfile(null); setShowRegister(true); })
       .finally(() => setProfileLoading(false));
   }, [authenticated, address]);
 
