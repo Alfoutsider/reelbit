@@ -27,6 +27,8 @@ export interface DemoSlot {
   imageUri:     string;
   realSolSim:   number; // fake SOL raised (float, SOL units)
   tokensHeld:   number; // raw token units held by demo user (cosmetic)
+  devBuyPct:    number; // % of supply the creator bought at launch (0 = no dev buy)
+  devSold:      boolean; // true once creator sells their dev tokens
   graduated:    boolean;
   primaryColor: string;
   accentColor:  string;
@@ -98,14 +100,31 @@ function saveDemoSlots(slots: DemoSlot[]): void {
   localStorage.setItem(SLOTS_KEY, JSON.stringify(slots));
 }
 
-export function createDemoSlot(data: Pick<DemoSlot, "name" | "ticker" | "model" | "description" | "imageUri">): DemoSlot {
+export function createDemoSlot(
+  data: Pick<DemoSlot, "name" | "ticker" | "model" | "description" | "imageUri">,
+  devBuyPct = 0,
+): DemoSlot {
   const id = `demo_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
   const [primaryColor, accentColor] = PALETTE[Math.floor(Math.random() * PALETTE.length)];
+
+  // Compute dev buy tokens at initial curve state
+  let tokensHeld = 0;
+  let realSolSim = 2 + Math.random() * 3; // start 2–5 SOL (shows initial traction)
+  if (devBuyPct > 0) {
+    const BONDING_SUPPLY = VIRTUAL_TOKENS * 793_100 / 1_073_000; // ~793.1M tokens in raw units
+    const tokensWanted = Math.floor(BONDING_SUPPLY * devBuyPct / 100);
+    const solCost = VIRTUAL_SOL * tokensWanted / (VIRTUAL_TOKENS - tokensWanted);
+    tokensHeld = tokensWanted;
+    realSolSim = Math.min(realSolSim + solCost, GRADUATION_SOL - 1);
+  }
+
   const slot: DemoSlot = {
     ...data,
     id,
-    realSolSim: 2 + Math.random() * 3, // start 2–5 SOL (shows initial traction)
-    tokensHeld: 0,
+    realSolSim,
+    tokensHeld,
+    devBuyPct,
+    devSold: false,
     graduated:  false,
     primaryColor,
     accentColor,

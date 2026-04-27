@@ -274,9 +274,9 @@ app.get("/metadata/:mint", (req: Request, res: Response) => {
 
 // Pre-register a token before launch so /metadata/:mint is ready for the Metaplex URI
 app.post("/themes/register", (req: Request, res: Response) => {
-  const { mint, tokenName, tokenSymbol, imageUri, description, model, creator } = req.body as {
+  const { mint, tokenName, tokenSymbol, imageUri, description, model, creator, devBuyPct } = req.body as {
     mint: string; tokenName: string; tokenSymbol: string;
-    imageUri?: string; description?: string; model?: string; creator?: string;
+    imageUri?: string; description?: string; model?: string; creator?: string; devBuyPct?: number;
   };
   if (!mint || !tokenName || !tokenSymbol) {
     return res.status(400).json({ error: "mint, tokenName, tokenSymbol required" });
@@ -292,6 +292,7 @@ app.post("/themes/register", (req: Request, res: Response) => {
     creator: creator ?? undefined,
     slotModel: (model ?? "Classic3Reel") as SlotModel,
     graduated: false,
+    devBuyPct: devBuyPct && devBuyPct > 0 ? devBuyPct : undefined,
     status: "generating" as const,
     heroImageUrl: imageUri ?? null,
     bgImageUrl: null,
@@ -665,6 +666,7 @@ app.get("/tokens/:mint", async (req: Request, res: Response) => {
     image:          theme.heroImageUrl ?? "",
     description:    `${theme.tokenName} ($${theme.tokenSymbol}) — slot token on ReelBit`,
     graduated:      theme.graduated,
+    devBuyPct:      theme.devBuyPct ?? 0,
     metadataUri:    `${config.serverBaseUrl}/metadata/${mintStr}`,
     program:        config.tokenLaunchProgramId,
     bondingCurve: curve ? {

@@ -206,6 +206,14 @@ export default function DemoSlotPage({ params }: { params: { id: string } }) {
               </span>
             </div>
             <p className="text-white/35 text-sm font-rajdhani">{slot.description || "No description provided."}</p>
+            {slot.devBuyPct > 0 && (
+              <div className="flex items-center gap-1.5 mt-1">
+                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-orbitron font-bold border ${slot.devSold ? "border-red-500/30 bg-red-500/8 text-red-400" : "border-green-500/30 bg-green-500/8 text-green-400"}`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${slot.devSold ? "bg-red-400" : "bg-green-400"}`} />
+                  {slot.devSold ? "DEV SOLD" : `DEV HOLDING · ${slot.devBuyPct}%`}
+                </span>
+              </div>
+            )}
           </div>
           {slot.graduated && (
             <Link href={`/slot/${playMint}`}>

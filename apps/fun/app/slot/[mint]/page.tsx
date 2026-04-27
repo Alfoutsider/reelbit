@@ -24,6 +24,7 @@ interface TokenApiResponse {
   model: string;
   image: string;
   graduated: boolean;
+  devBuyPct: number;
   bondingCurve: {
     creator: string;
     virtualSol: string;
@@ -47,9 +48,10 @@ function mapApiToSlotToken(r: TokenApiResponse): SlotToken {
     model:      (r.model as SlotToken["model"]) ?? "Classic3Reel",
     creator:    r.bondingCurve?.creator ?? "",
     graduated:  r.graduated,
+    devBuyPct:  r.devBuyPct ?? 0,
     mcapUsd:    mcapSol  * SOL_PRICE_USD,
-    priceUsd:   priceSol * SOL_PRICE_USD * 1e9, // lamports per raw token → USD per whole token (6 dec)
-    volume24h:  0, // not tracked yet
+    priceUsd:   priceSol * SOL_PRICE_USD * 1e9,
+    volume24h:  0,
     createdAt:  Date.now(),
   };
 }
@@ -191,6 +193,12 @@ export default function SlotPage({ params }: { params: { mint: string } }) {
                     <span className="badge badge-model">{model?.emoji} {model?.label}</span>
                     {slot.graduated && <span className="badge badge-graduated"><Zap size={8} /> GRADUATED</span>}
                     {nearGrad && <span className="badge badge-gold animate-pulse-gold">🔥 NEAR GRADUATION</span>}
+                    {slot.devBuyPct > 0 && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-orbitron font-bold border border-green-500/30 bg-green-500/8 text-green-400">
+                        <span className="w-1.5 h-1.5 rounded-full bg-green-400" />
+                        DEV HOLDING · {slot.devBuyPct}%
+                      </span>
+                    )}
                   </div>
                   <div className="flex items-center gap-4 mt-2 text-[12px] text-white/35 font-rajdhani font-semibold flex-wrap">
                     {slot.creator && <span>by {shortenAddress(slot.creator)}</span>}

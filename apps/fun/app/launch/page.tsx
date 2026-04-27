@@ -4,8 +4,9 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { usePrivy, useWallets } from "@/lib/privy";
 import type { AnchorWallet } from "@solana/wallet-adapter-react";
-import { launchSlot } from "@/lib/tokenLaunch";
-import { Rocket, CheckCircle, ChevronRight, Sparkles } from "lucide-react";
+import { launchSlot, buyTokens, VIRTUAL_SOL, VIRTUAL_TOKENS, LAMPORTS_PER_SOL_BIGINT } from "@/lib/tokenLaunch";
+import { PublicKey } from "@solana/web3.js";
+import { Rocket, CheckCircle, ChevronRight, Sparkles, TrendingUp } from "lucide-react";
 import { ImageUploader } from "@/components/slot/ImageUploader";
 import { BondingCurveChart } from "@/components/chart/BondingCurveChart";
 import { cn } from "@/lib/utils";
@@ -14,15 +15,34 @@ import type { SlotModel } from "@/types/slot";
 
 type Step = "form" | "preview" | "launching" | "success";
 
+// Bonding curve supply constants for dev buy cost estimation
+const BONDING_SUPPLY_RAW = VIRTUAL_TOKENS * 793_100n / 1_073_000n; // ~793.1M tokens in raw units
+const SOL_PRICE_USD = 150;
+
+function devBuyCostLamports(pct: number): bigint {
+  if (pct === 0) return 0n;
+  const tokensWanted = BONDING_SUPPLY_RAW * BigInt(pct) / 100n;
+  return VIRTUAL_SOL * tokensWanted / (VIRTUAL_TOKENS - tokensWanted);
+}
+
+function devBuyCostSolDisplay(pct: number): string {
+  if (pct === 0) return "0";
+  const lamports = devBuyCostLamports(pct);
+  return (Number(lamports) / Number(LAMPORTS_PER_SOL_BIGINT)).toFixed(3);
+}
+
+const DEV_BUY_PRESETS = [0, 1, 2, 5];
+
 interface FormData {
   name: string;
   ticker: string;
   imageUri: string;
   model: SlotModel;
   description: string;
+  devBuyPct: number;
 }
 
-const EMPTY: FormData = { name: "", ticker: "", imageUri: "", model: "Classic3Reel", description: "" };
+const EMPTY: FormData = { name: "", ticker: "", imageUri: "", model: "Classic3Reel", description: "", devBuyPct: 0 };
 
 const HOW_IT_WORKS = [
   { step: "01", title: "Launch for Free",  desc: "Token deploys at $5k mcap. You pay ~0.01 SOL rent only." },
@@ -69,7 +89,13 @@ export default function LaunchPage() {
         imageUri:    form.imageUri,
         description: form.description,
         model:       form.model,
+        devBuyPct:   form.devBuyPct,
       });
+      // Execute dev buy immediately after token creation if selected
+      if (form.devBuyPct > 0) {
+        const solLamports = devBuyCostLamports(form.devBuyPct);
+        await buyTokens(wallet, new PublicKey(result.mint), solLamports);
+      }
       setMintAddress(result.mint);
       setStep("success");
     } catch (e) {
@@ -118,12 +144,21 @@ export default function LaunchPage() {
                     <label className="section-label">Slot Model</label>
                     <div className="grid grid-cols-3 gap-2">
                       {SLOT_MODELS.map((m) => (
-                        <button key={m.id} type="button" onClick={() => setForm((f) => ({ ...f, model: m.id as SlotModel }))}
+                        <motion.button
+                          key={m.id}
+                          type="button"
+                          whileHover={{ scale: 1.03 }}
+                          whileTap={{ scale: 0.95 }}
+                          onClick={() => setForm((f) => ({ ...f, model: m.id as SlotModel }))}
                           className={cn("model-card", form.model === m.id && "selected")}>
-                          <div className="text-2xl mb-2">{m.emoji}</div>
+                          <motion.div
+                            animate={{ scale: form.model === m.id ? 1.15 : 1 }}
+                            transition={{ type: "spring", stiffness: 400, damping: 20 }}
+                            className="text-2xl mb-2"
+                          >{m.emoji}</motion.div>
                           <p className="font-orbitron text-[10px] font-bold tracking-wide text-white/60">{m.label}</p>
                           <p className="text-[9px] text-white/25 font-rajdhani mt-0.5">{m.reels} reels</p>
-                        </button>
+                        </motion.button>
                       ))}
                     </div>
                   </div>
@@ -140,6 +175,46 @@ export default function LaunchPage() {
                     <label className="section-label">Description</label>
                     <textarea value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
                       placeholder="Tell players about your slot theme…" rows={3} className="input-casino resize-none" />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="section-label flex items-center gap-1.5">
+                      <TrendingUp size={10} className="text-gold" />
+                      Dev Buy <span className="text-white/20 ml-1">(optional)</span>
+                    </label>
+                    <p className="text-[11px] text-white/30 font-rajdhani">Buy a % of the supply at launch. Visible to traders on your slot page.</p>
+                    <div className="flex gap-2">
+                      {DEV_BUY_PRESETS.map((pct) => {
+                        const selected = form.devBuyPct === pct;
+                        const costSol  = devBuyCostSolDisplay(pct);
+                        return (
+                          <motion.button
+                            key={pct}
+                            type="button"
+                            whileTap={{ scale: 0.93 }}
+                            onClick={() => setForm((f) => ({ ...f, devBuyPct: pct }))}
+                            className={cn(
+                              "flex-1 rounded-xl py-2 px-1 border text-center transition-all",
+                              selected
+                                ? "border-gold/60 bg-gold/10"
+                                : "border-white/8 bg-white/[0.02] hover:border-gold/30"
+                            )}
+                          >
+                            <p className={cn("font-orbitron text-[11px] font-bold", selected ? "gold-text" : "text-white/50")}>
+                              {pct === 0 ? "None" : `${pct}%`}
+                            </p>
+                            {pct > 0 && (
+                              <p className="text-[9px] text-white/25 font-rajdhani mt-0.5">~{costSol} SOL</p>
+                            )}
+                          </motion.button>
+                        );
+                      })}
+                    </div>
+                    {form.devBuyPct > 0 && (
+                      <p className="text-[11px] font-rajdhani text-gold/60">
+                        ≈ {devBuyCostSolDisplay(form.devBuyPct)} SOL (${(Number(devBuyCostLamports(form.devBuyPct)) / Number(LAMPORTS_PER_SOL_BIGINT) * SOL_PRICE_USD).toFixed(0)}) sent on-chain immediately after launch
+                      </p>
+                    )}
                   </div>
 
                   <motion.button whileHover={{ scale: 1.02, boxShadow: "0 0 32px rgba(139,92,246,0.6)" }} whileTap={{ scale: 0.97 }}
@@ -201,8 +276,9 @@ export default function LaunchPage() {
                     { k: "Ticker",     v: `$${form.ticker}` },
                     { k: "Model",      v: SLOT_MODELS.find((m) => m.id === form.model)?.label ?? "" },
                     { k: "Supply",     v: "1,000,000,000 tokens" },
-                    { k: "Your Cost",  v: "FREE (~0.01 SOL rent)" },
+                    { k: "Launch Cost",  v: "FREE (~0.01 SOL rent)" },
                     { k: "RTP",        v: `${RTP_PCT}% enforced on-chain` },
+                    ...(form.devBuyPct > 0 ? [{ k: "Dev Buy", v: `${form.devBuyPct}% (≈${devBuyCostSolDisplay(form.devBuyPct)} SOL)` }] : []),
                   ].map(({ k, v }) => (
                     <div key={k} className="flex justify-between items-center py-2 border-b border-white/5 last:border-0">
                       <span className="section-label">{k}</span>

@@ -8,6 +8,7 @@ export interface SlotToken {
   model: SlotModel;
   creator: string;
   graduated: boolean;
+  devBuyPct: number;
   mcapUsd: number;
   priceUsd: number;
   volume24h: number;

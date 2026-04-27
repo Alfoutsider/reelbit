@@ -30,8 +30,9 @@ const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
 
 // ── Bonding curve math (mirrors Rust x*y=k) ───────────────────────────────────
 
-const VIRTUAL_SOL    = BigInt(30 * LAMPORTS_PER_SOL);
-const VIRTUAL_TOKENS = BigInt("1073000191000000");
+export const LAMPORTS_PER_SOL_BIGINT = BigInt(LAMPORTS_PER_SOL);
+export const VIRTUAL_SOL    = BigInt(30 * LAMPORTS_PER_SOL);
+export const VIRTUAL_TOKENS = BigInt("1073000191000000");
 const GRADUATION_LAMPORTS = BigInt(85 * LAMPORTS_PER_SOL);
 
 /** Mirrors on-chain fee_bps() — dynamic fee rate based on graduation progress. */
@@ -215,6 +216,7 @@ export interface LaunchParams {
   imageUri: string;
   description: string;
   model: "Classic3Reel" | "Standard5Reel" | "FiveReelFreeSpins";
+  devBuyPct?: number;
 }
 
 export interface LaunchResult {
@@ -244,6 +246,7 @@ export async function launchSlot(
       imageUri: params.imageUri,
       description: params.description,
       model: params.model,
+      devBuyPct: params.devBuyPct ?? 0,
     }),
   });
 

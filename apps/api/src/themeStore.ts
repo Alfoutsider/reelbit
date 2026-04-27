@@ -11,6 +11,7 @@ export interface SlotTheme {
   graduated: boolean;
   creator?: string;      // wallet that launched this slot (set during register)
   poolAddress?: string; // Meteora DLMM LB pair address (set after graduation migration)
+  devBuyPct?: number;  // % of supply creator bought at launch (0 or absent = no dev buy)
   status: "generating" | "ready" | "failed";
   heroImageUrl: string | null;
   bgImageUrl: string | null;

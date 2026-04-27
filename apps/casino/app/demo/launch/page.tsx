@@ -2,14 +2,27 @@
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, Upload, Rocket, CheckCircle, Info, ChevronRight, Sparkles, Gamepad2 } from "lucide-react";
+import { ArrowLeft, Rocket, CheckCircle, Info, ChevronRight, Sparkles, Gamepad2, TrendingUp } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { isDemoMode, createDemoSlot } from "@/lib/demoSession";
+import { ImageUploader } from "@/components/slot/ImageUploader";
 import { cn } from "@/lib/utils";
 
 type Step = "form" | "preview" | "launching" | "success";
 type SlotModel = "Classic3Reel" | "Standard5Reel" | "FiveReelFreeSpins";
+
+// Bonding curve constants (mirrors demoSession.ts)
+const VIRTUAL_SOL    = 30;
+const VIRTUAL_TOKENS = 1_073_000_191_000_000;
+const BONDING_SUPPLY = Math.floor(VIRTUAL_TOKENS * 793_100 / 1_073_000);
+const SOL_PRICE_USD  = 150;
+
+function devBuyCostSol(pct: number): number {
+  if (pct === 0) return 0;
+  const tokensWanted = BONDING_SUPPLY * pct / 100;
+  return VIRTUAL_SOL * tokensWanted / (VIRTUAL_TOKENS - tokensWanted);
+}
 
 interface FormData {
   name:        string;
@@ -17,9 +30,11 @@ interface FormData {
   imageUri:    string;
   model:       SlotModel;
   description: string;
+  devBuyPct:   number;
 }
 
-const EMPTY: FormData = { name: "", ticker: "", imageUri: "", model: "Classic3Reel", description: "" };
+const EMPTY: FormData = { name: "", ticker: "", imageUri: "", model: "Classic3Reel", description: "", devBuyPct: 0 };
+const DEV_BUY_PRESETS = [0, 1, 2, 5];
 
 const SLOT_MODELS = [
   { id: "Classic3Reel",      emoji: "🎰", label: "Classic 3-Reel",  reels: 3 },
@@ -63,7 +78,6 @@ export default function DemoLaunchPage() {
 
   async function handleLaunch() {
     setStep("launching");
-    // Simulate a deploy delay
     await new Promise((r) => setTimeout(r, 2200));
     const slot = createDemoSlot({
       name:        form.name.trim(),
@@ -71,7 +85,7 @@ export default function DemoLaunchPage() {
       model:       form.model,
       description: form.description.trim(),
       imageUri:    form.imageUri.trim(),
-    });
+    }, form.devBuyPct);
     setSlotId(slot.id);
     setStep("success");
   }
@@ -140,38 +154,74 @@ export default function DemoLaunchPage() {
                     <label className="section-label">Slot Model</label>
                     <div className="grid grid-cols-3 gap-2">
                       {SLOT_MODELS.map((m) => (
-                        <button
+                        <motion.button
                           key={m.id}
                           type="button"
+                          whileHover={{ scale: 1.03 }}
+                          whileTap={{ scale: 0.95 }}
                           onClick={() => setForm((f) => ({ ...f, model: m.id as SlotModel }))}
-                          className={cn(
-                            "model-card",
-                            form.model === m.id && "selected",
-                          )}
+                          className={cn("model-card", form.model === m.id && "selected")}
                         >
-                          <div className="text-2xl mb-2">{m.emoji}</div>
+                          <motion.div
+                            animate={{ scale: form.model === m.id ? 1.15 : 1 }}
+                            transition={{ type: "spring", stiffness: 400, damping: 20 }}
+                            className="text-2xl mb-2"
+                          >{m.emoji}</motion.div>
                           <p className="font-orbitron text-[10px] font-bold tracking-wide text-white/60">{m.label}</p>
                           <p className="text-[9px] text-white/25 font-rajdhani mt-0.5">{m.reels} reels</p>
-                        </button>
+                        </motion.button>
                       ))}
                     </div>
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="section-label">Image URL <span className="text-white/20 ml-1">(optional)</span></label>
-                    <div className="relative">
-                      <Upload size={13} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/25" />
-                      <input
-                        value={form.imageUri}
-                        onChange={(e) => setForm((f) => ({ ...f, imageUri: e.target.value }))}
-                        placeholder="https://… or leave blank"
-                        className="input-casino pl-9"
-                      />
+                    <label className="section-label">Slot Image <span className="text-white/20 ml-1">(optional)</span></label>
+                    <ImageUploader
+                      value={form.imageUri}
+                      onChange={(url) => setForm((f) => ({ ...f, imageUri: url }))}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="section-label flex items-center gap-1.5">
+                      <TrendingUp size={10} style={{ color: "#d4a017" }} />
+                      Dev Buy <span className="text-white/20 ml-1">(optional)</span>
+                    </label>
+                    <p className="text-[11px] text-white/30 font-rajdhani">Buy a % of the supply at launch to show skin in the game. Visible to traders.</p>
+                    <div className="flex gap-2">
+                      {DEV_BUY_PRESETS.map((pct) => {
+                        const cost = devBuyCostSol(pct);
+                        const selected = form.devBuyPct === pct;
+                        return (
+                          <motion.button
+                            key={pct}
+                            type="button"
+                            whileTap={{ scale: 0.93 }}
+                            onClick={() => setForm((f) => ({ ...f, devBuyPct: pct }))}
+                            className={cn(
+                              "flex-1 rounded-xl py-2 px-1 border text-center transition-all",
+                              selected
+                                ? "border-[#d4a017]/70 bg-[#d4a017]/12"
+                                : "border-white/8 bg-white/[0.02] hover:border-[#d4a017]/30"
+                            )}
+                          >
+                            <p className={cn("font-orbitron text-[11px] font-bold", selected ? "text-[#f5c842]" : "text-white/50")}>
+                              {pct === 0 ? "None" : `${pct}%`}
+                            </p>
+                            {pct > 0 && (
+                              <p className="text-[9px] text-white/25 font-rajdhani mt-0.5">
+                                ~{cost.toFixed(2)} SOL
+                              </p>
+                            )}
+                          </motion.button>
+                        );
+                      })}
                     </div>
-                    <p className="flex items-center gap-1.5 text-[11px] text-white/25 font-rajdhani">
-                      <Info size={10} className="text-purple-400/50" />
-                      Leave blank — placeholder art is generated
-                    </p>
+                    {form.devBuyPct > 0 && (
+                      <p className="text-[11px] font-rajdhani" style={{ color: "rgba(212,160,23,0.7)" }}>
+                        ≈ {devBuyCostSol(form.devBuyPct).toFixed(3)} SOL (${(devBuyCostSol(form.devBuyPct) * SOL_PRICE_USD).toFixed(0)}) deducted from your demo balance at launch
+                      </p>
+                    )}
                   </div>
 
                   <div className="space-y-1.5">
@@ -258,6 +308,7 @@ export default function DemoLaunchPage() {
                     { k: "Supply",     v: "1,000,000,000 tokens (simulated)" },
                     { k: "Your Cost",  v: "FREE — demo mode" },
                     { k: "RTP",        v: "96% enforced" },
+                    ...(form.devBuyPct > 0 ? [{ k: "Dev Buy", v: `${form.devBuyPct}% (≈${devBuyCostSol(form.devBuyPct).toFixed(3)} SOL from demo balance)` }] : []),
                   ].map(({ k, v }) => (
                     <div key={k} className="flex justify-between items-center py-2 border-b border-white/5 last:border-0">
                       <span className="section-label">{k}</span>
