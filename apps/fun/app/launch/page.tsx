@@ -16,22 +16,23 @@ import type { SlotModel } from "@/types/slot";
 type Step = "form" | "preview" | "launching" | "success";
 
 // Bonding curve supply constants for dev buy cost estimation
-const BONDING_SUPPLY_RAW = VIRTUAL_TOKENS * 793_100n / 1_073_000n; // ~793.1M tokens in raw units
+const BONDING_SUPPLY_RAW = VIRTUAL_TOKENS * 793_100n / 1_073_000n;
 const SOL_PRICE_USD = 150;
 
-function devBuyCostLamports(pct: number): bigint {
-  if (pct === 0) return 0n;
-  const tokensWanted = BONDING_SUPPLY_RAW * BigInt(pct) / 100n;
-  return VIRTUAL_SOL * tokensWanted / (VIRTUAL_TOKENS - tokensWanted);
+const MAX_DEV_SOL = (() => {
+  const tokensMax = BONDING_SUPPLY_RAW * 5n / 100n;
+  const lamports = VIRTUAL_SOL * tokensMax / (VIRTUAL_TOKENS - tokensMax);
+  return Number(lamports) / Number(LAMPORTS_PER_SOL_BIGINT);
+})();
+
+function solToPct(solIn: number): number {
+  if (solIn <= 0) return 0;
+  const lamports = BigInt(Math.round(solIn * Number(LAMPORTS_PER_SOL_BIGINT)));
+  const tokensOut = VIRTUAL_TOKENS * lamports / (VIRTUAL_SOL + lamports);
+  return Math.min(Number(tokensOut * 100n / BONDING_SUPPLY_RAW), 5);
 }
 
-function devBuyCostSolDisplay(pct: number): string {
-  if (pct === 0) return "0";
-  const lamports = devBuyCostLamports(pct);
-  return (Number(lamports) / Number(LAMPORTS_PER_SOL_BIGINT)).toFixed(3);
-}
-
-const DEV_BUY_PRESETS = [0, 1, 2, 5];
+const DEV_BUY_PRESETS = [0.25, 0.5, 1];
 
 interface FormData {
   name: string;
@@ -39,10 +40,10 @@ interface FormData {
   imageUri: string;
   model: SlotModel;
   description: string;
-  devBuyPct: number;
+  devBuySol: string;
 }
 
-const EMPTY: FormData = { name: "", ticker: "", imageUri: "", model: "Classic3Reel", description: "", devBuyPct: 0 };
+const EMPTY: FormData = { name: "", ticker: "", imageUri: "", model: "Classic3Reel", description: "", devBuySol: "" };
 
 const HOW_IT_WORKS = [
   { step: "01", title: "Launch for Free",  desc: "Token deploys at $5k mcap. You pay ~0.01 SOL rent only." },
@@ -83,17 +84,18 @@ export default function LaunchPage() {
     setLaunchError(null);
     try {
       const wallet = wallets[0] as unknown as AnchorWallet;
+      const solIn = Math.min(parseFloat(form.devBuySol) || 0, MAX_DEV_SOL);
+      const devBuyPct = solToPct(solIn);
       const result = await launchSlot(wallet, {
         name:        form.name,
         ticker:      form.ticker.toUpperCase(),
         imageUri:    form.imageUri,
         description: form.description,
         model:       form.model,
-        devBuyPct:   form.devBuyPct,
+        devBuyPct,
       });
-      // Execute dev buy immediately after token creation if selected
-      if (form.devBuyPct > 0) {
-        const solLamports = devBuyCostLamports(form.devBuyPct);
+      if (solIn > 0) {
+        const solLamports = BigInt(Math.round(solIn * Number(LAMPORTS_PER_SOL_BIGINT)));
         await buyTokens(wallet, new PublicKey(result.mint), solLamports);
       }
       setMintAddress(result.mint);
@@ -182,37 +184,49 @@ export default function LaunchPage() {
                       <TrendingUp size={10} className="text-gold" />
                       Dev Buy <span className="text-white/20 ml-1">(optional)</span>
                     </label>
-                    <p className="text-[11px] text-white/30 font-rajdhani">Buy a % of the supply at launch. Visible to traders on your slot page.</p>
+                    <p className="text-[11px] text-white/30 font-rajdhani">Buy SOL worth of your token at launch. Max 5% of supply. Visible to traders.</p>
                     <div className="flex gap-2">
-                      {DEV_BUY_PRESETS.map((pct) => {
-                        const selected = form.devBuyPct === pct;
-                        const costSol  = devBuyCostSolDisplay(pct);
-                        return (
-                          <motion.button
-                            key={pct}
-                            type="button"
-                            whileTap={{ scale: 0.93 }}
-                            onClick={() => setForm((f) => ({ ...f, devBuyPct: pct }))}
-                            className={cn(
-                              "flex-1 rounded-xl py-2 px-1 border text-center transition-all",
-                              selected
-                                ? "border-gold/60 bg-gold/10"
-                                : "border-white/8 bg-white/[0.02] hover:border-gold/30"
-                            )}
-                          >
-                            <p className={cn("font-orbitron text-[11px] font-bold", selected ? "gold-text" : "text-white/50")}>
-                              {pct === 0 ? "None" : `${pct}%`}
-                            </p>
-                            {pct > 0 && (
-                              <p className="text-[9px] text-white/25 font-rajdhani mt-0.5">~{costSol} SOL</p>
-                            )}
-                          </motion.button>
-                        );
-                      })}
+                      <motion.button type="button" whileTap={{ scale: 0.93 }}
+                        onClick={() => setForm((f) => ({ ...f, devBuySol: "" }))}
+                        className={cn("flex-1 rounded-xl py-2 border text-center transition-all text-[11px] font-orbitron font-bold",
+                          !form.devBuySol ? "border-gold/60 bg-gold/10 gold-text" : "border-white/8 bg-white/[0.02] text-white/40 hover:border-gold/30")}>
+                        None
+                      </motion.button>
+                      {DEV_BUY_PRESETS.map((sol) => (
+                        <motion.button key={sol} type="button" whileTap={{ scale: 0.93 }}
+                          onClick={() => setForm((f) => ({ ...f, devBuySol: String(sol) }))}
+                          className={cn("flex-1 rounded-xl py-2 border text-center transition-all",
+                            form.devBuySol === String(sol)
+                              ? "border-gold/60 bg-gold/10"
+                              : "border-white/8 bg-white/[0.02] hover:border-gold/30")}>
+                          <p className={cn("font-orbitron text-[11px] font-bold", form.devBuySol === String(sol) ? "gold-text" : "text-white/50")}>
+                            {sol} SOL
+                          </p>
+                          <p className="text-[9px] text-white/25 font-rajdhani mt-0.5">~{solToPct(sol).toFixed(1)}%</p>
+                        </motion.button>
+                      ))}
                     </div>
-                    {form.devBuyPct > 0 && (
+                    <div className="relative">
+                      <input
+                        type="number"
+                        min="0"
+                        max={MAX_DEV_SOL.toFixed(3)}
+                        step="0.01"
+                        value={form.devBuySol}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          if (v === "" || parseFloat(v) <= MAX_DEV_SOL + 0.001) {
+                            setForm((f) => ({ ...f, devBuySol: v }));
+                          }
+                        }}
+                        placeholder={`Custom amount (max ${MAX_DEV_SOL.toFixed(2)} SOL)`}
+                        className="input-casino pr-16"
+                      />
+                      <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[11px] font-orbitron text-white/30">SOL</span>
+                    </div>
+                    {form.devBuySol && parseFloat(form.devBuySol) > 0 && (
                       <p className="text-[11px] font-rajdhani text-gold/60">
-                        ≈ {devBuyCostSolDisplay(form.devBuyPct)} SOL (${(Number(devBuyCostLamports(form.devBuyPct)) / Number(LAMPORTS_PER_SOL_BIGINT) * SOL_PRICE_USD).toFixed(0)}) sent on-chain immediately after launch
+                        {solToPct(Math.min(parseFloat(form.devBuySol), MAX_DEV_SOL)).toFixed(2)}% of supply · ≈${(Math.min(parseFloat(form.devBuySol), MAX_DEV_SOL) * SOL_PRICE_USD).toFixed(0)} sent on-chain after launch
                       </p>
                     )}
                   </div>
@@ -278,7 +292,9 @@ export default function LaunchPage() {
                     { k: "Supply",     v: "1,000,000,000 tokens" },
                     { k: "Launch Cost",  v: "FREE (~0.01 SOL rent)" },
                     { k: "RTP",        v: `${RTP_PCT}% enforced on-chain` },
-                    ...(form.devBuyPct > 0 ? [{ k: "Dev Buy", v: `${form.devBuyPct}% (≈${devBuyCostSolDisplay(form.devBuyPct)} SOL)` }] : []),
+                    ...(form.devBuySol && parseFloat(form.devBuySol) > 0
+                      ? [{ k: "Dev Buy", v: `${parseFloat(form.devBuySol).toFixed(2)} SOL · ${solToPct(Math.min(parseFloat(form.devBuySol), MAX_DEV_SOL)).toFixed(2)}% of supply` }]
+                      : []),
                   ].map(({ k, v }) => (
                     <div key={k} className="flex justify-between items-center py-2 border-b border-white/5 last:border-0">
                       <span className="section-label">{k}</span>

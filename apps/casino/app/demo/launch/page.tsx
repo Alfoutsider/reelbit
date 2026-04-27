@@ -18,10 +18,17 @@ const VIRTUAL_TOKENS = 1_073_000_191_000_000;
 const BONDING_SUPPLY = Math.floor(VIRTUAL_TOKENS * 793_100 / 1_073_000);
 const SOL_PRICE_USD  = 150;
 
-function devBuyCostSol(pct: number): number {
-  if (pct === 0) return 0;
-  const tokensWanted = BONDING_SUPPLY * pct / 100;
-  return VIRTUAL_SOL * tokensWanted / (VIRTUAL_TOKENS - tokensWanted);
+// Max dev buy = 5% of bonding curve supply
+const MAX_DEV_SOL = (() => {
+  const tokensMax = BONDING_SUPPLY * 5 / 100;
+  return VIRTUAL_SOL * tokensMax / (VIRTUAL_TOKENS - tokensMax);
+})();
+
+function solToPct(solIn: number): number {
+  if (solIn <= 0) return 0;
+  const k = VIRTUAL_SOL * VIRTUAL_TOKENS;
+  const tokensOut = k / VIRTUAL_SOL - k / (VIRTUAL_SOL + solIn);
+  return Math.min((tokensOut / BONDING_SUPPLY) * 100, 5);
 }
 
 interface FormData {
@@ -30,11 +37,11 @@ interface FormData {
   imageUri:    string;
   model:       SlotModel;
   description: string;
-  devBuyPct:   number;
+  devBuySol:   string;
 }
 
-const EMPTY: FormData = { name: "", ticker: "", imageUri: "", model: "Classic3Reel", description: "", devBuyPct: 0 };
-const DEV_BUY_PRESETS = [0, 1, 2, 5];
+const EMPTY: FormData = { name: "", ticker: "", imageUri: "", model: "Classic3Reel", description: "", devBuySol: "" };
+const DEV_BUY_PRESETS = [0.25, 0.5, 1];
 
 const SLOT_MODELS = [
   { id: "Classic3Reel",      emoji: "🎰", label: "Classic 3-Reel",  reels: 3 },
@@ -79,13 +86,15 @@ export default function DemoLaunchPage() {
   async function handleLaunch() {
     setStep("launching");
     await new Promise((r) => setTimeout(r, 2200));
+    const solIn = Math.min(parseFloat(form.devBuySol) || 0, MAX_DEV_SOL);
+    const devBuyPct = solToPct(solIn);
     const slot = createDemoSlot({
       name:        form.name.trim(),
       ticker:      form.ticker.toUpperCase(),
       model:       form.model,
       description: form.description.trim(),
       imageUri:    form.imageUri.trim(),
-    }, form.devBuyPct);
+    }, devBuyPct);
     setSlotId(slot.id);
     setStep("success");
   }
@@ -187,39 +196,53 @@ export default function DemoLaunchPage() {
                       <TrendingUp size={10} style={{ color: "#d4a017" }} />
                       Dev Buy <span className="text-white/20 ml-1">(optional)</span>
                     </label>
-                    <p className="text-[11px] text-white/30 font-rajdhani">Buy a % of the supply at launch to show skin in the game. Visible to traders.</p>
+                    <p className="text-[11px] text-white/30 font-rajdhani">Buy SOL worth of your token at launch. Max 5% of supply. Visible to traders.</p>
+                    {/* Quick presets */}
                     <div className="flex gap-2">
-                      {DEV_BUY_PRESETS.map((pct) => {
-                        const cost = devBuyCostSol(pct);
-                        const selected = form.devBuyPct === pct;
-                        return (
-                          <motion.button
-                            key={pct}
-                            type="button"
-                            whileTap={{ scale: 0.93 }}
-                            onClick={() => setForm((f) => ({ ...f, devBuyPct: pct }))}
-                            className={cn(
-                              "flex-1 rounded-xl py-2 px-1 border text-center transition-all",
-                              selected
-                                ? "border-[#d4a017]/70 bg-[#d4a017]/12"
-                                : "border-white/8 bg-white/[0.02] hover:border-[#d4a017]/30"
-                            )}
-                          >
-                            <p className={cn("font-orbitron text-[11px] font-bold", selected ? "text-[#f5c842]" : "text-white/50")}>
-                              {pct === 0 ? "None" : `${pct}%`}
-                            </p>
-                            {pct > 0 && (
-                              <p className="text-[9px] text-white/25 font-rajdhani mt-0.5">
-                                ~{cost.toFixed(2)} SOL
-                              </p>
-                            )}
-                          </motion.button>
-                        );
-                      })}
+                      <motion.button type="button" whileTap={{ scale: 0.93 }}
+                        onClick={() => setForm((f) => ({ ...f, devBuySol: "" }))}
+                        className={cn("flex-1 rounded-xl py-2 border text-center transition-all text-[11px] font-orbitron font-bold",
+                          !form.devBuySol ? "border-[#d4a017]/70 bg-[#d4a017]/12 text-[#f5c842]" : "border-white/8 bg-white/[0.02] text-white/40 hover:border-[#d4a017]/30")}>
+                        None
+                      </motion.button>
+                      {DEV_BUY_PRESETS.map((sol) => (
+                        <motion.button key={sol} type="button" whileTap={{ scale: 0.93 }}
+                          onClick={() => setForm((f) => ({ ...f, devBuySol: String(sol) }))}
+                          className={cn("flex-1 rounded-xl py-2 border text-center transition-all",
+                            form.devBuySol === String(sol)
+                              ? "border-[#d4a017]/70 bg-[#d4a017]/12"
+                              : "border-white/8 bg-white/[0.02] hover:border-[#d4a017]/30")}>
+                          <p className={cn("font-orbitron text-[11px] font-bold", form.devBuySol === String(sol) ? "text-[#f5c842]" : "text-white/50")}>
+                            {sol} SOL
+                          </p>
+                          <p className="text-[9px] text-white/25 font-rajdhani mt-0.5">
+                            ~{solToPct(sol).toFixed(1)}%
+                          </p>
+                        </motion.button>
+                      ))}
                     </div>
-                    {form.devBuyPct > 0 && (
+                    {/* Custom input */}
+                    <div className="relative">
+                      <input
+                        type="number"
+                        min="0"
+                        max={MAX_DEV_SOL.toFixed(3)}
+                        step="0.01"
+                        value={form.devBuySol}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          if (v === "" || parseFloat(v) <= MAX_DEV_SOL + 0.001) {
+                            setForm((f) => ({ ...f, devBuySol: v }));
+                          }
+                        }}
+                        placeholder={`Custom amount (max ${MAX_DEV_SOL.toFixed(2)} SOL)`}
+                        className="input-casino pr-16"
+                      />
+                      <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[11px] font-orbitron text-white/30">SOL</span>
+                    </div>
+                    {form.devBuySol && parseFloat(form.devBuySol) > 0 && (
                       <p className="text-[11px] font-rajdhani" style={{ color: "rgba(212,160,23,0.7)" }}>
-                        ≈ {devBuyCostSol(form.devBuyPct).toFixed(3)} SOL (${(devBuyCostSol(form.devBuyPct) * SOL_PRICE_USD).toFixed(0)}) deducted from your demo balance at launch
+                        {solToPct(Math.min(parseFloat(form.devBuySol), MAX_DEV_SOL)).toFixed(2)}% of supply · ≈${(Math.min(parseFloat(form.devBuySol), MAX_DEV_SOL) * SOL_PRICE_USD).toFixed(0)} deducted from demo balance at launch
                       </p>
                     )}
                   </div>
@@ -308,7 +331,9 @@ export default function DemoLaunchPage() {
                     { k: "Supply",     v: "1,000,000,000 tokens (simulated)" },
                     { k: "Your Cost",  v: "FREE — demo mode" },
                     { k: "RTP",        v: "96% enforced" },
-                    ...(form.devBuyPct > 0 ? [{ k: "Dev Buy", v: `${form.devBuyPct}% (≈${devBuyCostSol(form.devBuyPct).toFixed(3)} SOL from demo balance)` }] : []),
+                    ...(form.devBuySol && parseFloat(form.devBuySol) > 0
+                      ? [{ k: "Dev Buy", v: `${parseFloat(form.devBuySol).toFixed(2)} SOL · ${solToPct(Math.min(parseFloat(form.devBuySol), MAX_DEV_SOL)).toFixed(2)}% of supply` }]
+                      : []),
                   ].map(({ k, v }) => (
                     <div key={k} className="flex justify-between items-center py-2 border-b border-white/5 last:border-0">
                       <span className="section-label">{k}</span>
