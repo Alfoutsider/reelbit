@@ -22,8 +22,16 @@ import {
   type DemoSlot,
 } from "@/lib/demoSession";
 import { formatUsdc } from "@/lib/balanceClient";
+import { BondingCurveChart, type PricePoint } from "@/components/chart/BondingCurveChart";
 
 const SOL_PRICE_USD = 150;
+
+function makePricePoint(realSolSim: number): PricePoint {
+  const mcapUsd  = bondingMcapUsd(realSolSim, SOL_PRICE_USD);
+  const priceUsd = bondingPricePerToken(realSolSim, SOL_PRICE_USD);
+  const progress = Math.min(realSolSim / GRADUATION_SOL, 1);
+  return { ts: Date.now(), priceUsd, mcapUsd, realSolSim, progressPct: progress * 100 };
+}
 
 // ── Activity event ────────────────────────────────────────────────────────────
 
@@ -75,8 +83,13 @@ export default function DemoSlotPage({ params }: { params: { id: string } }) {
   const [sellPct,   setSellPct]   = useState(25);  // % of tokens to sell
   const [tab,       setTab]       = useState<"buy" | "sell">("buy");
   const [txMsg,     setTxMsg]     = useState<{ ok: boolean; text: string } | null>(null);
+  const [chartData, setChartData] = useState<PricePoint[]>([]);
   const activityRef = useRef<ActivityEvent[]>([]);
   const eventIdRef  = useRef(0);
+
+  const appendChartPoint = useCallback((realSolSim: number) => {
+    setChartData((prev) => [...prev, makePricePoint(realSolSim)].slice(-500));
+  }, []);
 
   // Redirect if not in demo mode
   useEffect(() => {
@@ -84,6 +97,7 @@ export default function DemoSlotPage({ params }: { params: { id: string } }) {
     const s = getDemoSlot(id);
     if (!s) { router.replace("/"); return; }
     setSlot(s);
+    setChartData([makePricePoint(s.realSolSim)]); // seed first point
     const sess = getDemoSession();
     if (sess) setBalance(sess.balance);
   }, [id, router]);
@@ -125,6 +139,7 @@ export default function DemoSlotPage({ params }: { params: { id: string } }) {
       } else {
         addEvent({ kind: "bot_buy", wallet: randomBot(), solAmount: delta, tokens: approxTokens, ts: Date.now() });
       }
+      appendChartPoint(updated.realSolSim);
       setSlot(updated);
     }
 
@@ -152,9 +167,10 @@ export default function DemoSlotPage({ params }: { params: { id: string } }) {
     const usdcUnits = Math.round(usdcFloat * 1_000_000);
     if (usdcUnits > balance) { setTxMsg({ ok: false, text: "Insufficient demo balance" }); return; }
     try {
-      const { tokensReceived, graduated } = demoBuySlot(id, usdcUnits, SOL_PRICE_USD);
+      const { tokensReceived, graduated, newSolSim } = demoBuySlot(id, usdcUnits, SOL_PRICE_USD);
       const solSpent = usdcFloat / SOL_PRICE_USD;
       addEvent({ kind: "buy", wallet: "You", solAmount: solSpent, tokens: tokensReceived, ts: Date.now() });
+      appendChartPoint(newSolSim);
       setTxMsg({ ok: true, text: `Bought ${formatTokens(tokensReceived)} $${slot?.ticker ?? ""}` });
       if (graduated) addEvent({ kind: "graduated", wallet: "System", solAmount: 0, tokens: 0, ts: Date.now() });
     } catch (e) {
@@ -169,8 +185,9 @@ export default function DemoSlotPage({ params }: { params: { id: string } }) {
     const tokenAmount = Math.floor(slot.tokensHeld * (sellPct / 100));
     if (tokenAmount <= 0) return;
     try {
-      const { usdcReceived } = demoSellSlot(id, tokenAmount, SOL_PRICE_USD);
+      const { usdcReceived, newSolSim } = demoSellSlot(id, tokenAmount, SOL_PRICE_USD);
       addEvent({ kind: "sell", wallet: "You", solAmount: usdcReceived / 1_000_000 / SOL_PRICE_USD, tokens: tokenAmount, ts: Date.now() });
+      appendChartPoint(newSolSim);
       setTxMsg({ ok: true, text: `Sold for ${formatUsdc(usdcReceived)}` });
     } catch (e) {
       setTxMsg({ ok: false, text: (e as Error).message });
@@ -255,19 +272,17 @@ export default function DemoSlotPage({ params }: { params: { id: string } }) {
             </AnimatePresence>
 
             {/* Bonding curve card */}
-            <div className="card-panel p-6 space-y-5">
-              <div className="flex items-center justify-between">
-                <p className="font-orbitron text-[10px] font-bold text-white/40 tracking-widest">BONDING CURVE</p>
-                {!slot.graduated && (
-                  <span className="text-[11px] font-rajdhani text-white/30">
-                    {formatSol(slot.realSolSim)} / {GRADUATION_SOL} SOL raised
-                  </span>
-                )}
-              </div>
+            <div className="card-panel p-6 space-y-4">
+              {/* Chart */}
+              <BondingCurveChart
+                chartData={chartData}
+                currentMcapUsd={mcapUsd}
+                currentPriceUsd={priceUsd}
+              />
 
               {/* Progress bar */}
-              <div className="space-y-2">
-                <div className="h-3 rounded-full bg-white/[0.06] overflow-hidden">
+              <div className="space-y-1.5">
+                <div className="h-2.5 rounded-full bg-white/[0.06] overflow-hidden">
                   <motion.div
                     animate={{ width: `${progress * 100}%` }}
                     transition={{ duration: 0.8, ease: "easeOut" }}
@@ -282,7 +297,7 @@ export default function DemoSlotPage({ params }: { params: { id: string } }) {
                 <div className="flex justify-between text-[10px] font-rajdhani text-white/25">
                   <span>$5K MCap</span>
                   <span className="font-bold" style={{ color: slot.primaryColor }}>
-                    {(progress * 100).toFixed(1)}%
+                    {(progress * 100).toFixed(1)}% · {formatSol(slot.realSolSim)}/{GRADUATION_SOL} SOL
                   </span>
                   <span>$100K 🎓</span>
                 </div>
@@ -291,8 +306,8 @@ export default function DemoSlotPage({ params }: { params: { id: string } }) {
               {/* Stats */}
               <div className="grid grid-cols-3 gap-3">
                 {[
-                  { label: "MCap",       value: `$${mcapUsd >= 1000 ? `${(mcapUsd / 1000).toFixed(1)}K` : mcapUsd.toFixed(0)}` },
-                  { label: "SOL Raised", value: `${formatSol(slot.realSolSim)} SOL` },
+                  { label: "MCap",        value: `$${mcapUsd >= 1000 ? `${(mcapUsd / 1000).toFixed(1)}K` : mcapUsd.toFixed(0)}` },
+                  { label: "SOL Raised",  value: `${formatSol(slot.realSolSim)} SOL` },
                   { label: "Price/Token", value: `$${priceUsd < 0.000001 ? priceUsd.toExponential(2) : priceUsd.toFixed(6)}` },
                 ].map(({ label, value }) => (
                   <div key={label} className="bg-white/[0.03] border border-white/5 rounded-xl p-3 text-center">
