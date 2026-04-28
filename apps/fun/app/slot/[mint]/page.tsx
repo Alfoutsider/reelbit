@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { motion } from "framer-motion";
-import { ArrowLeft, ExternalLink, Copy, Zap, TrendingUp, BarChart2, RefreshCw } from "lucide-react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { ArrowLeft, ExternalLink, Copy, Zap, TrendingUp, BarChart2, RefreshCw, Twitter, MessageSquare, Users, Heart, Send } from "lucide-react";
 import Link from "next/link";
+import { usePrivy, useWallets } from "@/lib/privy";
 import { BuySellPanel } from "@/components/slot/BuySellPanel";
 import { BondingCurveChart, type PricePoint } from "@/components/chart/BondingCurveChart";
 import { cn, shortenAddress, formatUsd, graduationProgress } from "@/lib/utils";
@@ -14,6 +15,21 @@ const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
 const POLL_INTERVAL_MS  = 12_000;
 const CHART_POLL_MS     = 15_000;
 const TRADES_POLL_MS    = 10_000;
+const COMMENTS_POLL_MS  = 15_000;
+
+interface Comment {
+  id:        string;
+  wallet:    string;
+  text:      string;
+  timestamp: number;
+  likes:     number;
+}
+
+interface Holder {
+  wallet: string;
+  amount: number;
+  pct:    number;
+}
 
 // ── API response type ─────────────────────────────────────────────────────────
 
@@ -67,6 +83,9 @@ function timeAgo(ts: number) {
 
 export default function SlotPage({ params }: { params: { mint: string } }) {
   const { mint } = params;
+  const { authenticated } = usePrivy();
+  const { wallets } = useWallets();
+  const walletAddress = wallets[0]?.address ?? "";
 
   const [slot,       setSlot]      = useState<SlotToken | null>(null);
   const [solPrice,   setSolPrice]  = useState(150);
@@ -76,6 +95,17 @@ export default function SlotPage({ params }: { params: { mint: string } }) {
   const [loading,    setLoading]   = useState(true);
   const [error,      setError]     = useState<string | null>(null);
   const [tradeKey,   setTradeKey]  = useState(0);
+
+  // Comments
+  const [comments,     setComments]     = useState<Comment[]>([]);
+  const [commentText,  setCommentText]  = useState("");
+  const [commenting,   setCommenting]   = useState(false);
+  const [activeTab,    setActiveTab]    = useState<"trades" | "comments">("trades");
+
+  // Holders
+  const [holders,      setHolders]      = useState<Holder[]>([]);
+  const [holdersLoaded, setHoldersLoaded] = useState(false);
+  const commentInputRef = useRef<HTMLTextAreaElement>(null);
 
   const fetchToken = useCallback(async () => {
     try {
@@ -116,16 +146,63 @@ export default function SlotPage({ params }: { params: { mint: string } }) {
     } catch {}
   }, [mint]);
 
+  const fetchComments = useCallback(async () => {
+    try {
+      const res = await fetch(`${API}/tokens/${mint}/comments?limit=100`);
+      if (res.ok) setComments(await res.json());
+    } catch {}
+  }, [mint]);
+
+  const fetchHolders = useCallback(async () => {
+    if (holdersLoaded) return;
+    try {
+      const res = await fetch(`${API}/tokens/${mint}/holders?limit=50`);
+      if (res.ok) {
+        setHolders(await res.json());
+        setHoldersLoaded(true);
+      }
+    } catch {}
+  }, [mint, holdersLoaded]);
+
+  const submitComment = async () => {
+    if (!commentText.trim() || !walletAddress || commenting) return;
+    setCommenting(true);
+    try {
+      const res = await fetch(`${API}/tokens/${mint}/comments`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ wallet: walletAddress, text: commentText.trim() }),
+      });
+      if (res.ok) {
+        const c: Comment = await res.json();
+        setComments((prev) => [c, ...prev]);
+        setCommentText("");
+      }
+    } catch {} finally {
+      setCommenting(false);
+    }
+  };
+
+  const likeComment = async (commentId: string) => {
+    try {
+      await fetch(`${API}/tokens/${mint}/comments/${commentId}/like`, { method: "POST" });
+      setComments((prev) => prev.map((c) => c.id === commentId ? { ...c, likes: c.likes + 1 } : c));
+    } catch {}
+  };
+
   // Initial load + poll for live curve updates
   useEffect(() => {
     fetchToken();
     fetchChart();
     fetchTrades();
-    const tokenId  = setInterval(fetchToken,  POLL_INTERVAL_MS);
-    const chartId  = setInterval(fetchChart,  CHART_POLL_MS);
-    const tradesId = setInterval(fetchTrades, TRADES_POLL_MS);
-    return () => { clearInterval(tokenId); clearInterval(chartId); clearInterval(tradesId); };
-  }, [fetchToken, fetchChart, fetchTrades]);
+    fetchComments();
+    fetchHolders();
+    const tokenId    = setInterval(fetchToken,    POLL_INTERVAL_MS);
+    const chartId    = setInterval(fetchChart,    CHART_POLL_MS);
+    const tradesId   = setInterval(fetchTrades,   TRADES_POLL_MS);
+    const commentsId = setInterval(fetchComments, COMMENTS_POLL_MS);
+    return () => { clearInterval(tokenId); clearInterval(chartId); clearInterval(tradesId); clearInterval(commentsId); };
+  }, [fetchToken, fetchChart, fetchTrades, fetchComments, fetchHolders]);
 
   function onTradeComplete() {
     setTradeKey((k) => k + 1);
@@ -226,6 +303,12 @@ export default function SlotPage({ params }: { params: { mint: string } }) {
                       className="flex items-center gap-1 hover:text-white transition-colors">
                       <ExternalLink size={10} /> Solscan
                     </a>
+                    <a
+                      href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(`Just launched ${slot.name} ($${slot.ticker}) — a slot machine token on @ReelBitFun 🎰\n\nPlay it at reelbit.fun/slot/${mint}`)}`}
+                      target="_blank" rel="noopener noreferrer"
+                      className="flex items-center gap-1 hover:text-sky-400 transition-colors">
+                      <Twitter size={10} /> Share
+                    </a>
                   </div>
                 </div>
 
@@ -293,44 +376,123 @@ export default function SlotPage({ params }: { params: { mint: string } }) {
               </motion.div>
             )}
 
-            {/* Trade history */}
+            {/* Trades / Comments tabs */}
             <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}
               className="card-panel overflow-hidden">
-              <div className="px-5 py-4 border-b border-white/5 flex items-center justify-between">
-                <p className="font-orbitron text-[10px] font-bold text-white/50 tracking-widest">TRADE HISTORY</p>
-                <span className="badge badge-model text-[9px]">{trades.length} trades</span>
+              {/* Tab bar */}
+              <div className="flex border-b border-white/5">
+                {([
+                  { id: "trades"   as const, label: "Trades",   icon: TrendingUp,    count: trades.length },
+                  { id: "comments" as const, label: "Comments", icon: MessageSquare, count: comments.length },
+                ]).map(({ id, label, icon: Icon, count }) => (
+                  <button key={id} onClick={() => setActiveTab(id)}
+                    className={cn(
+                      "flex items-center gap-1.5 px-5 py-3.5 text-[10px] font-orbitron font-bold tracking-widest border-b-2 transition-all -mb-px",
+                      activeTab === id
+                        ? "border-purple-500 text-purple-400"
+                        : "border-transparent text-white/25 hover:text-white/50",
+                    )}>
+                    <Icon size={10} /> {label}
+                    {count > 0 && <span className="ml-0.5 text-white/20">({count})</span>}
+                  </button>
+                ))}
               </div>
-              {trades.length === 0 ? (
-                <div className="px-5 py-8 text-center">
-                  <p className="font-rajdhani text-white/25 text-sm">No trades recorded yet.</p>
-                  <p className="font-rajdhani text-white/15 text-xs mt-1">New trades appear here automatically.</p>
-                </div>
-              ) : (
-                <div>
-                  {trades.map((t, i) => (
-                    <motion.div key={t.txSig} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: 0.2 + i * 0.06 }} className="trade-row">
-                      <div className="flex items-center gap-3">
-                        <span className={cn("badge text-[9px]",
-                          t.type === "buy"
-                            ? "bg-green-500/12 border-green-500/25 text-green-400"
-                            : "bg-red-500/12 border-red-500/25 text-red-400")}>
-                          {t.type.toUpperCase()}
-                        </span>
-                        <span className="font-mono text-[11px] text-white/40">{t.wallet}</span>
+
+              {/* Trades panel */}
+              <AnimatePresence mode="wait">
+                {activeTab === "trades" && (
+                  <motion.div key="trades" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                    {trades.length === 0 ? (
+                      <div className="px-5 py-8 text-center">
+                        <p className="font-rajdhani text-white/25 text-sm">No trades recorded yet.</p>
+                        <p className="font-rajdhani text-white/15 text-xs mt-1">New trades appear here automatically.</p>
                       </div>
-                      <div className="flex items-center gap-5 text-[11px] text-white/30 font-rajdhani font-semibold">
-                        <span className="font-mono">
-                          {t.type === "buy"
-                            ? `${t.solAmount.toFixed(3)} SOL`
-                            : `${(t.tokenAmount / 1_000_000).toFixed(1)}M $${slot.ticker}`}
-                        </span>
-                        <span className="text-white/20">{timeAgo(t.timestamp)}</span>
+                    ) : (
+                      <div className="max-h-[340px] overflow-y-auto">
+                        {trades.map((t, i) => (
+                          <motion.div key={t.txSig} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }}
+                            transition={{ delay: i * 0.04 }} className="trade-row">
+                            <div className="flex items-center gap-3">
+                              <span className={cn("badge text-[9px]",
+                                t.type === "buy"
+                                  ? "bg-green-500/12 border-green-500/25 text-green-400"
+                                  : "bg-red-500/12 border-red-500/25 text-red-400")}>
+                                {t.type.toUpperCase()}
+                              </span>
+                              <span className="font-mono text-[11px] text-white/40">{shortenAddress(t.wallet)}</span>
+                            </div>
+                            <div className="flex items-center gap-5 text-[11px] text-white/30 font-rajdhani font-semibold">
+                              <span className="font-mono">
+                                {t.type === "buy"
+                                  ? `${t.solAmount.toFixed(3)} SOL`
+                                  : `${(t.tokenAmount / 1_000_000).toFixed(1)}M $${slot.ticker}`}
+                              </span>
+                              <span className="text-white/20">{timeAgo(t.timestamp)}</span>
+                            </div>
+                          </motion.div>
+                        ))}
                       </div>
-                    </motion.div>
-                  ))}
-                </div>
-              )}
+                    )}
+                  </motion.div>
+                )}
+
+                {/* Comments panel */}
+                {activeTab === "comments" && (
+                  <motion.div key="comments" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                    {/* Input */}
+                    <div className="p-4 border-b border-white/5">
+                      {authenticated && walletAddress ? (
+                        <div className="flex gap-2">
+                          <textarea
+                            ref={commentInputRef}
+                            value={commentText}
+                            onChange={(e) => setCommentText(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submitComment(); } }}
+                            placeholder="Share your thoughts…"
+                            rows={2}
+                            maxLength={500}
+                            className="flex-1 rounded-xl bg-white/[0.04] border border-white/8 px-3 py-2.5 text-sm font-rajdhani text-white placeholder:text-white/20 outline-none focus:border-purple-500/40 transition-colors resize-none"
+                          />
+                          <button
+                            onClick={submitComment}
+                            disabled={!commentText.trim() || commenting}
+                            className="flex-shrink-0 w-10 h-10 self-end rounded-xl bg-purple-600/20 border border-purple-500/30 flex items-center justify-center hover:bg-purple-600/40 transition-colors disabled:opacity-30">
+                            <Send size={13} className="text-purple-400" />
+                          </button>
+                        </div>
+                      ) : (
+                        <p className="text-center text-[11px] text-white/25 font-rajdhani py-1">Connect wallet to comment</p>
+                      )}
+                    </div>
+
+                    {/* Comment list */}
+                    <div className="max-h-[340px] overflow-y-auto divide-y divide-white/[0.04]">
+                      {comments.length === 0 ? (
+                        <div className="px-5 py-8 text-center">
+                          <p className="font-rajdhani text-white/25 text-sm">No comments yet. Be the first!</p>
+                        </div>
+                      ) : comments.map((c) => (
+                        <div key={c.id} className="px-4 py-3 flex gap-3">
+                          <div className="w-7 h-7 rounded-full bg-purple-500/20 border border-purple-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                            <span className="text-[9px] font-orbitron text-purple-400/70">{c.wallet.slice(0, 2).toUpperCase()}</span>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-[10px] font-mono text-white/40">{shortenAddress(c.wallet)}</span>
+                              <span className="text-[10px] text-white/20 font-rajdhani">{timeAgo(c.timestamp)}</span>
+                            </div>
+                            <p className="text-[13px] font-rajdhani text-white/70 leading-relaxed break-words">{c.text}</p>
+                          </div>
+                          <button onClick={() => likeComment(c.id)}
+                            className="flex items-center gap-1 text-[10px] text-white/20 hover:text-pink-400 transition-colors flex-shrink-0 mt-1">
+                            <Heart size={10} /> {c.likes > 0 ? c.likes : ""}
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </motion.div>
           </div>
 
@@ -435,6 +597,42 @@ export default function SlotPage({ params }: { params: { mint: string } }) {
                   </div>
                 ))}
               </div>
+            </motion.div>
+
+            {/* Holder list */}
+            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.22 }}
+              className="card-panel overflow-hidden">
+              <div className="px-5 py-4 border-b border-white/5 flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <Users size={11} className="text-purple-400" />
+                  <p className="font-orbitron text-[10px] font-bold text-white/50 tracking-widest">TOP HOLDERS</p>
+                </div>
+                {holders.length > 0 && (
+                  <span className="text-[9px] text-white/20 font-orbitron">{holders.length} wallets</span>
+                )}
+              </div>
+              {holders.length === 0 ? (
+                <div className="px-5 py-6 text-center">
+                  <p className="font-rajdhani text-white/20 text-xs">Holder data loads from Helius DAS</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-white/[0.04] max-h-[280px] overflow-y-auto">
+                  {holders.slice(0, 20).map((h, i) => (
+                    <div key={h.wallet} className="px-4 py-2.5 flex items-center gap-3">
+                      <span className="text-[10px] font-orbitron text-white/20 w-5 text-right flex-shrink-0">{i + 1}</span>
+                      <span className="flex-1 font-mono text-[11px] text-white/50 truncate">{shortenAddress(h.wallet)}</span>
+                      <div className="text-right flex-shrink-0">
+                        <span className="font-orbitron text-[10px] text-white/60">{h.pct.toFixed(2)}%</span>
+                      </div>
+                      {/* Mini bar */}
+                      <div className="w-16 h-1.5 rounded-full bg-white/5 flex-shrink-0">
+                        <div className="h-full rounded-full bg-purple-500/50"
+                          style={{ width: `${Math.min(100, h.pct / (holders[0]?.pct || 1) * 100)}%` }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </motion.div>
           </div>
         </div>

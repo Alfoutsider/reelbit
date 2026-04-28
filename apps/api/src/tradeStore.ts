@@ -77,3 +77,19 @@ export function getTradesForMint(mint: string, limit = 50): TradeEvent[] {
 export function getGlobalFeed(limit = 50): TradeEvent[] {
   return globalFeed.slice(0, Math.min(limit, MAX_GLOBAL));
 }
+
+/** Sum of usdValue for trades in the last 24 hours for a given mint. */
+export function getVolume24h(mint: string): number {
+  const cutoff = Date.now() - 24 * 60 * 60 * 1_000;
+  return (store.get(mint) ?? [])
+    .filter((t) => t.timestamp >= cutoff)
+    .reduce((sum, t) => sum + t.usdValue, 0);
+}
+
+/** Sum of usdValue for all trades in the last 24 hours (global). */
+export function getGlobalVolume24h(): number {
+  const cutoff = Date.now() - 24 * 60 * 60 * 1_000;
+  return globalFeed
+    .filter((t) => t.timestamp >= cutoff)
+    .reduce((sum, t) => sum + t.usdValue, 0);
+}

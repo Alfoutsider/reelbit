@@ -32,7 +32,8 @@ import { startMcapWatcher } from "./mcapWatcher";
 import { getSolUsdPrice, lamportsToUsdc, usdcToLamports } from "./pythPrice";
 import { swapSolToUsdc, USDC_MINT } from "./jupiterSwap";
 import { USDC_UNIT, applyWelcomeBonus, recordWagering, getBalance } from "./balanceStore";
-import { recordTrade, getTradesForMint, getGlobalFeed, loadTrades } from "./tradeStore";
+import { recordTrade, getTradesForMint, getGlobalFeed, getVolume24h, getGlobalVolume24h, loadTrades } from "./tradeStore";
+import { getComments, addComment, likeComment } from "./commentStore";
 
 const app = express();
 
@@ -693,16 +694,28 @@ app.get("/fees/info", (_req: Request, res: Response) => {
 
 app.get("/tokens", (_req: Request, res: Response) => {
   const themes = getAllThemes().filter((t) => !t.graduated);
-  res.json(themes.map((t) => ({
-    mint:        t.mint,
-    name:        t.tokenName,
-    symbol:      t.tokenSymbol,
-    model:       t.slotModel,
-    image:       t.heroImageUrl ?? "",
-    graduated:   t.graduated,
-    metadataUri: `${config.serverBaseUrl}/metadata/${t.mint}`,
-    program:     config.tokenLaunchProgramId,
-  })));
+  res.json(themes.map((t) => {
+    // Use latest price-history snapshot for mcap (no chain call needed for list)
+    const history = getPriceHistory(t.mint, 1);
+    const latest  = history[history.length - 1];
+    return {
+      mint:        t.mint,
+      name:        t.tokenName,
+      symbol:      t.tokenSymbol,
+      model:       t.slotModel,
+      image:       t.heroImageUrl ?? "",
+      graduated:   t.graduated,
+      devBuyPct:   t.devBuyPct ?? 0,
+      creator:     t.creator ?? "",
+      mcapUsd:     latest?.mcapUsd     ?? 0,
+      priceUsd:    latest?.priceUsd    ?? 0,
+      volume24h:   getVolume24h(t.mint),
+      progressPct: latest?.progressPct ?? 0,
+      createdAt:   t.updatedAt,
+      metadataUri: `${config.serverBaseUrl}/metadata/${t.mint}`,
+      program:     config.tokenLaunchProgramId,
+    };
+  }));
 });
 
 app.get("/tokens/:mint", async (req: Request, res: Response) => {
@@ -758,6 +771,85 @@ app.get("/tokens/:mint/trades", (req: Request, res: Response) => {
 app.get("/feed/trades", (req: Request, res: Response) => {
   const limit = Math.min(200, Math.max(1, parseInt(req.query.limit as string) || 50));
   res.json(getGlobalFeed(limit));
+});
+
+// ── Holder list ───────────────────────────────────────────────────────────────
+
+const HELIUS_DAS_URL = config.rpcUrl.includes("mainnet")
+  ? `https://mainnet.helius-rpc.com/?api-key=${config.heliusApiKey}`
+  : `https://devnet.helius-rpc.com/?api-key=${config.heliusApiKey}`;
+
+/** GET /tokens/:mint/holders?limit=50 — top token holders via Helius DAS */
+app.get("/tokens/:mint/holders", async (req: Request, res: Response) => {
+  const { mint } = req.params;
+  const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 50));
+
+  if (!config.heliusApiKey) {
+    return res.json([]); // gracefully degrade without API key
+  }
+
+  try {
+    const body = {
+      jsonrpc: "2.0",
+      id:      "holders",
+      method:  "getTokenAccounts",
+      params:  { mint, limit, page: 1, options: { showZeroBalance: false } },
+    };
+    const r = await fetch(HELIUS_DAS_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!r.ok) return res.json([]);
+
+    const data = await r.json() as {
+      result?: { token_accounts: Array<{ owner: string; amount: string }> };
+    };
+    const accounts = data.result?.token_accounts ?? [];
+    const total = accounts.reduce((s, a) => s + BigInt(a.amount), 0n);
+
+    const holders = accounts
+      .filter((a) => BigInt(a.amount) > 0n)
+      .map((a) => ({
+        wallet:  a.owner,
+        amount:  Number(BigInt(a.amount)) / 1_000_000,
+        pct:     total > 0n ? Number(BigInt(a.amount) * 10_000n / total) / 100 : 0,
+      }))
+      .sort((a, b) => b.amount - a.amount);
+
+    res.json(holders);
+  } catch {
+    res.json([]);
+  }
+});
+
+// ── Comments ──────────────────────────────────────────────────────────────────
+
+/** GET /tokens/:mint/comments?limit=100 */
+app.get("/tokens/:mint/comments", (req: Request, res: Response) => {
+  const limit = Math.min(200, Math.max(1, parseInt(req.query.limit as string) || 100));
+  res.json(getComments(req.params.mint, limit));
+});
+
+/** POST /tokens/:mint/comments  { wallet, text } */
+app.post("/tokens/:mint/comments", (req: Request, res: Response) => {
+  const { wallet, text } = req.body as { wallet?: string; text?: string };
+  if (!wallet || !text?.trim()) {
+    return res.status(400).json({ error: "wallet and text required" });
+  }
+  try {
+    const comment = addComment(req.params.mint, wallet, text);
+    res.status(201).json(comment);
+  } catch (err) {
+    res.status(400).json({ error: (err as Error).message });
+  }
+});
+
+/** POST /tokens/:mint/comments/:id/like */
+app.post("/tokens/:mint/comments/:id/like", (req: Request, res: Response) => {
+  const ok = likeComment(req.params.mint, req.params.id);
+  if (!ok) return res.status(404).json({ error: "Comment not found" });
+  res.json({ ok: true });
 });
 
 /**

@@ -10,6 +10,29 @@ import type { SlotToken } from "@/types/slot";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
 
+interface TokenListItem {
+  mint: string; name: string; symbol: string; model: string;
+  image: string; graduated: boolean; devBuyPct: number; creator: string;
+  mcapUsd: number; priceUsd: number; volume24h: number; progressPct: number; createdAt: number;
+}
+
+function mapToken(t: TokenListItem): SlotToken {
+  return {
+    mint:      t.mint,
+    name:      t.name,
+    ticker:    t.symbol,
+    imageUri:  t.image,
+    model:     t.model as SlotToken["model"],
+    creator:   t.creator,
+    graduated: t.graduated,
+    devBuyPct: t.devBuyPct,
+    mcapUsd:   t.mcapUsd,
+    priceUsd:  t.priceUsd,
+    volume24h: t.volume24h,
+    createdAt: t.createdAt,
+  };
+}
+
 const FEATURES = [
   { icon: Shield, title: "Provably Fair",  desc: "On-chain HMAC-SHA256 RNG. Every spin verifiable on Solana." },
   { icon: Zap,    title: "Instant Launch", desc: "Deploy your token in seconds. Zero cost. Zero code." },
@@ -31,7 +54,7 @@ export default function HomePage() {
         if (!r.ok) throw new Error("API unavailable");
         return r.json();
       })
-      .then((data: SlotToken[]) => setSlots(Array.isArray(data) ? data : []))
+      .then((data: TokenListItem[]) => setSlots(Array.isArray(data) ? data.map(mapToken) : []))
       .catch(() => setSlots([]))
       .finally(() => setLoading(false));
   }, []);
