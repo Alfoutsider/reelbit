@@ -11,9 +11,9 @@ import { SLOT_MODELS } from "@/lib/constants";
 import type { SlotToken, TradeEvent } from "@/types/slot";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
-const SOL_PRICE_USD = 150; // used for mcap/price display; replace with oracle feed in prod
 const POLL_INTERVAL_MS  = 12_000;
 const CHART_POLL_MS     = 15_000;
+const TRADES_POLL_MS    = 10_000;
 
 // ── API response type ─────────────────────────────────────────────────────────
 
@@ -37,7 +37,7 @@ interface TokenApiResponse {
   } | null;
 }
 
-function mapApiToSlotToken(r: TokenApiResponse): SlotToken {
+function mapApiToSlotToken(r: TokenApiResponse, solPriceUsd: number): SlotToken {
   const mcapSol  = r.bondingCurve?.mcapSol  ?? 0;
   const priceSol = r.bondingCurve?.pricePerTokenSol ?? 0;
   return {
@@ -49,8 +49,8 @@ function mapApiToSlotToken(r: TokenApiResponse): SlotToken {
     creator:    r.bondingCurve?.creator ?? "",
     graduated:  r.graduated,
     devBuyPct:  r.devBuyPct ?? 0,
-    mcapUsd:    mcapSol  * SOL_PRICE_USD,
-    priceUsd:   priceSol * SOL_PRICE_USD * 1e9,
+    mcapUsd:    mcapSol  * solPriceUsd,
+    priceUsd:   priceSol * solPriceUsd * 1e9,
     volume24h:  0,
     createdAt:  Date.now(),
   };
@@ -68,23 +68,30 @@ function timeAgo(ts: number) {
 export default function SlotPage({ params }: { params: { mint: string } }) {
   const { mint } = params;
 
-  const [slot,      setSlot]     = useState<SlotToken | null>(null);
-  const [progress,  setProgress] = useState(0);
-  const [trades,    setTrades]   = useState<TradeEvent[]>([]); // eslint-disable-line @typescript-eslint/no-unused-vars
-  const [chartData, setChartData] = useState<PricePoint[]>([]);
-  const [loading,   setLoading]  = useState(true);
-  const [error,     setError]    = useState<string | null>(null);
-  const [tradeKey,  setTradeKey] = useState(0);
+  const [slot,       setSlot]      = useState<SlotToken | null>(null);
+  const [solPrice,   setSolPrice]  = useState(150);
+  const [progress,   setProgress]  = useState(0);
+  const [trades,     setTrades]    = useState<TradeEvent[]>([]);
+  const [chartData,  setChartData] = useState<PricePoint[]>([]);
+  const [loading,    setLoading]   = useState(true);
+  const [error,      setError]     = useState<string | null>(null);
+  const [tradeKey,   setTradeKey]  = useState(0);
 
   const fetchToken = useCallback(async () => {
     try {
-      const res = await fetch(`${API}/tokens/${mint}`);
-      if (!res.ok) {
-        if (res.status === 404) throw new Error("Token not found");
-        throw new Error(`API error ${res.status}`);
+      const [priceRes, tokenRes] = await Promise.all([
+        fetch(`${API}/sol-price`).then((r) => r.ok ? r.json() as Promise<{ price: number }> : null).catch(() => null),
+        fetch(`${API}/tokens/${mint}`),
+      ]);
+      const currentSolPrice = priceRes?.price ?? solPrice;
+      if (priceRes?.price) setSolPrice(priceRes.price);
+
+      if (!tokenRes.ok) {
+        if (tokenRes.status === 404) throw new Error("Token not found");
+        throw new Error(`API error ${tokenRes.status}`);
       }
-      const data: TokenApiResponse = await res.json();
-      const mapped = mapApiToSlotToken(data);
+      const data: TokenApiResponse = await tokenRes.json();
+      const mapped = mapApiToSlotToken(data, currentSolPrice);
       setSlot(mapped);
       setProgress(graduationProgress(mapped.mcapUsd));
       setError(null);
@@ -93,12 +100,19 @@ export default function SlotPage({ params }: { params: { mint: string } }) {
     } finally {
       setLoading(false);
     }
-  }, [mint]);
+  }, [mint, solPrice]);
 
   const fetchChart = useCallback(async () => {
     try {
-      const res = await fetch(`${API}/tokens/${mint}/chart?limit=200`);
+      const res = await fetch(`${API}/tokens/${mint}/chart?limit=300`);
       if (res.ok) setChartData(await res.json());
+    } catch {}
+  }, [mint]);
+
+  const fetchTrades = useCallback(async () => {
+    try {
+      const res = await fetch(`${API}/tokens/${mint}/trades?limit=50`);
+      if (res.ok) setTrades(await res.json());
     } catch {}
   }, [mint]);
 
@@ -106,10 +120,12 @@ export default function SlotPage({ params }: { params: { mint: string } }) {
   useEffect(() => {
     fetchToken();
     fetchChart();
-    const tokenId = setInterval(fetchToken, POLL_INTERVAL_MS);
-    const chartId = setInterval(fetchChart, CHART_POLL_MS);
-    return () => { clearInterval(tokenId); clearInterval(chartId); };
-  }, [fetchToken, fetchChart]);
+    fetchTrades();
+    const tokenId  = setInterval(fetchToken,  POLL_INTERVAL_MS);
+    const chartId  = setInterval(fetchChart,  CHART_POLL_MS);
+    const tradesId = setInterval(fetchTrades, TRADES_POLL_MS);
+    return () => { clearInterval(tokenId); clearInterval(chartId); clearInterval(tradesId); };
+  }, [fetchToken, fetchChart, fetchTrades]);
 
   function onTradeComplete() {
     setTradeKey((k) => k + 1);
@@ -218,7 +234,7 @@ export default function SlotPage({ params }: { params: { mint: string } }) {
                     ${slot.priceUsd < 0.01 ? slot.priceUsd.toFixed(8) : slot.priceUsd.toFixed(4)}
                   </p>
                   <p className="font-orbitron text-[10px] text-white/25 tracking-wider mt-1">
-                    MCAP {formatUsd(slot.mcapUsd / SOL_PRICE_USD, SOL_PRICE_USD)}
+                    MCAP {formatUsd(slot.mcapUsd / solPrice, solPrice)}
                   </p>
                   <button onClick={fetchToken} className="mt-1 text-white/20 hover:text-white/50 transition-colors">
                     <RefreshCw size={11} />
@@ -231,8 +247,8 @@ export default function SlotPage({ params }: { params: { mint: string } }) {
             <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}
               className="grid grid-cols-3 gap-3">
               {[
-                { label: "Market Cap", value: formatUsd(slot.mcapUsd / SOL_PRICE_USD, SOL_PRICE_USD), icon: BarChart2 },
-                { label: "24h Volume",  value: slot.volume24h > 0 ? formatUsd(slot.volume24h / SOL_PRICE_USD, SOL_PRICE_USD) : "—", icon: TrendingUp },
+                { label: "Market Cap", value: formatUsd(slot.mcapUsd / solPrice, solPrice), icon: BarChart2 },
+                { label: "24h Volume",  value: slot.volume24h > 0 ? formatUsd(slot.volume24h / solPrice, solPrice) : "—", icon: TrendingUp },
                 { label: "Curve",       value: slot.graduated ? "GRADUATED" : `${progress.toFixed(1)}%`, icon: Zap },
               ].map(({ label, value, icon: Icon }) => (
                 <div key={label} className="stat-box">

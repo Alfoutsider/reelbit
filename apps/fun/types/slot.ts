@@ -16,13 +16,14 @@ export interface SlotToken {
 }
 
 export interface TradeEvent {
-  txSig: string;
-  type: "buy" | "sell";
-  wallet: string;
-  solAmount: number;
+  txSig:       string;
+  mint?:       string;
+  type:        "buy" | "sell";
+  wallet:      string;
+  solAmount:   number;
   tokenAmount: number;
-  priceUsd: number;
-  timestamp: number;
+  usdValue:    number;
+  timestamp:   number;
 }
 
 export interface CurvePoint {

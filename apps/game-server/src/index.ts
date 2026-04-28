@@ -36,6 +36,17 @@ async function creditBalance(wallet: string, usdcUnits: number): Promise<void> {
   }).catch((err) => console.error("[game-server] Failed to credit payout:", err));
 }
 
+// Slots are off-chain. The 4% house edge (100% - 96% RTP) funds the jackpot pool.
+// This is fire-and-forget — a failed call doesn't block the player.
+function fundJackpot(usdcUnits: number): void {
+  if (usdcUnits <= 0) return;
+  fetch(`${API_URL}/internal/jackpot-fund`, {
+    method:  "POST",
+    headers: { "Content-Type": "application/json", "x-internal-secret": INTERNAL_SECRET },
+    body:    JSON.stringify({ usdcUnits }),
+  }).catch((err) => console.error("[game-server] jackpot-fund failed:", err));
+}
+
 async function main() {
   // Load persisted sessions from disk before accepting requests
   initSessionStore();
@@ -113,6 +124,12 @@ async function main() {
 
         if (result.totalPayout > 0) {
           creditBalance(updated.wallet, result.totalPayout);
+        }
+
+        // 4% house edge from every bet goes to the jackpot pool
+        if (!isFree && betUsdc > 0) {
+          const houseEdge = Math.floor(betUsdc * 0.04);
+          fundJackpot(houseEdge);
         }
 
         if (result.isJackpot) {

@@ -32,6 +32,7 @@ import { startMcapWatcher } from "./mcapWatcher";
 import { getSolUsdPrice, lamportsToUsdc, usdcToLamports } from "./pythPrice";
 import { swapSolToUsdc, USDC_MINT } from "./jupiterSwap";
 import { USDC_UNIT, applyWelcomeBonus, recordWagering, getBalance } from "./balanceStore";
+import { recordTrade, getTradesForMint, getGlobalFeed, loadTrades } from "./tradeStore";
 
 const app = express();
 
@@ -46,7 +47,7 @@ const ALLOWED_ORIGINS = [
 
 app.use((req: Request, res: Response, next: NextFunction) => {
   const origin = req.headers.origin ?? "";
-  if (ALLOWED_ORIGINS.includes(origin) || origin.endsWith(".vercel.app")) {
+  if (ALLOWED_ORIGINS.includes(origin)) {
     res.setHeader("Access-Control-Allow-Origin", origin);
     res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
     res.setHeader("Access-Control-Allow-Headers", "Content-Type,Authorization");
@@ -393,10 +394,18 @@ app.post("/withdraw", async (req: Request, res: Response) => {
   if (!wallet || !usdcUnits) {
     return res.status(400).json({ error: "wallet and usdcUnits required" });
   }
+  if (usdcUnits < USDC_UNIT || usdcUnits > 100_000 * USDC_UNIT) {
+    return res.status(400).json({ error: "Withdraw amount must be between $1 and $100,000" });
+  }
+  // Destination must be the owner's wallet — prevents draining to a third party
+  // without proper signature verification
+  if (destination && destination !== wallet) {
+    return res.status(400).json({ error: "Withdrawal destination must match the source wallet" });
+  }
   if (await isDemoUser(wallet)) {
     return res.status(403).json({ error: "Demo balances cannot be withdrawn. Deposit real funds to unlock withdrawals." });
   }
-  const to = destination ?? wallet;
+  const to = wallet;
   try {
     // Deduct flat withdrawal fee before converting — user pays the house gas cost
     const totalDebit     = usdcUnits + WITHDRAWAL_FEE_USDC;
@@ -504,6 +513,27 @@ function buildPayJackpotInstruction(mint: PublicKey, winner: PublicKey): Transac
   });
 }
 
+const JACKPOT_KEY = "JACKPOT_POOL"; // internal accumulator for slot house-edge contributions
+
+/**
+ * POST /internal/jackpot-fund
+ * Called by the game-server after each spin with the house-edge portion (4% of bet).
+ * Accumulates off-chain; the on-chain jackpot vault is funded separately by distributionCron.
+ */
+app.post("/internal/jackpot-fund", requireInternal, async (req: Request, res: Response) => {
+  const { usdcUnits } = req.body as { usdcUnits: number };
+  if (!usdcUnits || usdcUnits <= 0) return res.status(400).json({ error: "usdcUnits required" });
+  await credit(JACKPOT_KEY, usdcUnits);
+  const entry = await getBalance(JACKPOT_KEY);
+  res.json({ poolBalance: entry.playable });
+});
+
+/** GET /jackpot/pool — public endpoint so frontends can display the jackpot size */
+app.get("/jackpot/pool", async (_req: Request, res: Response) => {
+  const entry = await getBalance(JACKPOT_KEY);
+  res.json({ usdcUnits: entry.playable });
+});
+
 app.post("/internal/jackpot-won", requireInternal, async (req: Request, res: Response) => {
   const { wallet, mint: mintStr } = req.body as { wallet: string; mint: string; sessionId: string };
   if (!wallet || !mintStr) {
@@ -556,14 +586,14 @@ app.post("/webhooks/helius", async (req: Request, res: Response) => {
         );
         // Snapshot price history for chart on every confirmed trade
         try {
-          const mintPk = new PublicKey(mint);
-          const curve = await fetchBondingCurveState(connection, mintPk);
+          const mintPk  = new PublicKey(mint);
+          const curve   = await fetchBondingCurveState(connection, mintPk);
           if (curve) {
-            const vs = curve.virtualSol;
-            const vt = curve.virtualTokens;
-            const solPrice = 150; // TODO: replace with Pyth feed
+            const vs       = curve.virtualSol;
+            const vt       = curve.virtualTokens;
+            const solPrice = await getSolUsdPrice(connection);
             const priceSol = pricePerToken(vs, vt);
-            const mcap = mcapSol(vs, vt) * solPrice;
+            const mcap     = mcapSol(vs, vt) * solPrice;
             appendPricePoint(mint, {
               ts:              Date.now(),
               priceUsd:        priceSol * solPrice * 1e9,
@@ -571,6 +601,19 @@ app.post("/webhooks/helius", async (req: Request, res: Response) => {
               realSolLamports: Number(curve.realSol),
               progressPct:     Math.min(100, Math.round(Number(curve.realSol) / 85_000_000_000 * 100)),
             });
+            // Record the trade event for the trade feed
+            if (events.bought) {
+              recordTrade({
+                txSig:       payload.signature,
+                mint,
+                type:        "buy",
+                wallet:      events.bought.buyer ?? "unknown",
+                solAmount:   Number(events.bought.solIn) / 1e9,
+                tokenAmount: Number(events.bought.tokensOut),
+                usdValue:    (Number(events.bought.solIn) / 1e9) * solPrice,
+                timestamp:   Date.now(),
+              });
+            }
           }
         } catch {}
       }
@@ -686,6 +729,18 @@ app.get("/tokens/:mint", async (req: Request, res: Response) => {
 app.get("/tokens/:mint/chart", (req: Request, res: Response) => {
   const limit = Math.min(500, Math.max(1, parseInt(req.query.limit as string) || 200));
   res.json(getPriceHistory(req.params.mint, limit));
+});
+
+/** GET /tokens/:mint/trades?limit=50 — recent trades for this token */
+app.get("/tokens/:mint/trades", (req: Request, res: Response) => {
+  const limit = Math.min(200, Math.max(1, parseInt(req.query.limit as string) || 50));
+  res.json(getTradesForMint(req.params.mint, limit));
+});
+
+/** GET /feed/trades?limit=50 — global trade feed across all tokens */
+app.get("/feed/trades", (req: Request, res: Response) => {
+  const limit = Math.min(200, Math.max(1, parseInt(req.query.limit as string) || 50));
+  res.json(getGlobalFeed(limit));
 });
 
 /**
@@ -845,6 +900,7 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
 
 app.listen(config.port, () => {
   console.log(`[api] ReelBit API running on port ${config.port}`);
+  loadTrades();
   startDistributionCron(connection);
   startLpHarvestCron(connection);
   startHolderDividendCron(connection);

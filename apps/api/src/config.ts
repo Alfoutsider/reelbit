@@ -6,6 +6,17 @@ function required(key: string): string {
   return v;
 }
 
+const isProduction = process.env.NODE_ENV === "production";
+
+if (isProduction) {
+  if (!process.env.ADMIN_API_KEY || process.env.ADMIN_API_KEY === "admin-dev-key") {
+    throw new Error("[config] ADMIN_API_KEY must be set to a secret value in production");
+  }
+  if (!process.env.INTERNAL_API_SECRET || process.env.INTERNAL_API_SECRET === "dev-secret-change-in-prod") {
+    throw new Error("[config] INTERNAL_API_SECRET must be set to a secret value in production");
+  }
+}
+
 export const config = {
   port: parseInt(process.env.PORT ?? "3001"),
   rpcUrl: process.env.RPC_URL ?? "https://api.devnet.solana.com",
