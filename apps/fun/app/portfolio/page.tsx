@@ -1,0 +1,251 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import { motion } from "framer-motion";
+import { usePrivy, useWallets } from "@/lib/privy";
+import { ArrowLeft, Wallet, TrendingUp, Zap, BarChart2, ExternalLink } from "lucide-react";
+import Link from "next/link";
+import { cn, shortenAddress } from "@/lib/utils";
+
+const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+
+interface Position {
+  mint:         string;
+  tokenName:    string;
+  tokenSymbol:  string;
+  slotModel:    "Classic3Reel" | "Standard5Reel" | "FiveReelFreeSpins";
+  heroImageUrl: string | null;
+  primaryColor: string;
+  accentColor:  string;
+  graduated:    boolean;
+  balance:      number;   // tokens (decimal, 6-dp)
+  supplyPct:    number;   // % of total supply
+  valueUsd:     number;   // estimated value in USD
+  priceUsd:     number;   // per token
+  mcapUsd:      number;
+  progressPct:  number;   // bonding curve progress 0–100
+}
+
+const MODEL_LABEL: Record<string, string> = {
+  Classic3Reel: "3-Reel", Standard5Reel: "5-Reel", FiveReelFreeSpins: "Free Spins",
+};
+const MODEL_EMOJI: Record<string, string> = {
+  Classic3Reel: "🎰", Standard5Reel: "🎲", FiveReelFreeSpins: "✨",
+};
+
+function fmtUsd(n: number) {
+  if (n === 0) return "$0.00";
+  if (n < 0.01) return `$${n.toFixed(6)}`;
+  if (n < 1) return `$${n.toFixed(4)}`;
+  return `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function fmtTokens(n: number) {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
+  if (n >= 1_000)     return `${(n / 1_000).toFixed(1)}K`;
+  return n.toFixed(2);
+}
+
+export default function PortfolioPage() {
+  const { authenticated, login } = usePrivy();
+  const { wallets } = useWallets();
+  const walletAddress = wallets[0]?.address ?? "";
+
+  const [positions, setPositions] = useState<Position[]>([]);
+  const [loading,   setLoading]   = useState(false);
+  const [error,     setError]     = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!authenticated || !walletAddress) return;
+    setLoading(true);
+    setError(null);
+    fetch(`${API}/portfolio/${walletAddress}`)
+      .then((r) => {
+        if (!r.ok) throw new Error(`API error ${r.status}`);
+        return r.json();
+      })
+      .then((data: Position[]) => setPositions(Array.isArray(data) ? data : []))
+      .catch((err) => setError((err as Error).message))
+      .finally(() => setLoading(false));
+  }, [authenticated, walletAddress]);
+
+  const totalValueUsd = positions.reduce((s, p) => s + p.valueUsd, 0);
+
+  if (!authenticated) {
+    return (
+      <div className="relative min-h-screen flex items-center justify-center">
+        <div className="grid-overlay opacity-30" />
+        <div className="relative z-10 text-center space-y-5">
+          <div className="w-16 h-16 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center mx-auto">
+            <Wallet size={28} className="text-white/30" />
+          </div>
+          <div>
+            <p className="font-orbitron text-xl font-bold text-white">Connect Wallet</p>
+            <p className="font-rajdhani text-white/40 mt-1">Sign in to view your token holdings</p>
+          </div>
+          <motion.button
+            whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
+            onClick={login}
+            className="btn-launch px-8 py-3 font-orbitron font-bold text-sm">
+            Connect Wallet
+          </motion.button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative min-h-screen">
+      <div className="grid-overlay opacity-30" />
+      <div className="mx-auto max-w-5xl px-4 py-8 space-y-6 relative z-10">
+
+        <div className="flex items-center gap-3">
+          <Link href="/" className="flex items-center gap-1.5 text-sm text-white/30 hover:text-white transition-colors font-rajdhani font-semibold">
+            <ArrowLeft size={14} /> All Slots
+          </Link>
+        </div>
+
+        {/* Header */}
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-1">
+          <h1 className="font-orbitron text-2xl font-black text-white">My Portfolio</h1>
+          <p className="font-rajdhani text-sm text-white/35">
+            {shortenAddress(walletAddress)} · {positions.length} position{positions.length !== 1 ? "s" : ""}
+          </p>
+        </motion.div>
+
+        {/* Summary strip */}
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}
+          className="grid grid-cols-3 gap-3">
+          {[
+            { label: "Total Value",  value: fmtUsd(totalValueUsd),       icon: BarChart2  },
+            { label: "Positions",    value: String(positions.length),     icon: TrendingUp },
+            { label: "Graduated",    value: String(positions.filter(p => p.graduated).length), icon: Zap },
+          ].map(({ label, value, icon: Icon }) => (
+            <div key={label} className="stat-box">
+              <div className="flex items-center gap-1.5 mb-1">
+                <Icon size={10} className="text-purple-400" />
+                <p className="label">{label}</p>
+              </div>
+              <p className="value text-lg">{value}</p>
+            </div>
+          ))}
+        </motion.div>
+
+        {/* Loading */}
+        {loading && (
+          <div className="flex items-center justify-center py-20">
+            <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1.2, ease: "linear" }}
+              className="w-8 h-8 rounded-full border-2 border-purple-500/30 border-t-purple-500" />
+          </div>
+        )}
+
+        {/* Error */}
+        {error && !loading && (
+          <div className="card-panel p-6 text-center">
+            <p className="font-rajdhani text-white/40">{error}</p>
+          </div>
+        )}
+
+        {/* Empty */}
+        {!loading && !error && positions.length === 0 && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="card-panel p-12 text-center space-y-4">
+            <div className="text-4xl">🎰</div>
+            <p className="font-orbitron text-lg font-bold text-white/60">No holdings yet</p>
+            <p className="font-rajdhani text-white/30 text-sm max-w-xs mx-auto">
+              Buy into a slot token on the bonding curve and your position will appear here.
+            </p>
+            <Link href="/">
+              <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
+                className="btn-launch px-6 py-2.5 text-sm font-orbitron font-bold mx-auto">
+                Explore Slots
+              </motion.button>
+            </Link>
+          </motion.div>
+        )}
+
+        {/* Position cards */}
+        {!loading && positions.length > 0 && (
+          <div className="space-y-3">
+            {positions.map((p, i) => (
+              <motion.div key={p.mint}
+                initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.05 }}
+                className="card-panel p-5">
+                <div className="flex items-center gap-4">
+                  {/* Token image */}
+                  <div className="relative w-12 h-12 flex-shrink-0">
+                    {p.heroImageUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={p.heroImageUrl} alt={p.tokenName}
+                        className="w-full h-full rounded-xl object-cover border border-white/8" />
+                    ) : (
+                      <div className="w-full h-full rounded-xl border border-white/8 flex items-center justify-center"
+                        style={{ background: `${p.primaryColor}22` }}>
+                        <span className="font-orbitron text-base font-black" style={{ color: p.primaryColor }}>
+                          {p.tokenSymbol.slice(0, 2)}
+                        </span>
+                      </div>
+                    )}
+                    {p.graduated && (
+                      <div className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-green-500 border-2 border-casino-card flex items-center justify-center">
+                        <Zap size={8} className="text-white" />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Token info */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-orbitron font-bold text-white text-base">{p.tokenName}</span>
+                      <span className="text-white/30 font-rajdhani text-sm">${p.tokenSymbol}</span>
+                      <span className="badge badge-model text-[9px]">
+                        {MODEL_EMOJI[p.slotModel]} {MODEL_LABEL[p.slotModel]}
+                      </span>
+                      {p.graduated && <span className="badge badge-graduated text-[9px]"><Zap size={7} /> LIVE</span>}
+                    </div>
+                    {/* Bonding curve progress bar (pre-graduation) */}
+                    {!p.graduated && (
+                      <div className="mt-2 flex items-center gap-2">
+                        <div className="flex-1 h-1 rounded-full bg-white/5">
+                          <div className="h-full rounded-full bg-purple-500/60"
+                            style={{ width: `${Math.min(100, p.progressPct)}%` }} />
+                        </div>
+                        <span className="text-[10px] font-orbitron text-white/25">{p.progressPct.toFixed(0)}%</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Right: value block */}
+                  <div className="text-right flex-shrink-0 space-y-1">
+                    <p className="font-orbitron font-black text-lg text-white">{fmtUsd(p.valueUsd)}</p>
+                    <p className="text-[11px] text-white/30 font-rajdhani">
+                      {fmtTokens(p.balance)} tokens · {p.supplyPct.toFixed(3)}% supply
+                    </p>
+                    <p className="text-[10px] text-white/20 font-mono">
+                      {fmtUsd(p.priceUsd)} / token
+                    </p>
+                  </div>
+
+                  {/* View link */}
+                  <Link href={`/slot/${p.mint}`}
+                    className="flex-shrink-0 w-8 h-8 rounded-lg bg-white/5 border border-white/8 flex items-center justify-center hover:bg-white/10 transition-colors ml-1">
+                    <ExternalLink size={12} className="text-white/40" />
+                  </Link>
+                </div>
+
+                {/* MCap row */}
+                {p.mcapUsd > 0 && (
+                  <div className="mt-3 pt-3 border-t border-white/5 flex items-center justify-between text-[10px]">
+                    <span className="text-white/20 font-rajdhani">Market cap</span>
+                    <span className="font-orbitron text-white/40">{fmtUsd(p.mcapUsd)}</span>
+                  </div>
+                )}
+              </motion.div>
+            ))}
+          </div>
+        )}
+
+      </div>
+    </div>
+  );
+}

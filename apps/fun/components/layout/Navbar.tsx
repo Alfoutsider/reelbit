@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { usePrivy, useWallets } from "@/lib/privy";
-import { Wallet, ExternalLink, Zap } from "lucide-react";
+import { Wallet, ExternalLink, Zap, BarChart2 } from "lucide-react";
 import { RegisterModal } from "@/components/auth/RegisterModal";
 import type { UserProfile } from "@/components/auth/RegisterModal";
 import { UserModal } from "@/components/auth/UserModal";
@@ -50,8 +50,8 @@ export function Navbar() {
   }
 
   const navLinks = [
-    { href: "/",       label: "Explore" },
-    { href: "/launch", label: "Launch" },
+    { href: "/",            label: "Explore" },
+    { href: "/launch",      label: "Launch"  },
   ];
 
   return (
@@ -78,6 +78,13 @@ export function Navbar() {
                 {label}
               </Link>
             ))}
+            {authenticated && (
+              <Link href="/portfolio"
+                className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold text-white/50 hover:text-white hover:bg-white/5 transition-all font-rajdhani">
+                <BarChart2 size={13} className="opacity-70" />
+                Portfolio
+              </Link>
+            )}
             <a href="https://reelbit-casino.vercel.app" target="_blank" rel="noopener noreferrer"
               className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold text-gold/70 hover:text-gold hover:bg-gold/5 transition-all font-rajdhani">
               <Zap size={13} className="text-gold" />

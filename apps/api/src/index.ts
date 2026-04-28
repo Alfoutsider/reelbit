@@ -1,6 +1,7 @@
 import express, { Request, Response, NextFunction } from "express";
 import path from "path";
 import { Connection, PublicKey, Transaction, TransactionInstruction, sendAndConfirmTransaction } from "@solana/web3.js";
+import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { config } from "./config";
 import { extractTokenLaunchEvents } from "./decoder";
 import { handleGraduation } from "./migration";
@@ -820,6 +821,76 @@ app.get("/tokens/:mint/holders", async (req: Request, res: Response) => {
     res.json(holders);
   } catch {
     res.json([]);
+  }
+});
+
+// ── Portfolio ─────────────────────────────────────────────────────────────────
+
+/**
+ * GET /portfolio/:wallet
+ * Returns all ReelBit token positions held by a wallet.
+ * Uses on-chain getParsedTokenAccountsByOwner — no Helius key required.
+ */
+app.get("/portfolio/:wallet", async (req: Request, res: Response) => {
+  let walletPubkey: PublicKey;
+  try { walletPubkey = new PublicKey(req.params.wallet); }
+  catch { return res.status(400).json({ error: "Invalid wallet address" }); }
+
+  // Build a lookup of all known ReelBit mints
+  const themes = getAllThemes();
+  const mintIndex = new Map(themes.map((t) => [t.mint, t]));
+  if (mintIndex.size === 0) return res.json([]);
+
+  try {
+    const accounts = await connection.getParsedTokenAccountsByOwner(walletPubkey, {
+      programId: TOKEN_PROGRAM_ID,
+    });
+
+    const positions = [];
+    const TOTAL_SUPPLY = 1_000_000_000; // 1B tokens (6 decimals)
+
+    for (const { account } of accounts.value) {
+      const info = account.data.parsed?.info;
+      if (!info) continue;
+      const mint    = info.mint as string;
+      const balance = Number(info.tokenAmount?.amount ?? 0) / 1_000_000; // raw → decimal
+      if (balance <= 0) continue;
+
+      const theme = mintIndex.get(mint);
+      if (!theme) continue; // not a ReelBit token
+
+      const history     = getPriceHistory(mint, 1);
+      const latest      = history[history.length - 1];
+      const priceUsd    = latest?.priceUsd    ?? 0;
+      const mcapUsd     = latest?.mcapUsd     ?? 0;
+      const progressPct = latest?.progressPct ?? 0;
+      const valueUsd    = balance * priceUsd;
+      const supplyPct   = (balance / TOTAL_SUPPLY) * 100;
+
+      positions.push({
+        mint,
+        tokenName:   theme.tokenName,
+        tokenSymbol: theme.tokenSymbol,
+        slotModel:   theme.slotModel,
+        heroImageUrl: theme.heroImageUrl,
+        primaryColor: theme.primaryColor,
+        accentColor:  theme.accentColor,
+        graduated:    theme.graduated,
+        balance,
+        supplyPct,
+        valueUsd,
+        priceUsd,
+        mcapUsd,
+        progressPct,
+      });
+    }
+
+    // Sort by USD value descending
+    positions.sort((a, b) => b.valueUsd - a.valueUsd);
+    res.json(positions);
+  } catch (err) {
+    console.error("[portfolio]", err);
+    res.status(500).json({ error: "Failed to fetch portfolio" });
   }
 });
 
