@@ -222,7 +222,7 @@ export default function CasinoSlotPage({ params }: { params: { mint: string } })
           </Link>
           <div className="flex items-center gap-4 text-xs">
             <div className="flex items-center gap-1 text-green-400/70">
-              <Shield size={11} /> 96% RTP
+              <Shield size={11} /> PROVABLY FAIR
             </div>
             {isLoggedIn && (
               <button

@@ -24,6 +24,7 @@ export interface Session {
   nonce:          number;  // incremented on every spin
   createdAt:      number;  // ms timestamp
   lastSpinAt:     number;  // ms timestamp — used for TTL
+  targetRtp:      number;  // assigned RTP for this slot (0–1), fetched from API at session create
 }
 
 const DATA_DIR   = process.env.DATA_DIR ?? "./data";

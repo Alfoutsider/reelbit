@@ -1,5 +1,5 @@
 import type { SymbolId } from "./paytable";
-import { PAYTABLE_3REEL, PAYTABLE_5REEL, buildReelStrip } from "./paytable";
+import { PAYTABLE_3REEL, PAYTABLE_5REEL, BASE_RTP, buildReelStrip } from "./paytable";
 import { spinReels, type SpinSeed } from "./rng";
 
 export type SlotModel = "Classic3Reel" | "Standard5Reel" | "FiveReelFreeSpins";
@@ -110,6 +110,9 @@ export class SlotEngine {
   /**
    * Pure spin — no internal state. Caller is responsible for persisting
    * and incrementing the nonce (via sessionStore.incrementNonce).
+   *
+   * targetRtp: effective RTP for this slot (0–1). Payout is scaled relative to
+   * BASE_RTP so the house edge is preserved without altering the symbol display.
    */
   spin(
     serverSeed: string,
@@ -118,6 +121,7 @@ export class SlotEngine {
     clientSeed: string,
     betLamports: number,
     model: SlotModel,
+    targetRtp: number = BASE_RTP[model] ?? 0.94,
   ): SpinResult {
 
     const seed: SpinSeed = { serverSeed, clientSeed, nonce };
@@ -153,7 +157,14 @@ export class SlotEngine {
       }
     }
 
-    const totalPayout = winLines.reduce((sum, w) => sum + w.payout, 0);
+    const rawPayout = winLines.reduce((sum, w) => sum + w.payout, 0);
+
+    // Scale payout to match the slot's assigned RTP relative to the paytable baseline
+    const baseRtp = BASE_RTP[model] ?? 0.94;
+    const totalPayout = rawPayout > 0
+      ? Math.floor(rawPayout * (targetRtp / baseRtp))
+      : 0;
+
     const isJackpot = winLines.some((w) => w.symbols.every((s) => s === "SEVEN"));
 
     // Free spins: awarded on 3+ scatter (BELL) in 5-reel free spins model

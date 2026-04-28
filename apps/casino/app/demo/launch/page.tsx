@@ -289,7 +289,7 @@ export default function DemoLaunchPage() {
                     {[
                       { label: "Starting MCAP", value: "$5,000" },
                       { label: "Graduation",    value: "$100K" },
-                      { label: "RTP",           value: "96%" },
+                      { label: "RTP",           value: form.model === "Classic3Reel" ? "94–98%" : form.model === "Standard5Reel" ? "92–96%" : "90–94%" },
                       { label: "Creator Share", value: "25%" },
                     ].map(({ label, value }) => (
                       <div key={label} className="stat-box">
@@ -330,7 +330,7 @@ export default function DemoLaunchPage() {
                     { k: "Model",      v: SLOT_MODELS.find((m) => m.id === form.model)?.label ?? "" },
                     { k: "Supply",     v: "1,000,000,000 tokens (simulated)" },
                     { k: "Your Cost",  v: "FREE — demo mode" },
-                    { k: "RTP",        v: "96% enforced" },
+                    { k: "RTP",        v: `${form.model === "Classic3Reel" ? "94–98%" : form.model === "Standard5Reel" ? "92–96%" : "90–94%"} (assigned at graduation)` },
                     ...(form.devBuySol && parseFloat(form.devBuySol) > 0
                       ? [{ k: "Dev Buy", v: `${parseFloat(form.devBuySol).toFixed(2)} SOL · ${solToPct(Math.min(parseFloat(form.devBuySol), MAX_DEV_SOL)).toFixed(2)}% of supply` }]
                       : []),

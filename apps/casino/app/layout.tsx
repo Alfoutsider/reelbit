@@ -4,8 +4,8 @@ import { Providers } from "@/components/layout/Providers";
 import { Navbar } from "@/components/layout/Navbar";
 
 export const metadata: Metadata = {
-  title: "ReelBit Casino — On-Chain Slots with 96% RTP",
-  description: "Play provably fair slot machines on Solana. Deposit SOL and spin.",
+  title: "ReelBit Casino — Provably Fair Slots on Solana",
+  description: "Play provably fair slot machines on Solana. Up to 98% RTP. Deposit SOL and spin.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

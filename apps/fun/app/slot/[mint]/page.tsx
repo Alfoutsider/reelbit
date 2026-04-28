@@ -425,7 +425,7 @@ export default function SlotPage({ params }: { params: { mint: string } }) {
                 {[
                   { k: "Model",    v: `${model?.emoji ?? ""} ${model?.label ?? slot.model}` },
                   { k: "Reels",    v: `${model?.reels ?? "?"} reels` },
-                  { k: "RTP",      v: "96% enforced on-chain" },
+                  { k: "RTP",      v: slot.model === "Classic3Reel" ? "94–98%" : slot.model === "Standard5Reel" ? "92–96%" : "90–94%" },
                   { k: "Supply",   v: "1,000,000,000" },
                   { k: "Network",  v: "Solana devnet" },
                 ].map(({ k, v }) => (

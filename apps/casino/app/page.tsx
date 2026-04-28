@@ -222,7 +222,7 @@ export default function CasinoLobby() {
         >
           <div className="inline-flex items-center gap-2 bg-green-500/8 border border-green-500/20 rounded-full px-4 py-1.5 mb-1">
             <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-            <span className="font-orbitron text-[10px] font-bold text-green-400/80 tracking-widest">PROVABLY FAIR · 96% RTP · LIVE ON SOLANA</span>
+            <span className="font-orbitron text-[10px] font-bold text-green-400/80 tracking-widest">PROVABLY FAIR · UP TO 98% RTP · LIVE ON SOLANA</span>
           </div>
 
           <h1 className="font-orbitron text-3xl md:text-5xl font-black tracking-tight leading-tight">
@@ -238,7 +238,7 @@ export default function CasinoLobby() {
             {[
               { label: "Live Slots",  value: loading ? "…" : String(allSlots.length) },
               { label: "Graduated",   value: loading ? "…" : String(graduatedSlots.length) },
-              { label: "RTP",         value: "96%" },
+              { label: "Max RTP",      value: "98%" },
               { label: "House Edge",  value: "4%" },
             ].map(({ label, value }) => (
               <div key={label} className="text-center">

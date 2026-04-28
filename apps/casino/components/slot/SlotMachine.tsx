@@ -386,7 +386,7 @@ export function SlotMachine({ model, spinResult, isSpinning, onSpinComplete, the
         ) : (
           <div className="flex items-center justify-between text-[9px] font-orbitron text-white/15 tracking-widest">
             <span>{model === "Classic3Reel" ? "1 LINE" : "20 LINES"}</span>
-            <span>96% RTP</span>
+            <span>PROVABLY FAIR</span>
             <span>{reelCount} REELS</span>
           </div>
         )}

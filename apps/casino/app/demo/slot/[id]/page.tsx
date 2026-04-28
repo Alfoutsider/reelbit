@@ -517,7 +517,7 @@ export default function DemoSlotPage({ params }: { params: { id: string } }) {
                 { k: "Model",   v: slot.model.replace(/([A-Z])/g, " $1").trim() },
                 { k: "Created", v: new Date(slot.createdAt).toLocaleDateString() },
                 { k: "Supply",  v: "1,000,000,000" },
-                { k: "RTP",     v: "96%" },
+                { k: "RTP",     v: slot.model === "Classic3Reel" ? "94–98%" : slot.model === "Standard5Reel" ? "92–96%" : "90–94%" },
               ].map(({ k, v }) => (
                 <div key={k} className="flex justify-between text-[11px]">
                   <span className="text-white/25 font-rajdhani">{k}</span>

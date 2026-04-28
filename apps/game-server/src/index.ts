@@ -11,6 +11,8 @@ import {
   incrementNonce,
   consumeSession,
 } from "./sessionStore";
+import { initVolumeStore, addVolume, getVolume } from "./volumeStore";
+import { computeEffectiveRtp, BASE_RTP } from "./paytable";
 import type { SlotModel } from "./engine";
 
 const API_URL         = process.env.API_URL             ?? "http://localhost:3001";
@@ -47,9 +49,23 @@ function fundJackpot(usdcUnits: number): void {
   }).catch((err) => console.error("[game-server] jackpot-fund failed:", err));
 }
 
+async function fetchTokenRtp(mint: string, model: SlotModel): Promise<number> {
+  try {
+    const res = await fetch(`${API_URL}/tokens/${mint}/rtp`);
+    if (res.ok) {
+      const data = await res.json() as { rtp: number };
+      if (typeof data.rtp === "number" && data.rtp > 0) return data.rtp;
+    }
+  } catch {
+    // fall through to default
+  }
+  return BASE_RTP[model] ?? 0.94;
+}
+
 async function main() {
-  // Load persisted sessions from disk before accepting requests
+  // Load persisted sessions and volume data from disk before accepting requests
   initSessionStore();
+  initVolumeStore();
 
   const app    = Fastify({ logger: true });
   const engine = new SlotEngine();
@@ -73,8 +89,9 @@ async function main() {
       const serverSeed     = newServerSeed();
       const serverSeedHash = hashServerSeed(serverSeed);
       const now            = Date.now();
+      const targetRtp      = await fetchTokenRtp(mint, model);
 
-      createSession({ id, wallet, mint, model, serverSeed, serverSeedHash, nonce: 0, createdAt: now, lastSpinAt: now });
+      createSession({ id, wallet, mint, model, serverSeed, serverSeedHash, nonce: 0, createdAt: now, lastSpinAt: now, targetRtp });
 
       return reply.send({ sessionId: id, serverSeedHash });
     },
@@ -113,6 +130,9 @@ async function main() {
       const updated = incrementNonce(sessionId);
 
       try {
+        const cumulativeVolume = getVolume(updated.mint);
+        const effectiveRtp = computeEffectiveRtp(updated.model, updated.targetRtp, cumulativeVolume);
+
         const result = engine.spin(
           updated.serverSeed,
           updated.serverSeedHash,
@@ -120,6 +140,7 @@ async function main() {
           clientSeed,
           betUsdc,
           updated.model,
+          effectiveRtp,
         );
 
         if (result.totalPayout > 0) {
@@ -130,6 +151,7 @@ async function main() {
         if (!isFree && betUsdc > 0) {
           const houseEdge = Math.floor(betUsdc * 0.04);
           fundJackpot(houseEdge);
+          addVolume(updated.mint, betUsdc);
         }
 
         if (result.isJackpot) {

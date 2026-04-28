@@ -4,7 +4,7 @@ import { Connection, PublicKey, Transaction, TransactionInstruction, sendAndConf
 import { config } from "./config";
 import { extractTokenLaunchEvents } from "./decoder";
 import { handleGraduation } from "./migration";
-import { getAllThemes, getTheme, getGraduatedThemes, getThemesByCreator, setTheme, deriveColors } from "./themeStore";
+import { getAllThemes, getTheme, getGraduatedThemes, getThemesByCreator, setTheme, deriveColors, markGraduated, assignRtp } from "./themeStore";
 import type { SlotModel } from "./themeStore";
 import { apply as demoApply, approve as demoApprove, deny as demoDeny, getApplication, getAllApplications, isDemoUser, DEMO_CREDIT_USDC } from "./demoStore";
 import { getFakeActivity, tickFakeBots } from "./fakeBots";
@@ -137,6 +137,17 @@ app.get("/themes/:mint", (req: Request, res: Response) => {
   const theme = getTheme(req.params.mint);
   if (!theme) return res.status(404).json({ error: "Theme not found" });
   res.json(theme);
+});
+
+// Used by game-server to load the assigned RTP when creating a spin session
+app.get("/tokens/:mint/rtp", (req: Request, res: Response) => {
+  const theme = getTheme(req.params.mint);
+  if (!theme) return res.status(404).json({ error: "Token not found" });
+  const BASE_RTP: Record<string, number> = {
+    Classic3Reel: 0.96, Standard5Reel: 0.94, FiveReelFreeSpins: 0.92,
+  };
+  const rtp = theme.rtp ?? BASE_RTP[theme.slotModel] ?? 0.94;
+  res.json({ mint: theme.mint, rtp, model: theme.slotModel });
 });
 
 app.post("/themes/trigger", async (req: Request, res: Response) => {
@@ -619,6 +630,12 @@ app.post("/webhooks/helius", async (req: Request, res: Response) => {
       }
 
       if (events.graduated) {
+        // Mark graduated in theme store and assign a permanent RTP before DLMM migration
+        const existingTheme = getTheme(events.graduated.mint);
+        const model: SlotModel = (existingTheme?.slotModel ?? "Classic3Reel") as SlotModel;
+        markGraduated(events.graduated.mint, model);
+        assignRtp(events.graduated.mint, model);
+
         await handleGraduation(events.graduated, connection);
         triggerThemeGeneration(
           events.graduated.mint,

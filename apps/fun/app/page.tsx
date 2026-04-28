@@ -14,7 +14,7 @@ const FEATURES = [
   { icon: Shield, title: "Provably Fair",  desc: "On-chain HMAC-SHA256 RNG. Every spin verifiable on Solana." },
   { icon: Zap,    title: "Instant Launch", desc: "Deploy your token in seconds. Zero cost. Zero code." },
   { icon: Trophy, title: "25% Revenue",    desc: "Earn 25% of all casino GGR and trading fees forever." },
-  { icon: Lock,   title: "96% RTP",        desc: "Return-to-player enforced by smart contract. Always fair." },
+  { icon: Lock,   title: "Up to 98% RTP",  desc: "Dynamic RTP assigned at graduation. Provably fair commit-reveal." },
 ];
 
 type SortMode = "trending" | "new" | "graduating";

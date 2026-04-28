@@ -85,7 +85,7 @@ export function Navbar() {
               <TrendingUp size={10} /> CALCULATOR
             </Link>
             <div className="hidden sm:flex items-center gap-1 text-green-400/50 text-[10px] font-orbitron tracking-wider">
-              <Zap size={10} /> 96% RTP
+              <Zap size={10} /> UP TO 98% RTP
             </div>
 
             {demoSession ? (

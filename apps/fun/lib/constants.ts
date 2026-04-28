@@ -14,8 +14,14 @@ export const GRADUATION_TARGET_USD = 100_000;
 export const STARTING_MCAP_USD     = 5_000;
 export const TOTAL_SUPPLY          = 1_000_000_000;
 export const MAX_WALLET_PCT        = 5;
-export const RTP_PCT               = 96;
 export const HOUSE_EDGE_PCT        = 4;
+
+// RTP ranges per slot model (casino is off-chain; RTP assigned at graduation)
+export const RTP_RANGES = {
+  Classic3Reel:      { min: 94, max: 98, label: "94–98%" },
+  Standard5Reel:     { min: 92, max: 96, label: "92–96%" },
+  FiveReelFreeSpins: { min: 90, max: 94, label: "90–94%" },
+} as const;
 
 export const SLOT_MODELS = [
   { id: "Classic3Reel", label: "Classic 3-Reel", emoji: "🎰", reels: 3 },

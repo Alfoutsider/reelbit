@@ -1,3 +1,37 @@
+// ── RTP configuration ────────────────────────────────────────────────────────
+
+// RTP ranges per model — each slot gets a random value in-range at graduation.
+// Range drifts toward the minimum as cumulative betting volume grows.
+export const RTP_RANGES: Record<string, readonly [number, number]> = {
+  Classic3Reel:      [0.94, 0.98],
+  Standard5Reel:     [0.92, 0.96],
+  FiveReelFreeSpins: [0.90, 0.94],
+};
+
+// The paytable was tuned around these baseline RTPs — used as the scaling denominator
+export const BASE_RTP: Record<string, number> = {
+  Classic3Reel:      0.96,
+  Standard5Reel:     0.94,
+  FiveReelFreeSpins: 0.92,
+};
+
+// Volume (USDC micro-units) at which RTP drifts fully to the range minimum
+const VOLUME_CEILING_USDC = 500_000 * 1_000_000; // $500K cumulative bets
+
+/**
+ * Returns the effective RTP for a spin, accounting for volume drift.
+ * As a slot accumulates bets, the payout rate slides toward the floor of its range.
+ */
+export function computeEffectiveRtp(
+  model: string,
+  assignedRtp: number,
+  cumulativeVolumeUsdc: number,
+): number {
+  const [minRtp] = RTP_RANGES[model] ?? [0.90, 0.94];
+  const drift = Math.min(1, cumulativeVolumeUsdc / VOLUME_CEILING_USDC);
+  return Math.max(minRtp, assignedRtp - drift * (assignedRtp - minRtp));
+}
+
 // ── Symbols ───────────────────────────────────────────────────────────────────
 
 export type SymbolId =

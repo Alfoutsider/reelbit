@@ -10,7 +10,7 @@ import { Rocket, CheckCircle, ChevronRight, Sparkles, TrendingUp } from "lucide-
 import { ImageUploader } from "@/components/slot/ImageUploader";
 import { BondingCurveChart } from "@/components/chart/BondingCurveChart";
 import { cn } from "@/lib/utils";
-import { SLOT_MODELS, STARTING_MCAP_USD, RTP_PCT } from "@/lib/constants";
+import { SLOT_MODELS, STARTING_MCAP_USD, RTP_RANGES } from "@/lib/constants";
 import type { SlotModel } from "@/types/slot";
 
 type Step = "form" | "preview" | "launching" | "success";
@@ -118,7 +118,7 @@ export default function LaunchPage() {
           <h1 className="font-orbitron text-3xl md:text-4xl font-black text-white tracking-tight">
             Launch a <span className="gold-text">Slot Token</span>
           </h1>
-          <p className="text-white/40 font-rajdhani text-base mt-2">Free to deploy · 96% RTP enforced · You earn 25% of all fees forever</p>
+          <p className="text-white/40 font-rajdhani text-base mt-2">Free to deploy · Provably fair casino slots · You earn 25% of all fees forever</p>
         </motion.div>
 
         <AnimatePresence mode="wait">
@@ -262,7 +262,7 @@ export default function LaunchPage() {
                     {[
                       { label: "Starting MCAP", value: "$5,000" },
                       { label: "Graduation",    value: "$100K" },
-                      { label: "RTP",           value: `${RTP_PCT}%` },
+                      { label: "RTP",           value: RTP_RANGES[form.model as keyof typeof RTP_RANGES]?.label ?? "90–98%" },
                       { label: "Creator Share", value: "25%" },
                     ].map(({ label, value }) => (
                       <div key={label} className="stat-box">
@@ -291,7 +291,7 @@ export default function LaunchPage() {
                     { k: "Model",      v: SLOT_MODELS.find((m) => m.id === form.model)?.label ?? "" },
                     { k: "Supply",     v: "1,000,000,000 tokens" },
                     { k: "Launch Cost",  v: "FREE (~0.01 SOL rent)" },
-                    { k: "RTP",        v: `${RTP_PCT}% enforced on-chain` },
+                    { k: "RTP",        v: `${RTP_RANGES[form.model as keyof typeof RTP_RANGES]?.label ?? "90–98%"} (assigned at graduation)` },
                     ...(form.devBuySol && parseFloat(form.devBuySol) > 0
                       ? [{ k: "Dev Buy", v: `${parseFloat(form.devBuySol).toFixed(2)} SOL · ${solToPct(Math.min(parseFloat(form.devBuySol), MAX_DEV_SOL)).toFixed(2)}% of supply` }]
                       : []),

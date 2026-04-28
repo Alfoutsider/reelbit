@@ -12,12 +12,33 @@ export interface SlotTheme {
   creator?: string;      // wallet that launched this slot (set during register)
   poolAddress?: string; // Meteora DLMM LB pair address (set after graduation migration)
   devBuyPct?: number;  // % of supply creator bought at launch (0 or absent = no dev buy)
+  rtp?: number;        // assigned RTP at graduation (0–1), e.g. 0.956 = 95.6%
   status: "generating" | "ready" | "failed";
   heroImageUrl: string | null;
   bgImageUrl: string | null;
   primaryColor: string;
   accentColor: string;
   updatedAt: number;
+}
+
+// RTP ranges per model — mirrors game-server/src/paytable.ts
+const RTP_RANGES: Record<SlotModel, readonly [number, number]> = {
+  Classic3Reel:      [0.94, 0.98],
+  Standard5Reel:     [0.92, 0.96],
+  FiveReelFreeSpins: [0.90, 0.94],
+};
+
+/** Pick a random RTP within the model's range and assign it to the theme. */
+export function assignRtp(mint: string, model: SlotModel): number {
+  const [min, max] = RTP_RANGES[model];
+  const rtp = min + Math.random() * (max - min);
+  const store = readStore();
+  if (store[mint]) {
+    store[mint].rtp = rtp;
+    store[mint].updatedAt = Date.now();
+    writeStore(store);
+  }
+  return rtp;
 }
 
 import { config } from "./config";
