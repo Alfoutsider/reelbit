@@ -50,6 +50,7 @@ interface TokenApiResponse {
     pricePerTokenSol: number;
     mcapSol: number;
     progressPct: number;
+    graduationEtaMs: number | null;
   } | null;
 }
 
@@ -79,6 +80,17 @@ function timeAgo(ts: number) {
   return `${Math.floor(s / 3600)}h ago`;
 }
 
+function formatEta(ms: number | null): string | null {
+  if (ms === null) return null;
+  if (ms <= 0)     return "Imminent";
+  const h = Math.floor(ms / 3_600_000);
+  const m = Math.floor((ms % 3_600_000) / 60_000);
+  if (h >= 24) return `~${Math.round(h / 24)}d`;
+  if (h > 0)   return `~${h}h ${m}m`;
+  if (m > 0)   return `~${m}m`;
+  return "<1m";
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function SlotPage({ params }: { params: { mint: string } }) {
@@ -90,6 +102,7 @@ export default function SlotPage({ params }: { params: { mint: string } }) {
   const [slot,       setSlot]      = useState<SlotToken | null>(null);
   const [solPrice,   setSolPrice]  = useState(150);
   const [progress,   setProgress]  = useState(0);
+  const [etaMs,      setEtaMs]     = useState<number | null>(null);
   const [trades,     setTrades]    = useState<TradeEvent[]>([]);
   const [chartData,  setChartData] = useState<PricePoint[]>([]);
   const [loading,    setLoading]   = useState(true);
@@ -123,7 +136,8 @@ export default function SlotPage({ params }: { params: { mint: string } }) {
       const data: TokenApiResponse = await tokenRes.json();
       const mapped = mapApiToSlotToken(data, currentSolPrice);
       setSlot(mapped);
-      setProgress(graduationProgress(mapped.mcapUsd));
+      setProgress(data.bondingCurve?.progressPct ?? graduationProgress(mapped.mcapUsd));
+      setEtaMs(data.bondingCurve?.graduationEtaMs ?? null);
       setError(null);
     } catch (err) {
       setError((err as Error).message);
@@ -190,19 +204,52 @@ export default function SlotPage({ params }: { params: { mint: string } }) {
     } catch {}
   };
 
-  // Initial load + poll for live curve updates
+  // Initial load + slow poll for curve state and chart (SSE handles trades/price)
   useEffect(() => {
     fetchToken();
     fetchChart();
     fetchTrades();
     fetchComments();
     fetchHolders();
+    // Keep slow poll for full token refresh and chart; SSE handles the hot path
     const tokenId    = setInterval(fetchToken,    POLL_INTERVAL_MS);
     const chartId    = setInterval(fetchChart,    CHART_POLL_MS);
-    const tradesId   = setInterval(fetchTrades,   TRADES_POLL_MS);
     const commentsId = setInterval(fetchComments, COMMENTS_POLL_MS);
-    return () => { clearInterval(tokenId); clearInterval(chartId); clearInterval(tradesId); clearInterval(commentsId); };
-  }, [fetchToken, fetchChart, fetchTrades, fetchComments, fetchHolders]);
+    return () => { clearInterval(tokenId); clearInterval(chartId); clearInterval(commentsId); };
+  }, [fetchToken, fetchChart, fetchComments, fetchHolders]);
+
+  // SSE: real-time trade and price updates — no polling needed for these
+  useEffect(() => {
+    let es: EventSource | null = null;
+    try {
+      es = new EventSource(`${API}/tokens/${mint}/stream`);
+
+      es.addEventListener("trade", (e: MessageEvent) => {
+        try {
+          const t = JSON.parse(e.data) as TradeEvent;
+          setTrades((prev) => [t, ...prev].slice(0, 50));
+        } catch {}
+      });
+
+      es.addEventListener("price", (e: MessageEvent) => {
+        try {
+          const p = JSON.parse(e.data) as { mcapUsd: number; priceUsd: number; progressPct: number };
+          setSlot((prev) => prev ? { ...prev, mcapUsd: p.mcapUsd, priceUsd: p.priceUsd } : prev);
+          setProgress(p.progressPct);
+          // Append new candle to chart
+          setChartData((prev) => [...prev, { ts: Date.now(), priceUsd: p.priceUsd, mcapUsd: p.mcapUsd, realSolLamports: 0, progressPct: p.progressPct }]);
+        } catch {}
+      });
+
+      es.onerror = () => {
+        // SSE disconnected — fall back to polling until reconnect
+        es?.close();
+      };
+    } catch {
+      // EventSource not supported (SSR guard) — polling already running
+    }
+    return () => es?.close();
+  }, [mint]);
 
   function onTradeComplete() {
     setTradeKey((k) => k + 1);
@@ -366,7 +413,12 @@ export default function SlotPage({ params }: { params: { mint: string } }) {
                 </div>
                 <div className="flex justify-between text-[11px] text-white/25 font-orbitron">
                   <span>${(slot.mcapUsd / 1000).toFixed(1)}K current</span>
-                  <span className="text-white/40">$100K graduation</span>
+                  <div className="flex items-center gap-3">
+                    {formatEta(etaMs) && (
+                      <span className="text-purple-400/70">ETA {formatEta(etaMs)}</span>
+                    )}
+                    <span className="text-white/40">85 SOL target</span>
+                  </div>
                 </div>
                 <BondingCurveChart
                   chartData={chartData}

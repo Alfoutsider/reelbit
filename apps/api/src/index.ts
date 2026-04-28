@@ -35,6 +35,7 @@ import { swapSolToUsdc, USDC_MINT } from "./jupiterSwap";
 import { USDC_UNIT, applyWelcomeBonus, recordWagering, getBalance } from "./balanceStore";
 import { recordTrade, getTradesForMint, getGlobalFeed, getVolume24h, getGlobalVolume24h, loadTrades } from "./tradeStore";
 import { getComments, addComment, likeComment } from "./commentStore";
+import { addSSEClient, broadcast } from "./sseEmitter";
 
 const app = express();
 
@@ -70,6 +71,34 @@ const connection = new Connection(config.rpcUrl, "confirmed");
 
 app.get("/health", (_req: Request, res: Response) => {
   res.json({ status: "ok", ts: Date.now() });
+});
+
+// ── Server-Sent Events (real-time feed) ───────────────────────────────────────
+
+function sseHeaders(res: Response) {
+  res.setHeader("Content-Type",  "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection",    "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no"); // disable Nginx buffering
+  res.flushHeaders();
+}
+
+/** GET /feed/stream — global real-time feed (all tokens) */
+app.get("/feed/stream", (req: Request, res: Response) => {
+  sseHeaders(res);
+  addSSEClient(res, null);
+  res.write(": connected\n\n");
+  const ping = setInterval(() => { try { res.write(": ping\n\n"); } catch { clearInterval(ping); } }, 25_000);
+  req.on("close", () => clearInterval(ping));
+});
+
+/** GET /tokens/:mint/stream — per-token real-time feed (trades + price) */
+app.get("/tokens/:mint/stream", (req: Request, res: Response) => {
+  sseHeaders(res);
+  addSSEClient(res, req.params.mint);
+  res.write(": connected\n\n");
+  const ping = setInterval(() => { try { res.write(": ping\n\n"); } catch { clearInterval(ping); } }, 25_000);
+  req.on("close", () => clearInterval(ping));
 });
 
 // ── House wallet ──────────────────────────────────────────────────────────────
@@ -607,25 +636,31 @@ app.post("/webhooks/helius", async (req: Request, res: Response) => {
             const solPrice = await getSolUsdPrice(connection);
             const priceSol = pricePerToken(vs, vt);
             const mcap     = mcapSol(vs, vt) * solPrice;
-            appendPricePoint(mint, {
+            const pricePoint = {
               ts:              Date.now(),
               priceUsd:        priceSol * solPrice * 1e9,
               mcapUsd:         mcap,
               realSolLamports: Number(curve.realSol),
               progressPct:     Math.min(100, Math.round(Number(curve.realSol) / 85_000_000_000 * 100)),
-            });
+            };
+            appendPricePoint(mint, pricePoint);
+            broadcast("price", pricePoint, mint);
+
             // Record the trade event for the trade feed
             if (events.bought) {
-              recordTrade({
+              const tradeEvent = {
                 txSig:       payload.signature,
                 mint,
-                type:        "buy",
+                type:        "buy" as const,
                 wallet:      events.bought.buyer ?? "unknown",
                 solAmount:   Number(events.bought.solIn) / 1e9,
                 tokenAmount: Number(events.bought.tokensOut),
                 usdValue:    (Number(events.bought.solIn) / 1e9) * solPrice,
                 timestamp:   Date.now(),
-              });
+              };
+              recordTrade(tradeEvent);
+              broadcast("trade", tradeEvent, mint);
+              broadcast("trade", tradeEvent, null);
             }
           }
         } catch {}
@@ -682,6 +717,33 @@ app.get("/fees/info", (_req: Request, res: Response) => {
     },
   });
 });
+
+// ── Graduation ETA helper ─────────────────────────────────────────────────────
+
+/**
+ * Estimates time-to-graduation in milliseconds based on recent SOL inflow rate.
+ * Uses the last 6 hours of buy trade volume. Returns null if not enough data.
+ */
+function graduationEta(mint: string, realSolLamports: number): number | null {
+  const GRADUATION_LAMPORTS = 85_000_000_000; // 85 SOL
+  const remaining = GRADUATION_LAMPORTS - realSolLamports;
+  if (remaining <= 0) return 0;
+
+  // Use buy trades in the last 6 hours to estimate SOL inflow rate
+  const windowMs  = 6 * 60 * 60 * 1_000;
+  const cutoff    = Date.now() - windowMs;
+  const recent    = getTradesForMint(mint, 1000).filter(
+    (t) => t.type === "buy" && t.timestamp >= cutoff,
+  );
+  if (recent.length < 2) return null;
+
+  const totalSolIn = recent.reduce((s, t) => s + t.solAmount, 0);
+  const solPerMs   = totalSolIn / windowMs; // average SOL/ms inflow rate
+  if (solPerMs <= 0) return null;
+
+  const remainingSol = remaining / 1_000_000_000;
+  return Math.round(remainingSol / solPerMs); // estimated ms to graduation
+}
 
 // ── Pre-graduation trading API (pump.fun-compatible) ─────────────────────────
 //
@@ -752,6 +814,7 @@ app.get("/tokens/:mint", async (req: Request, res: Response) => {
       pricePerTokenSol:  pricePerToken(vs, vt),
       mcapSol:           mcapSol(vs, vt),
       progressPct:       Math.min(100, Math.round(Number(rs) / 85_000_000_000 * 100)),
+      graduationEtaMs:   graduationEta(mintStr, Number(rs)),
     } : null,
   });
 });
