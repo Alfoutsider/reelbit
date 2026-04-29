@@ -28,11 +28,18 @@ export function startCreatorHoldingCron(connection: Connection): void {
     for (const theme of themes) {
       try {
         const hasMinDevBuy = theme.devHasMinBuy ?? false;
+
+        // If dev never bought ≥ 0.2 SOL they are permanently in the 15% "no-skin"
+        // tier regardless of their current balance. Do not update holdRatio —
+        // computeRevTier() gates on hasMinDevBuy first, but we skip the RPC call
+        // entirely to avoid any chance of a 0-balance read being misused.
+        if (!hasMinDevBuy) continue;
+
         const tier = await getCreatorRevTier(
           theme.creator!,
           theme.mint,
           theme.devBuyPct!,
-          hasMinDevBuy,
+          true,
           connection,
         );
         setCreatorHoldRatio(theme.mint, tier.holdRatio);
