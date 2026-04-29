@@ -755,30 +755,73 @@ function graduationEta(mint: string, realSolLamports: number): number | null {
 // POST /tokens/:mint/buy    — returns unsigned base64 tx (caller signs + sends)
 // POST /tokens/:mint/sell   — returns unsigned base64 tx (caller signs + sends)
 
-app.get("/tokens", (_req: Request, res: Response) => {
+/**
+ * GET /tokens
+ * Query params:
+ *   q       — search by name, symbol, or creator address (case-insensitive)
+ *   sort    — "trending" (default) | "new" | "graduating"
+ *   limit   — max results (default 50, max 200)
+ *   offset  — pagination offset (default 0)
+ *
+ * Trending score = 60% volume24h (USD) + 30% progressPct (0–100 normalised to USD scale) + 10% recency bonus
+ */
+app.get("/tokens", (req: Request, res: Response) => {
+  const q      = ((req.query.q as string) ?? "").toLowerCase().trim();
+  const sort   = (req.query.sort as string) ?? "trending";
+  const limit  = Math.min(200, Math.max(1, parseInt(req.query.limit  as string) || 50));
+  const offset = Math.max(0, parseInt(req.query.offset as string) || 0);
+
   const themes = getAllThemes().filter((t) => !t.graduated);
-  res.json(themes.map((t) => {
-    // Use latest price-history snapshot for mcap (no chain call needed for list)
-    const history = getPriceHistory(t.mint, 1);
-    const latest  = history[history.length - 1];
+
+  // Enrich with live data from stores (no chain calls)
+  const enriched = themes.map((t) => {
+    const history    = getPriceHistory(t.mint, 1);
+    const latest     = history[history.length - 1];
+    const vol24h     = getVolume24h(t.mint);
+    const progressPct = latest?.progressPct ?? 0;
+    const ageMs      = Date.now() - (t.updatedAt ?? 0);
+    const ageHours   = ageMs / 3_600_000;
+    // Recency bonus: full score for tokens < 6h old, fades over 72h
+    const recencyBonus = Math.max(0, 1 - ageHours / 72) * 10_000;
+    const trendingScore = vol24h * 0.6 + progressPct * 400 * 0.3 + recencyBonus * 0.1;
+
     return {
-      mint:        t.mint,
-      name:        t.tokenName,
-      symbol:      t.tokenSymbol,
-      model:       t.slotModel,
-      image:       t.heroImageUrl ?? "",
-      graduated:   t.graduated,
-      devBuyPct:   t.devBuyPct ?? 0,
-      creator:     t.creator ?? "",
-      mcapUsd:     latest?.mcapUsd     ?? 0,
-      priceUsd:    latest?.priceUsd    ?? 0,
-      volume24h:   getVolume24h(t.mint),
-      progressPct: latest?.progressPct ?? 0,
-      createdAt:   t.updatedAt,
-      metadataUri: `${config.serverBaseUrl}/metadata/${t.mint}`,
-      program:     config.tokenLaunchProgramId,
+      mint:          t.mint,
+      name:          t.tokenName,
+      symbol:        t.tokenSymbol,
+      model:         t.slotModel,
+      image:         t.heroImageUrl ?? "",
+      graduated:     t.graduated,
+      devBuyPct:     t.devBuyPct ?? 0,
+      creator:       t.creator ?? "",
+      mcapUsd:       latest?.mcapUsd  ?? 0,
+      priceUsd:      latest?.priceUsd ?? 0,
+      volume24h:     vol24h,
+      progressPct,
+      createdAt:     t.updatedAt,
+      trendingScore,
+      metadataUri:   `${config.serverBaseUrl}/metadata/${t.mint}`,
+      program:       config.tokenLaunchProgramId,
     };
-  }));
+  });
+
+  // Filter
+  const filtered = q
+    ? enriched.filter((t) =>
+        t.name.toLowerCase().includes(q) ||
+        t.symbol.toLowerCase().includes(q) ||
+        t.creator.toLowerCase().includes(q),
+      )
+    : enriched;
+
+  // Sort
+  if (sort === "new")        filtered.sort((a, b) => b.createdAt - a.createdAt);
+  else if (sort === "graduating") filtered.sort((a, b) => b.progressPct - a.progressPct);
+  else                       filtered.sort((a, b) => b.trendingScore - a.trendingScore); // "trending"
+
+  const total = filtered.length;
+  const page  = filtered.slice(offset, offset + limit);
+  res.json({ total, limit, offset, tokens: page });
 });
 
 app.get("/tokens/:mint", async (req: Request, res: Response) => {
