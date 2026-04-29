@@ -5,7 +5,10 @@
  *   1. Reads the fee_vault balance on-chain
  *   2. Skips if below 0.05 SOL threshold
  *   3. Builds + signs + sends a claim_fees transaction
- *   4. Emits a log for monitoring
+ *      - claim_fees checks creator's token balance on-chain and routes
+ *        the penalty portion to holder_dividend_vault automatically
+ *   4. After claim_fees: drains holder_dividend_vault → platform wallet,
+ *      records drained amount in dividendStore for holder distribution
  *
  * Post-graduation: DLMM LP fee harvesting is handled separately (sprint 4).
  * Top-100 holder dividends run on a 24h cadence from holderDividendCron.ts.
@@ -26,6 +29,7 @@ import {
   TransactionInstruction,
   AccountMeta,
 } from "@solana/web3.js";
+import { getAssociatedTokenAddressSync } from "@solana/spl-token";
 import fs from "fs";
 import path from "path";
 import { getAllThemes, setCreatorHoldRatio } from "./themeStore";
@@ -39,20 +43,22 @@ const PROGRAM_ID = new PublicKey(config.tokenLaunchProgramId);
 const DISTRIBUTION_INTERVAL_MS = 30 * 60 * 1_000; // 30 minutes
 
 // Fee split (must mirror on-chain constants)
-// Pre-bond: Creator 25% / Platform 25% / Jackpot 45% / Legal+Licensing 5%
+// Pre-bond: Creator up to 25% / Platform 25% / Jackpot 45% / Legal+Licensing 5%
+// Creator share may be reduced by loyalty penalty (on-chain enforced)
 export const FEE_SPLIT = {
   creator:   0.25,
   platform:  0.25,
   jackpot:   0.45,
-  legal:     0.025, // legal wallet  (2.5%)
-  licensing: 0.025, // license wallet (2.5%)
+  legal:     0.025,
+  licensing: 0.025,
 } as const;
 
-// ── Discriminator ─────────────────────────────────────────────────────────────
+// ── Discriminators ────────────────────────────────────────────────────────────
 // Taken directly from target/idl/token_launch.json — authoritative source.
 
-const CLAIM_FEES_DISCRIMINATOR        = Buffer.from([82, 251, 233, 156, 12, 52, 184, 202]);
-const INITIALIZE_PLATFORM_DISCRIMINATOR = Buffer.from([119, 201, 101, 45, 75, 122, 89, 3]);
+const CLAIM_FEES_DISCRIMINATOR           = Buffer.from([82, 251, 233, 156, 12, 52, 184, 202]);
+const DRAIN_HOLDER_DIVIDEND_DISCRIMINATOR = Buffer.from([14, 99, 176, 42, 183, 211, 68, 27]);
+const INITIALIZE_PLATFORM_DISCRIMINATOR  = Buffer.from([119, 201, 101, 45, 75, 122, 89, 3]);
 
 // ── PDA helpers ───────────────────────────────────────────────────────────────
 
@@ -60,10 +66,11 @@ function pda(seeds: Buffer[], programId: PublicKey): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(seeds, programId);
 }
 
-function bondingCurvePda(mint: PublicKey)  { return pda([Buffer.from("bonding_curve"), mint.toBuffer()], PROGRAM_ID); }
-function feeVaultPda(mint: PublicKey)      { return pda([Buffer.from("fee_vault"), mint.toBuffer()], PROGRAM_ID); }
-function jackpotVaultPda(mint: PublicKey)  { return pda([Buffer.from("jackpot_vault"), mint.toBuffer()], PROGRAM_ID); }
-function platformConfigPda()               { return pda([Buffer.from("platform_config")], PROGRAM_ID); }
+function bondingCurvePda(mint: PublicKey)       { return pda([Buffer.from("bonding_curve"), mint.toBuffer()], PROGRAM_ID); }
+function feeVaultPda(mint: PublicKey)           { return pda([Buffer.from("fee_vault"), mint.toBuffer()], PROGRAM_ID); }
+function jackpotVaultPda(mint: PublicKey)       { return pda([Buffer.from("jackpot_vault"), mint.toBuffer()], PROGRAM_ID); }
+function holderDividendVaultPda(mint: PublicKey){ return pda([Buffer.from("holder_dividend"), mint.toBuffer()], PROGRAM_ID); }
+function platformConfigPda()                    { return pda([Buffer.from("platform_config")], PROGRAM_ID); }
 
 // ── Keypair loading ───────────────────────────────────────────────────────────
 
@@ -74,63 +81,88 @@ function loadKeypair(envKey: string, fallback: string): Keypair {
 }
 
 // ── BondingCurveVault parser ──────────────────────────────────────────────────
-// Matches on-chain struct layout: 8 disc + 32 mint + 32 creator + 8×5 u64 + 8+8+8 timestamps + 1 bump
+// Layout: 8 disc + 32 mint + 32 creator + 8 vSol + 8 vTokens + 8 rSol + 8 rTokens
+//       + 8 launchedAt + 8 lastFeeDist + 8 totalFees + 8 devBuyAmount + 1 bump = 137
 
 interface VaultState {
-  creator:              PublicKey;
-  launchedAt:           bigint;
-  lastFeeDistribution:  bigint;
-  realSol:              bigint;
+  creator:             PublicKey;
+  launchedAt:          bigint;
+  lastFeeDistribution: bigint;
+  realSol:             bigint;
+  devBuyAmount:        bigint;
 }
 
 const BONDING_CURVE_DISCRIMINATOR = Buffer.from([252, 234, 66, 111, 20, 145, 209, 189]);
 
 function parseBondingCurveVault(data: Buffer): VaultState | null {
-  if (data.length < 130) return null;
+  if (data.length < 137) return null;
   if (!data.subarray(0, 8).equals(BONDING_CURVE_DISCRIMINATOR)) return null;
   // offset 8: mint (32), offset 40: creator (32)
   const creator             = new PublicKey(data.subarray(40, 72));
-  // offset 72: virtual_sol, 80: virtual_tokens, 88: real_sol, 96: real_tokens, 104: launched_at, 112: last_fee_distribution, 120: total_fees_accumulated, 128: bump
+  // offset 72: virtual_sol(8), 80: virtual_tokens(8), 88: real_sol(8)
+  // offset 96: real_tokens(8), 104: launched_at(8), 112: last_fee_dist(8)
+  // offset 120: total_fees(8), 128: dev_buy_amount(8), 136: bump(1)
   const realSol             = data.readBigUInt64LE(88);
   const launchedAt          = data.readBigInt64LE(104);
   const lastFeeDistribution = data.readBigInt64LE(112);
-  return { creator, launchedAt, lastFeeDistribution, realSol };
+  const devBuyAmount        = data.readBigUInt64LE(128);
+  return { creator, launchedAt, lastFeeDistribution, realSol, devBuyAmount };
 }
 
-// ── Instruction builder ───────────────────────────────────────────────────────
+// ── Instruction builders ──────────────────────────────────────────────────────
 
 function buildClaimFeesInstruction(
-  mint: PublicKey,
-  caller: PublicKey,
-  creator: PublicKey,
-  platformWallet: PublicKey,
-  legalWallet: PublicKey,
-  licenseWallet: PublicKey,
+  mint:                PublicKey,
+  caller:              PublicKey,
+  creator:             PublicKey,
+  creatorTokenAccount: PublicKey,
+  platformWallet:      PublicKey,
+  legalWallet:         PublicKey,
+  licenseWallet:       PublicKey,
 ): TransactionInstruction {
-  const [bondingCurve]  = bondingCurvePda(mint);
-  const [feeVault]      = feeVaultPda(mint);
-  const [jackpotVault]  = jackpotVaultPda(mint);
-  const [platformConfig] = platformConfigPda();
+  const [bondingCurve]       = bondingCurvePda(mint);
+  const [feeVault]           = feeVaultPda(mint);
+  const [jackpotVault]       = jackpotVaultPda(mint);
+  const [holderDividendVault] = holderDividendVaultPda(mint);
+  const [platformConfig]     = platformConfigPda();
 
   const keys: AccountMeta[] = [
-    { pubkey: caller,          isSigner: true,  isWritable: true  },
-    { pubkey: mint,            isSigner: false, isWritable: false },
-    { pubkey: bondingCurve,    isSigner: false, isWritable: true  },
-    { pubkey: feeVault,        isSigner: false, isWritable: true  },
-    { pubkey: jackpotVault,    isSigner: false, isWritable: true  },
-    { pubkey: platformConfig,  isSigner: false, isWritable: false },
-    { pubkey: platformWallet,  isSigner: false, isWritable: true  },
-    { pubkey: legalWallet,     isSigner: false, isWritable: true  },
-    { pubkey: licenseWallet,   isSigner: false, isWritable: true  },
-    { pubkey: creator,         isSigner: false, isWritable: true  },
+    { pubkey: caller,               isSigner: true,  isWritable: true  },
+    { pubkey: mint,                 isSigner: false, isWritable: false },
+    { pubkey: bondingCurve,         isSigner: false, isWritable: true  },
+    { pubkey: feeVault,             isSigner: false, isWritable: true  },
+    { pubkey: jackpotVault,         isSigner: false, isWritable: true  },
+    { pubkey: platformConfig,       isSigner: false, isWritable: false },
+    { pubkey: platformWallet,       isSigner: false, isWritable: true  },
+    { pubkey: legalWallet,          isSigner: false, isWritable: true  },
+    { pubkey: licenseWallet,        isSigner: false, isWritable: true  },
+    { pubkey: creator,              isSigner: false, isWritable: true  },
+    { pubkey: creatorTokenAccount,  isSigner: false, isWritable: false },
+    { pubkey: holderDividendVault,  isSigner: false, isWritable: true  },
     { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
   ];
 
-  return new TransactionInstruction({
-    programId: PROGRAM_ID,
-    keys,
-    data: CLAIM_FEES_DISCRIMINATOR,
-  });
+  return new TransactionInstruction({ programId: PROGRAM_ID, keys, data: CLAIM_FEES_DISCRIMINATOR });
+}
+
+function buildDrainHolderDividendInstruction(
+  mint:          PublicKey,
+  authority:     PublicKey,
+  platformWallet: PublicKey,
+): TransactionInstruction {
+  const [holderDividendVault] = holderDividendVaultPda(mint);
+  const [platformConfig]     = platformConfigPda();
+
+  const keys: AccountMeta[] = [
+    { pubkey: authority,            isSigner: true,  isWritable: true  },
+    { pubkey: mint,                 isSigner: false, isWritable: false },
+    { pubkey: platformConfig,       isSigner: false, isWritable: false },
+    { pubkey: holderDividendVault,  isSigner: false, isWritable: true  },
+    { pubkey: platformWallet,       isSigner: false, isWritable: true  },
+    { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+  ];
+
+  return new TransactionInstruction({ programId: PROGRAM_ID, keys, data: DRAIN_HOLDER_DIVIDEND_DISCRIMINATOR });
 }
 
 // ── Main distribution loop ────────────────────────────────────────────────────
@@ -154,29 +186,32 @@ export async function runDistributionRound(connection: Connection): Promise<void
     try { mint = new PublicKey(theme.mint); } catch { continue; }
 
     try {
-      const [feeVaultPk] = feeVaultPda(mint);
-      const [bondingCurvePk] = bondingCurvePda(mint);
+      const [feeVaultPk]           = feeVaultPda(mint);
+      const [bondingCurvePk]       = bondingCurvePda(mint);
+      const [holderDividendVaultPk] = holderDividendVaultPda(mint);
 
       const [feeInfo, vaultInfo] = await Promise.all([
         connection.getAccountInfo(feeVaultPk),
         connection.getAccountInfo(bondingCurvePk),
       ]);
 
-      // Skip if no fee vault or not enough accumulated
       if (!feeInfo || feeInfo.lamports < MIN_FEE_VAULT_LAMPORTS) continue;
-
-      // Parse vault state to check cooldown
       if (!vaultInfo) continue;
+
       const vaultState = parseBondingCurveVault(Buffer.from(vaultInfo.data));
       if (!vaultState) continue;
 
       const secondsSinceLastDist = nowSecs - Number(vaultState.lastFeeDistribution);
       if (secondsSinceLastDist < THIRTY_MIN_SECS) continue;
 
+      // Derive creator's ATA — may not exist if they sold everything (on-chain handles gracefully)
+      const creatorTokenAccount = getAssociatedTokenAddressSync(mint, vaultState.creator, false);
+
       const ix = buildClaimFeesInstruction(
         mint,
         botKeypair.publicKey,
         vaultState.creator,
+        creatorTokenAccount,
         platformWallet,
         legalWallet,
         licenseWallet,
@@ -195,32 +230,45 @@ export async function runDistributionRound(connection: Connection): Promise<void
       await connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, "confirmed");
 
       const jackpotExpired = (nowSecs - Number(vaultState.launchedAt)) > (30 * 24 * 60 * 60);
-      const feeTotal = feeInfo.lamports - 890_880; // minus rent-exempt floor
+      const feeTotal = feeInfo.lamports - 890_880;
 
-      // Check creator holding ratio and route holder bonus if penalized
-      let tierLabel = "";
+      // Update cached hold ratio from on-chain data
       if (theme.creator && theme.devBuyPct) {
-        try {
-          const tier = await getCreatorRevTier(theme.creator, theme.mint, theme.devBuyPct, connection);
-          setCreatorHoldRatio(theme.mint, tier.holdRatio);
+        getCreatorRevTier(theme.creator, theme.mint, theme.devBuyPct, connection)
+          .then((t) => setCreatorHoldRatio(theme.mint, t.holdRatio))
+          .catch(() => {});
+      }
 
-          if (tier.holderBonusPct > 0 && feeTotal > 0) {
-            const holderBonus = Math.floor(feeTotal * tier.holderBonusPct);
-            if (holderBonus > 0) {
-              await addDividend(theme.mint, holderBonus);
-              tierLabel = ` [creator ${tier.label}: +${(tier.holderBonusPct * 100).toFixed(1)}% → holders (${(holderBonus / 1e9).toFixed(4)} SOL)]`;
-            }
-          }
-        } catch {
-          // Non-fatal — skip penalty check for this round
+      // Drain holder_dividend_vault → platform wallet, record for holder distribution
+      let holderDividendDrained = 0;
+      try {
+        const dividendVaultInfo = await connection.getAccountInfo(holderDividendVaultPk);
+        const drainable = dividendVaultInfo
+          ? Math.max(0, dividendVaultInfo.lamports - 890_880)
+          : 0;
+
+        if (drainable > 0) {
+          const drainIx = buildDrainHolderDividendInstruction(mint, botKeypair.publicKey, platformWallet);
+          const { blockhash: bh2, lastValidBlockHeight: lvbh2 } = await connection.getLatestBlockhash("confirmed");
+          const drainTx = new Transaction();
+          drainTx.feePayer = botKeypair.publicKey;
+          drainTx.recentBlockhash = bh2;
+          drainTx.add(drainIx);
+          const drainSig = await connection.sendTransaction(drainTx, [botKeypair], { preflightCommitment: "confirmed" });
+          await connection.confirmTransaction({ signature: drainSig, blockhash: bh2, lastValidBlockHeight: lvbh2 }, "confirmed");
+          holderDividendDrained = drainable;
+          // Record for holderDividendCron to distribute to top-100 holders
+          await addDividend(theme.mint, drainable);
         }
+      } catch {
+        // Non-fatal — dividend drain will retry next round
       }
 
       console.log(
         `[dist] ${theme.tokenSymbol} (${theme.mint.slice(0, 8)}) — ` +
         `${(feeTotal / 1e9).toFixed(4)} SOL distributed` +
         (jackpotExpired ? " [jackpot → platform: 30d expired]" : "") +
-        tierLabel,
+        (holderDividendDrained > 0 ? ` [holder dividend: ${(holderDividendDrained / 1e9).toFixed(4)} SOL]` : ""),
       );
     } catch (err) {
       console.error(`[dist] Error distributing fees for ${theme.mint.slice(0, 8)}:`, (err as Error).message);
@@ -233,7 +281,6 @@ export async function runDistributionRound(connection: Connection): Promise<void
 export function startDistributionCron(connection: Connection): void {
   const run = () => runDistributionRound(connection).catch(console.error);
 
-  // Initial run after 5 min (let the API fully start first)
   setTimeout(run, 5 * 60 * 1_000);
   setInterval(run, DISTRIBUTION_INTERVAL_MS);
 

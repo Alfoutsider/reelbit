@@ -71,6 +71,14 @@ const JACKPOT_EXPIRY_SECS:    i64 = 30 * 24 * 60 * 60; // 30 days
 const DISTRIBUTION_INTERVAL:  i64 = 30 * 60;            // 30 minutes minimum between claims
 const MIN_DISTRIBUTION_LAMPORTS: u64 = 50_000_000;      // 0.05 SOL minimum to distribute
 
+// Creator loyalty penalty thresholds (hold ratio expressed in basis points of original alloc)
+//   hold_bps >= 5_000 (≥ 50% held) → full 25% creator share
+//   0 < hold_bps < 5_000          → 10% creator, 15% → holder_dividend_vault
+//   hold_bps = 0 (fully sold)     →  0.5% creator, 24.5% → holder_dividend_vault
+const CREATOR_HOLD_FULL_BPS: u64 = 5_000;
+const CREATOR_PENALTY_BPS:   u64 = 1_000; // 10%
+const CREATOR_DUMPED_BPS:    u64 =    50; // 0.5%
+
 /// Progressive fee rate based on how close the token is to graduation.
 fn fee_bps(real_sol: u64) -> u64 {
     let pct = (real_sol as u128 * 100 / GRADUATION_LAMPORTS as u128) as u64;
@@ -126,20 +134,21 @@ impl SlotMetadata {
 /// Bonding curve vault — holds trading SOL, tracks reserves + fee distribution state.
 #[account]
 pub struct BondingCurveVault {
-    pub mint:                 Pubkey,
-    pub creator:              Pubkey,
-    pub virtual_sol:          u64,
-    pub virtual_tokens:       u64,
-    pub real_sol:             u64,
-    pub real_tokens:          u64,
-    pub launched_at:          i64, // unix timestamp of launch
+    pub mint:                  Pubkey,
+    pub creator:               Pubkey,
+    pub virtual_sol:           u64,
+    pub virtual_tokens:        u64,
+    pub real_sol:              u64,
+    pub real_tokens:           u64,
+    pub launched_at:           i64, // unix timestamp of launch
     pub last_fee_distribution: i64, // unix timestamp of last claim_fees call
     pub total_fees_accumulated: u64, // lifetime total fees sent to fee_vault
-    pub bump:                 u8,
+    pub dev_buy_amount:        u64, // total tokens ever bought by creator (penalty baseline)
+    pub bump:                  u8,
 }
 
 impl BondingCurveVault {
-    const LEN: usize = 8 + 32 + 32 + 8 + 8 + 8 + 8 + 8 + 8 + 8 + 1;
+    const LEN: usize = 8 + 32 + 32 + 8 + 8 + 8 + 8 + 8 + 8 + 8 + 8 + 1;
 
     pub fn tokens_for_sol(&self, sol_in: u64) -> u64 {
         let num = (self.virtual_tokens as u128) * (sol_in as u128);
@@ -247,14 +256,16 @@ pub struct TokensSold {
 
 #[event]
 pub struct FeesDistributed {
-    pub mint:           Pubkey,
-    pub total:          u64,
-    pub creator_share:  u64,
-    pub platform_share: u64,
-    pub jackpot_share:  u64,
-    pub legal_share:    u64,
-    pub license_share:  u64,
-    pub jackpot_expired: bool, // true → jackpot share redirected to platform
+    pub mint:                   Pubkey,
+    pub total:                  u64,
+    pub creator_share:          u64,
+    pub platform_share:         u64,
+    pub jackpot_share:          u64,
+    pub legal_share:            u64,
+    pub license_share:          u64,
+    pub holder_dividend_share:  u64, // routed to holder_dividend_vault (creator penalty)
+    pub creator_hold_bps:       u64, // creator hold ratio × 10_000
+    pub jackpot_expired:        bool,
 }
 
 #[event]
@@ -374,6 +385,15 @@ pub struct LaunchSlot<'info> {
         bump,
     )]
     pub jackpot_vault: SystemAccount<'info>,
+
+    /// Holder dividend vault — accumulates creator loyalty penalty lamports.
+    /// CHECK: PDA validated by seeds; holds SOL only
+    #[account(
+        mut,
+        seeds = [b"holder_dividend", mint.key().as_ref()],
+        bump,
+    )]
+    pub holder_dividend_vault: SystemAccount<'info>,
 
     /// CHECK: PDA verified by Metaplex program CPI
     #[account(mut)]
@@ -563,6 +583,51 @@ pub struct ClaimFees<'info> {
     /// CHECK: validated inline
     #[account(mut, constraint = creator.key() == bonding_curve_vault.creator)]
     pub creator: SystemAccount<'info>,
+
+    /// Creator's current token account — read-only; used to determine loyalty tier.
+    /// CHECK: may be uninitialized if creator sold all tokens (0 balance assumed).
+    pub creator_token_account: UncheckedAccount<'info>,
+
+    /// Holder dividend vault — receives the penalty portion when creator is penalized.
+    /// CHECK: PDA validated by seeds; holds SOL only
+    #[account(
+        mut,
+        seeds = [b"holder_dividend", mint.key().as_ref()],
+        bump,
+    )]
+    pub holder_dividend_vault: SystemAccount<'info>,
+
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct DrainHolderDividend<'info> {
+    #[account(
+        mut,
+        constraint = authority.key() == platform_config.authority @ TokenLaunchError::Unauthorized,
+    )]
+    pub authority: Signer<'info>,
+
+    pub mint: Account<'info, Mint>,
+
+    #[account(
+        seeds = [b"platform_config"],
+        bump = platform_config.bump,
+    )]
+    pub platform_config: Account<'info, PlatformConfig>,
+
+    /// CHECK: PDA validated by seeds; source of accumulated holder dividend lamports
+    #[account(
+        mut,
+        seeds = [b"holder_dividend", mint.key().as_ref()],
+        bump,
+    )]
+    pub holder_dividend_vault: SystemAccount<'info>,
+
+    /// Destination — platform wallet re-distributes off-chain to top-100 holders.
+    /// CHECK: validated against platform_config.platform_wallet
+    #[account(mut, constraint = platform_wallet.key() == platform_config.platform_wallet)]
+    pub platform_wallet: SystemAccount<'info>,
 
     pub system_program: Program<'info, System>,
 }
@@ -857,6 +922,12 @@ pub mod token_launch {
         cap.tokens_held += tokens_out;
         cap.bump        = ctx.bumps.wallet_cap;
 
+        // Track creator's cumulative purchases as penalty baseline
+        if ctx.accounts.buyer.key() == ctx.accounts.bonding_curve_vault.creator {
+            ctx.accounts.bonding_curve_vault.dev_buy_amount =
+                ctx.accounts.bonding_curve_vault.dev_buy_amount.saturating_add(tokens_out);
+        }
+
         let new_real_sol    = vault.real_sol;
         let new_real_tokens = vault.real_tokens;
 
@@ -976,10 +1047,16 @@ pub mod token_launch {
         let jackpot_expired = !ctx.accounts.bonding_curve_vault.slot_metadata_graduated()
             && (now - vault.launched_at) > JACKPOT_EXPIRY_SECS;
 
-        let creator_share  = split_fee(distributable, CREATOR_SHARE_BPS);
-        let jackpot_raw    = split_fee(distributable, JACKPOT_SHARE_BPS);
-        let legal_share    = split_fee(distributable, LEGAL_SHARE_BPS);
-        let license_share  = split_fee(distributable, LICENSE_SHARE_BPS);
+        // Compute creator's effective revenue share based on dev allocation hold ratio
+        let dev_buy = ctx.accounts.bonding_curve_vault.dev_buy_amount;
+        let (effective_creator_bps, holder_dividend_bps, creator_hold_bps) =
+            compute_creator_tier(dev_buy, &ctx.accounts.creator_token_account);
+
+        let creator_share         = split_fee(distributable, effective_creator_bps);
+        let holder_dividend_share = split_fee(distributable, holder_dividend_bps);
+        let jackpot_raw           = split_fee(distributable, JACKPOT_SHARE_BPS);
+        let legal_share           = split_fee(distributable, LEGAL_SHARE_BPS);
+        let license_share         = split_fee(distributable, LICENSE_SHARE_BPS);
 
         let (jackpot_share, platform_share) = if jackpot_expired {
             // Jackpot allocation redirects to platform after 30 days without graduation
@@ -990,7 +1067,7 @@ pub mod token_launch {
         };
 
         // Remainder (rounding dust) stays in fee_vault for next round
-        let total_out = creator_share + platform_share + jackpot_share + legal_share + license_share;
+        let total_out = creator_share + holder_dividend_share + platform_share + jackpot_share + legal_share + license_share;
 
         let mint_key       = ctx.accounts.mint.key();
         let fee_vault_bump = ctx.bumps.fee_vault;
@@ -1073,6 +1150,21 @@ pub mod token_launch {
             )?;
         }
 
+        // fee_vault → holder_dividend_vault (creator loyalty penalty)
+        if holder_dividend_share > 0 {
+            system_program::transfer(
+                CpiContext::new_with_signer(
+                    sys_pid,
+                    system_program::Transfer {
+                        from: ctx.accounts.fee_vault.to_account_info(),
+                        to:   ctx.accounts.holder_dividend_vault.to_account_info(),
+                    },
+                    fee_signer_seeds,
+                ),
+                holder_dividend_share,
+            )?;
+        }
+
         // Update distribution timestamp
         ctx.accounts.bonding_curve_vault.last_fee_distribution = now;
 
@@ -1084,6 +1176,8 @@ pub mod token_launch {
             jackpot_share,
             legal_share,
             license_share,
+            holder_dividend_share,
+            creator_hold_bps,
             jackpot_expired,
         });
 
@@ -1127,6 +1221,34 @@ pub mod token_launch {
             winner: ctx.accounts.winner.key(),
             amount: payout,
         });
+
+        Ok(())
+    }
+
+    /// Drain accumulated holder dividend lamports to the platform wallet for off-chain distribution.
+    /// Only the platform authority can call this. The platform then distributes the SOL
+    /// to top-100 holders proportionally via the holderDividendCron.
+    pub fn drain_holder_dividend(ctx: Context<DrainHolderDividend>) -> Result<()> {
+        let rent_exempt_min: u64 = 890_880;
+        let vault_lamports = ctx.accounts.holder_dividend_vault.lamports();
+        let drainable = vault_lamports.saturating_sub(rent_exempt_min);
+        require!(drainable > 0, TokenLaunchError::ZeroAmount);
+
+        let mint_key = ctx.accounts.mint.key();
+        let bump     = ctx.bumps.holder_dividend_vault;
+        let seeds: &[&[u8]] = &[b"holder_dividend", mint_key.as_ref(), &[bump]];
+
+        system_program::transfer(
+            CpiContext::new_with_signer(
+                ctx.accounts.system_program.key(),
+                system_program::Transfer {
+                    from: ctx.accounts.holder_dividend_vault.to_account_info(),
+                    to:   ctx.accounts.platform_wallet.to_account_info(),
+                },
+                &[seeds],
+            ),
+            drainable,
+        )?;
 
         Ok(())
     }
@@ -1208,5 +1330,38 @@ impl BondingCurveVault {
     /// We check indirectly: if real_sol >= GRADUATION_LAMPORTS the token has graduated.
     pub fn slot_metadata_graduated(&self) -> bool {
         self.real_sol >= GRADUATION_LAMPORTS
+    }
+}
+
+/// Read the raw token amount from an SPL token account.
+/// Returns 0 if the account is uninitialized, closed, or malformed.
+/// SPL Token layout: mint (32) + owner (32) + amount (8) = bytes 64..72.
+fn read_token_balance(account: &UncheckedAccount) -> u64 {
+    let data = account.data.borrow();
+    if data.len() < 72 {
+        return 0;
+    }
+    u64::from_le_bytes(data[64..72].try_into().unwrap_or([0u8; 8]))
+}
+
+/// Compute creator revenue tier based on dev allocation hold ratio.
+/// Returns (effective_creator_bps, holder_dividend_bps, creator_hold_bps).
+fn compute_creator_tier(dev_buy_amount: u64, creator_token_account: &UncheckedAccount) -> (u64, u64, u64) {
+    if dev_buy_amount == 0 {
+        // No dev buy → no penalty applicable
+        return (CREATOR_SHARE_BPS, 0, 10_000);
+    }
+    let balance = read_token_balance(creator_token_account);
+    let hold_bps = ((balance as u128 * 10_000) / dev_buy_amount as u128).min(10_000) as u64;
+
+    if hold_bps >= CREATOR_HOLD_FULL_BPS {
+        // Holds ≥ 50% of allocation → full 25%
+        (CREATOR_SHARE_BPS, 0, hold_bps)
+    } else if balance > 0 {
+        // Holds 0–50% → penalized: 10% creator, 15% → holders
+        (CREATOR_PENALTY_BPS, CREATOR_SHARE_BPS - CREATOR_PENALTY_BPS, hold_bps)
+    } else {
+        // Fully sold → 0.5% creator, 24.5% → holders
+        (CREATOR_DUMPED_BPS, CREATOR_SHARE_BPS - CREATOR_DUMPED_BPS, 0)
     }
 }
