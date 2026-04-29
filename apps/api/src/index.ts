@@ -28,6 +28,7 @@ import {
 import { startDistributionCron, FEE_SPLIT } from "./distributionCron";
 import { startLpHarvestCron } from "./lpHarvestCron";
 import { startHolderDividendCron } from "./holderDividendCron";
+import { startCreatorHoldingCron } from "./creatorHoldingCron";
 import { getAllDividends, getDividend } from "./dividendStore";
 import { startMcapWatcher } from "./mcapWatcher";
 import { getSolUsdPrice, lamportsToUsdc, usdcToLamports } from "./pythPrice";
@@ -1217,6 +1218,7 @@ app.listen(config.port, () => {
   console.log(`[api] ReelBit API running on port ${config.port}`);
   loadTrades();
   startDistributionCron(connection);
+  startCreatorHoldingCron(connection);
   startLpHarvestCron(connection);
   startHolderDividendCron(connection);
   startMcapWatcher(connection);
