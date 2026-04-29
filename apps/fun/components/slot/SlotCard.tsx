@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { motion } from "framer-motion";
-import { TrendingUp, Zap, Clock } from "lucide-react";
+import { TrendingUp, Zap, Clock, AlertTriangle } from "lucide-react";
 import { cn, formatUsd, shortenAddress, graduationProgress } from "@/lib/utils";
 import type { SlotToken } from "@/types/slot";
 import { SLOT_MODELS } from "@/lib/constants";
@@ -97,7 +97,18 @@ export function SlotCard({ slot, solPrice = 150, index = 0 }: Props) {
               <TrendingUp size={11} style={{ color: "var(--brand-red)" }} />
               {formatUsd(slot.volume24h / solPrice, solPrice)} vol
             </span>
-            <span className="text-[10px] font-mono" style={{ color: "rgba(26,26,26,0.35)" }}>{shortenAddress(slot.creator)}</span>
+            {slot.creatorStatus && slot.creatorStatus !== "full" ? (
+              <span className="flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] font-orbitron font-bold"
+                style={{
+                  background: slot.creatorStatus === "dumped" ? "rgba(239,68,68,0.12)" : "rgba(234,179,8,0.12)",
+                  color:      slot.creatorStatus === "dumped" ? "#ef4444" : "#ca8a04",
+                }}>
+                <AlertTriangle size={8} />
+                {slot.creatorStatus === "dumped" ? "DUMPED" : `REV ${slot.creatorRevPct}%`}
+              </span>
+            ) : (
+              <span className="text-[10px] font-mono" style={{ color: "rgba(26,26,26,0.35)" }}>{shortenAddress(slot.creator)}</span>
+            )}
           </div>
         </div>
       </Link>

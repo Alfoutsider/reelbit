@@ -12,20 +12,23 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
 const PAGE_SIZE = 24;
 
 interface TokenListItem {
-  mint:         string;
-  name:         string;
-  symbol:       string;
-  model:        string;
-  image:        string;
-  graduated:    boolean;
-  devBuyPct:    number;
-  creator:      string;
-  mcapUsd:      number;
-  priceUsd:     number;
-  volume24h:    number;
-  progressPct:  number;
-  createdAt:    number;
-  trendingScore: number;
+  mint:             string;
+  name:             string;
+  symbol:           string;
+  model:            string;
+  image:            string;
+  graduated:        boolean;
+  devBuyPct:        number;
+  creator:          string;
+  mcapUsd:          number;
+  priceUsd:         number;
+  volume24h:        number;
+  progressPct:      number;
+  createdAt:        number;
+  trendingScore:    number;
+  creatorHoldRatio: number;
+  creatorStatus:    "full" | "penalized" | "dumped";
+  creatorRevPct:    number;
 }
 
 interface TokensResponse {
@@ -37,18 +40,20 @@ interface TokensResponse {
 
 function mapToken(t: TokenListItem): SlotToken {
   return {
-    mint:      t.mint,
-    name:      t.name,
-    ticker:    t.symbol,
-    imageUri:  t.image,
-    model:     t.model as SlotToken["model"],
-    creator:   t.creator,
-    graduated: t.graduated,
-    devBuyPct: t.devBuyPct,
-    mcapUsd:   t.mcapUsd,
-    priceUsd:  t.priceUsd,
-    volume24h: t.volume24h,
-    createdAt: t.createdAt,
+    mint:          t.mint,
+    name:          t.name,
+    ticker:        t.symbol,
+    imageUri:      t.image,
+    model:         t.model as SlotToken["model"],
+    creator:       t.creator,
+    graduated:     t.graduated,
+    devBuyPct:     t.devBuyPct,
+    mcapUsd:       t.mcapUsd,
+    priceUsd:      t.priceUsd,
+    volume24h:     t.volume24h,
+    createdAt:     t.createdAt,
+    creatorStatus: t.creatorStatus,
+    creatorRevPct: t.creatorRevPct,
   };
 }
 

@@ -28,8 +28,10 @@ import {
 } from "@solana/web3.js";
 import fs from "fs";
 import path from "path";
-import { getAllThemes } from "./themeStore";
+import { getAllThemes, setCreatorHoldRatio } from "./themeStore";
 import { config } from "./config";
+import { getCreatorRevTier } from "./creatorHoldingTracker";
+import { addDividend } from "./dividendStore";
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -194,10 +196,31 @@ export async function runDistributionRound(connection: Connection): Promise<void
 
       const jackpotExpired = (nowSecs - Number(vaultState.launchedAt)) > (30 * 24 * 60 * 60);
       const feeTotal = feeInfo.lamports - 890_880; // minus rent-exempt floor
+
+      // Check creator holding ratio and route holder bonus if penalized
+      let tierLabel = "";
+      if (theme.creator && theme.devBuyPct) {
+        try {
+          const tier = await getCreatorRevTier(theme.creator, theme.mint, theme.devBuyPct, connection);
+          setCreatorHoldRatio(theme.mint, tier.holdRatio);
+
+          if (tier.holderBonusPct > 0 && feeTotal > 0) {
+            const holderBonus = Math.floor(feeTotal * tier.holderBonusPct);
+            if (holderBonus > 0) {
+              await addDividend(theme.mint, holderBonus);
+              tierLabel = ` [creator ${tier.label}: +${(tier.holderBonusPct * 100).toFixed(1)}% → holders (${(holderBonus / 1e9).toFixed(4)} SOL)]`;
+            }
+          }
+        } catch {
+          // Non-fatal — skip penalty check for this round
+        }
+      }
+
       console.log(
         `[dist] ${theme.tokenSymbol} (${theme.mint.slice(0, 8)}) — ` +
         `${(feeTotal / 1e9).toFixed(4)} SOL distributed` +
-        (jackpotExpired ? " [jackpot → platform: 30d expired]" : ""),
+        (jackpotExpired ? " [jackpot → platform: 30d expired]" : "") +
+        tierLabel,
       );
     } catch (err) {
       console.error(`[dist] Error distributing fees for ${theme.mint.slice(0, 8)}:`, (err as Error).message);

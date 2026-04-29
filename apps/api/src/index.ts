@@ -5,7 +5,7 @@ import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { config } from "./config";
 import { extractTokenLaunchEvents } from "./decoder";
 import { handleGraduation } from "./migration";
-import { getAllThemes, getTheme, getGraduatedThemes, getThemesByCreator, setTheme, deriveColors, markGraduated, assignRtp } from "./themeStore";
+import { getAllThemes, getTheme, getGraduatedThemes, getThemesByCreator, setTheme, deriveColors, markGraduated, assignRtp, setCreatorHoldRatio } from "./themeStore";
 import type { SlotModel } from "./themeStore";
 import { apply as demoApply, approve as demoApprove, deny as demoDeny, getApplication, getAllApplications, isDemoUser, DEMO_CREDIT_USDC } from "./demoStore";
 import { getFakeActivity, tickFakeBots } from "./fakeBots";
@@ -36,6 +36,7 @@ import { USDC_UNIT, applyWelcomeBonus, recordWagering, getBalance } from "./bala
 import { recordTrade, getTradesForMint, getGlobalFeed, getVolume24h, getGlobalVolume24h, loadTrades } from "./tradeStore";
 import { getComments, addComment, likeComment } from "./commentStore";
 import { addSSEClient, broadcast } from "./sseEmitter";
+import { getCreatorRevTier, computeRevTier } from "./creatorHoldingTracker";
 
 const app = express();
 
@@ -785,23 +786,29 @@ app.get("/tokens", (req: Request, res: Response) => {
     const recencyBonus = Math.max(0, 1 - ageHours / 72) * 10_000;
     const trendingScore = vol24h * 0.6 + progressPct * 400 * 0.3 + recencyBonus * 0.1;
 
+    const holdRatio  = t.creatorHoldRatio ?? 1;
+    const revTier    = computeRevTier(holdRatio);
+
     return {
-      mint:          t.mint,
-      name:          t.tokenName,
-      symbol:        t.tokenSymbol,
-      model:         t.slotModel,
-      image:         t.heroImageUrl ?? "",
-      graduated:     t.graduated,
-      devBuyPct:     t.devBuyPct ?? 0,
-      creator:       t.creator ?? "",
-      mcapUsd:       latest?.mcapUsd  ?? 0,
-      priceUsd:      latest?.priceUsd ?? 0,
-      volume24h:     vol24h,
+      mint:             t.mint,
+      name:             t.tokenName,
+      symbol:           t.tokenSymbol,
+      model:            t.slotModel,
+      image:            t.heroImageUrl ?? "",
+      graduated:        t.graduated,
+      devBuyPct:        t.devBuyPct ?? 0,
+      creator:          t.creator ?? "",
+      mcapUsd:          latest?.mcapUsd  ?? 0,
+      priceUsd:         latest?.priceUsd ?? 0,
+      volume24h:        vol24h,
       progressPct,
-      createdAt:     t.updatedAt,
+      createdAt:        t.updatedAt,
       trendingScore,
-      metadataUri:   `${config.serverBaseUrl}/metadata/${t.mint}`,
-      program:       config.tokenLaunchProgramId,
+      creatorHoldRatio: holdRatio,
+      creatorStatus:    revTier.label,
+      creatorRevPct:    Math.round(revTier.creatorPct * 100),
+      metadataUri:      `${config.serverBaseUrl}/metadata/${t.mint}`,
+      program:          config.tokenLaunchProgramId,
     };
   });
 
@@ -837,6 +844,17 @@ app.get("/tokens/:mint", async (req: Request, res: Response) => {
   const vt = curve?.virtualTokens ?? BigInt("1073000191000000");
   const rs = curve?.realSol      ?? 0n;
 
+  // Creator hold ratio: use cached value if checked within last 30 min; otherwise fetch live
+  const HOLD_CACHE_TTL = 30 * 60 * 1_000;
+  let creatorTier = computeRevTier(theme.creatorHoldRatio ?? 1);
+  const cacheAge = Date.now() - (theme.creatorHoldCheckedAt ?? 0);
+  if (theme.creator && theme.devBuyPct && cacheAge > HOLD_CACHE_TTL) {
+    // Fire-and-forget refresh — respond immediately with cached data
+    getCreatorRevTier(theme.creator, mintStr, theme.devBuyPct, connection).then((t) => {
+      setCreatorHoldRatio(mintStr, t.holdRatio);
+    }).catch(() => {});
+  }
+
   res.json({
     mint:           mintStr,
     name:           theme.tokenName,
@@ -848,6 +866,14 @@ app.get("/tokens/:mint", async (req: Request, res: Response) => {
     devBuyPct:      theme.devBuyPct ?? 0,
     metadataUri:    `${config.serverBaseUrl}/metadata/${mintStr}`,
     program:        config.tokenLaunchProgramId,
+    creator: {
+      wallet:         theme.creator ?? null,
+      holdRatio:      creatorTier.holdRatio,
+      holdPct:        Math.round(creatorTier.holdRatio * 100),
+      revenuePct:     Math.round(creatorTier.creatorPct * 100),
+      holderBonusPct: Math.round(creatorTier.holderBonusPct * 100),
+      status:         creatorTier.label,
+    },
     bondingCurve: curve ? {
       creator:       curve.creator.toBase58(),
       virtualSol:    curve.virtualSol.toString(),

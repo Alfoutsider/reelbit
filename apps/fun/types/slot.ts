@@ -1,5 +1,7 @@
 export type SlotModel = "Classic3Reel" | "Standard5Reel" | "FiveReelFreeSpins";
 
+export type CreatorStatus = "full" | "penalized" | "dumped";
+
 export interface SlotToken {
   mint: string;
   name: string;
@@ -13,6 +15,8 @@ export interface SlotToken {
   priceUsd: number;
   volume24h: number;
   createdAt: number;
+  creatorStatus?: CreatorStatus;
+  creatorRevPct?: number;
 }
 
 export interface TradeEvent {

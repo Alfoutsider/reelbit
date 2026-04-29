@@ -12,7 +12,9 @@ export interface SlotTheme {
   creator?: string;      // wallet that launched this slot (set during register)
   poolAddress?: string; // Meteora DLMM LB pair address (set after graduation migration)
   devBuyPct?: number;  // % of supply creator bought at launch (0 or absent = no dev buy)
-  rtp?: number;        // assigned RTP at graduation (0–1), e.g. 0.956 = 95.6%
+  rtp?: number;              // assigned RTP at graduation (0–1), e.g. 0.956 = 95.6%
+  creatorHoldRatio?: number; // 0–1: fraction of original dev allocation still held
+  creatorHoldCheckedAt?: number; // ms timestamp of last on-chain balance check
   status: "generating" | "ready" | "failed";
   heroImageUrl: string | null;
   bgImageUrl: string | null;
@@ -102,6 +104,15 @@ export function setTheme(theme: SlotTheme): void {
   const store = readStore();
   store[theme.mint] = theme;
   writeStore(store);
+}
+
+export function setCreatorHoldRatio(mint: string, ratio: number): void {
+  const store = readStore();
+  if (store[mint]) {
+    store[mint].creatorHoldRatio      = ratio;
+    store[mint].creatorHoldCheckedAt  = Date.now();
+    writeStore(store);
+  }
 }
 
 /** Deterministic HSL → hex color from a symbol string */
