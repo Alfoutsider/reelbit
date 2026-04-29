@@ -786,8 +786,9 @@ app.get("/tokens", (req: Request, res: Response) => {
     const recencyBonus = Math.max(0, 1 - ageHours / 72) * 10_000;
     const trendingScore = vol24h * 0.6 + progressPct * 400 * 0.3 + recencyBonus * 0.1;
 
-    const holdRatio  = t.creatorHoldRatio ?? 1;
-    const revTier    = computeRevTier(holdRatio);
+    const holdRatio    = t.creatorHoldRatio ?? 1;
+    const hasMinDevBuy = t.devHasMinBuy ?? false;
+    const revTier      = computeRevTier(holdRatio, hasMinDevBuy);
 
     return {
       mint:             t.mint,
@@ -804,9 +805,10 @@ app.get("/tokens", (req: Request, res: Response) => {
       progressPct,
       createdAt:        t.updatedAt,
       trendingScore,
-      creatorHoldRatio: holdRatio,
-      creatorStatus:    revTier.label,
-      creatorRevPct:    Math.round(revTier.creatorPct * 100),
+      creatorHoldRatio:  holdRatio,
+      creatorStatus:     revTier.label,
+      creatorRevPct:     Math.round(revTier.creatorPct * 100),
+      creatorHasMinBuy:  hasMinDevBuy,
       metadataUri:      `${config.serverBaseUrl}/metadata/${t.mint}`,
       program:          config.tokenLaunchProgramId,
     };
@@ -844,13 +846,13 @@ app.get("/tokens/:mint", async (req: Request, res: Response) => {
   const vt = curve?.virtualTokens ?? BigInt("1073000191000000");
   const rs = curve?.realSol      ?? 0n;
 
-  // Creator hold ratio: use cached value if checked within last 30 min; otherwise fetch live
-  const HOLD_CACHE_TTL = 30 * 60 * 1_000;
-  let creatorTier = computeRevTier(theme.creatorHoldRatio ?? 1);
-  const cacheAge = Date.now() - (theme.creatorHoldCheckedAt ?? 0);
+  // Creator tier: use cached value; fire-and-forget refresh if stale
+  const HOLD_CACHE_TTL  = 30 * 60 * 1_000;
+  const hasMinDevBuy    = theme.devHasMinBuy ?? false;
+  let creatorTier       = computeRevTier(theme.creatorHoldRatio ?? 1, hasMinDevBuy);
+  const cacheAge        = Date.now() - (theme.creatorHoldCheckedAt ?? 0);
   if (theme.creator && theme.devBuyPct && cacheAge > HOLD_CACHE_TTL) {
-    // Fire-and-forget refresh — respond immediately with cached data
-    getCreatorRevTier(theme.creator, mintStr, theme.devBuyPct, connection).then((t) => {
+    getCreatorRevTier(theme.creator, mintStr, theme.devBuyPct, hasMinDevBuy, connection).then((t) => {
       setCreatorHoldRatio(mintStr, t.holdRatio);
     }).catch(() => {});
   }
@@ -868,6 +870,7 @@ app.get("/tokens/:mint", async (req: Request, res: Response) => {
     program:        config.tokenLaunchProgramId,
     creator: {
       wallet:         theme.creator ?? null,
+      hasMinDevBuy,
       holdRatio:      creatorTier.holdRatio,
       holdPct:        Math.round(creatorTier.holdRatio * 100),
       revenuePct:     Math.round(creatorTier.creatorPct * 100),

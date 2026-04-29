@@ -32,7 +32,7 @@ import {
 import { getAssociatedTokenAddressSync } from "@solana/spl-token";
 import fs from "fs";
 import path from "path";
-import { getAllThemes, setCreatorHoldRatio } from "./themeStore";
+import { getAllThemes, setCreatorHoldRatio, setCreatorDevBuyInfo } from "./themeStore";
 import { config } from "./config";
 import { getCreatorRevTier } from "./creatorHoldingTracker";
 import { addDividend } from "./dividendStore";
@@ -82,7 +82,7 @@ function loadKeypair(envKey: string, fallback: string): Keypair {
 
 // ── BondingCurveVault parser ──────────────────────────────────────────────────
 // Layout: 8 disc + 32 mint + 32 creator + 8 vSol + 8 vTokens + 8 rSol + 8 rTokens
-//       + 8 launchedAt + 8 lastFeeDist + 8 totalFees + 8 devBuyAmount + 1 bump = 137
+//       + 8 launchedAt + 8 lastFeeDist + 8 totalFees + 8 devBuyAmount + 8 devBuySol + 1 bump = 145
 
 interface VaultState {
   creator:             PublicKey;
@@ -90,23 +90,25 @@ interface VaultState {
   lastFeeDistribution: bigint;
   realSol:             bigint;
   devBuyAmount:        bigint;
+  devBuySol:           bigint;
 }
 
 const BONDING_CURVE_DISCRIMINATOR = Buffer.from([252, 234, 66, 111, 20, 145, 209, 189]);
 
 function parseBondingCurveVault(data: Buffer): VaultState | null {
-  if (data.length < 137) return null;
+  if (data.length < 145) return null;
   if (!data.subarray(0, 8).equals(BONDING_CURVE_DISCRIMINATOR)) return null;
   // offset 8: mint (32), offset 40: creator (32)
   const creator             = new PublicKey(data.subarray(40, 72));
   // offset 72: virtual_sol(8), 80: virtual_tokens(8), 88: real_sol(8)
   // offset 96: real_tokens(8), 104: launched_at(8), 112: last_fee_dist(8)
-  // offset 120: total_fees(8), 128: dev_buy_amount(8), 136: bump(1)
+  // offset 120: total_fees(8), 128: dev_buy_amount(8), 136: dev_buy_sol(8), 144: bump(1)
   const realSol             = data.readBigUInt64LE(88);
   const launchedAt          = data.readBigInt64LE(104);
   const lastFeeDistribution = data.readBigInt64LE(112);
   const devBuyAmount        = data.readBigUInt64LE(128);
-  return { creator, launchedAt, lastFeeDistribution, realSol, devBuyAmount };
+  const devBuySol           = data.readBigUInt64LE(136);
+  return { creator, launchedAt, lastFeeDistribution, realSol, devBuyAmount, devBuySol };
 }
 
 // ── Instruction builders ──────────────────────────────────────────────────────
@@ -232,9 +234,11 @@ export async function runDistributionRound(connection: Connection): Promise<void
       const jackpotExpired = (nowSecs - Number(vaultState.launchedAt)) > (30 * 24 * 60 * 60);
       const feeTotal = feeInfo.lamports - 890_880;
 
-      // Update cached hold ratio from on-chain data
+      // Update cached creator status from on-chain data
+      const devHasMinBuy = vaultState.devBuySol >= BigInt(200_000_000);
+      setCreatorDevBuyInfo(theme.mint, devHasMinBuy);
       if (theme.creator && theme.devBuyPct) {
-        getCreatorRevTier(theme.creator, theme.mint, theme.devBuyPct, connection)
+        getCreatorRevTier(theme.creator, theme.mint, theme.devBuyPct, devHasMinBuy, connection)
           .then((t) => setCreatorHoldRatio(theme.mint, t.holdRatio))
           .catch(() => {});
       }

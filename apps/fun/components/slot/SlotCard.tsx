@@ -100,11 +100,17 @@ export function SlotCard({ slot, solPrice = 150, index = 0 }: Props) {
             {slot.creatorStatus && slot.creatorStatus !== "full" ? (
               <span className="flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] font-orbitron font-bold"
                 style={{
-                  background: slot.creatorStatus === "dumped" ? "rgba(239,68,68,0.12)" : "rgba(234,179,8,0.12)",
-                  color:      slot.creatorStatus === "dumped" ? "#ef4444" : "#ca8a04",
+                  background: slot.creatorStatus === "dumped"   ? "rgba(239,68,68,0.12)"
+                            : slot.creatorStatus === "no-skin"  ? "rgba(107,114,128,0.12)"
+                            : "rgba(234,179,8,0.12)",
+                  color:      slot.creatorStatus === "dumped"   ? "#ef4444"
+                            : slot.creatorStatus === "no-skin"  ? "#9ca3af"
+                            : "#ca8a04",
                 }}>
                 <AlertTriangle size={8} />
-                {slot.creatorStatus === "dumped" ? "DUMPED" : `REV ${slot.creatorRevPct}%`}
+                {slot.creatorStatus === "dumped"  ? "DUMPED"
+                : slot.creatorStatus === "no-skin" ? "NO BUY"
+                : `REV ${slot.creatorRevPct}%`}
               </span>
             ) : (
               <span className="text-[10px] font-mono" style={{ color: "rgba(26,26,26,0.35)" }}>{shortenAddress(slot.creator)}</span>

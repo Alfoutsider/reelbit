@@ -1,6 +1,6 @@
 export type SlotModel = "Classic3Reel" | "Standard5Reel" | "FiveReelFreeSpins";
 
-export type CreatorStatus = "full" | "penalized" | "dumped";
+export type CreatorStatus = "full" | "no-skin" | "penalized" | "dumped";
 
 export interface SlotToken {
   mint: string;

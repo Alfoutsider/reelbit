@@ -1,72 +1,80 @@
 /**
- * Tracks how much of their original dev allocation the creator still holds,
- * and maps that to a revenue tier.
+ * Tracks creator loyalty tier for UI display and casino GGR distribution.
  *
- * Tiers (step function):
- *   holdRatio ≥ 0.50  →  creator 25%,  holders +0%    (full)
- *   0 < holdRatio < 0.50  →  creator 10%,  holders +15%   (penalized)
- *   holdRatio = 0     →  creator  0.5%, holders +24.5% (dumped)
+ * Mirrors the on-chain compute_creator_tier() logic in token-launch/src/lib.rs.
  *
- * The holder bonus is routed to the dividend pool so it gets paid out to
- * top-100 holders on the next holderDividendCron run.
+ * Tiers:
+ *   devBuySol < 0.2 SOL (200_000_000 lamports) → 15% forever (no skin)
+ *   devBuySol >= 0.2 SOL AND:
+ *     holdRatio >= 0.50 → 25% (full)
+ *     0 < holdRatio < 0.50 → 15% (penalized — same as no skin)
+ *     holdRatio = 0 (fully sold) → 0.5% (dumped)
+ *
+ * Difference from 25% always routes to holder dividend pool.
  */
 
 import { Connection, PublicKey } from "@solana/web3.js";
 
-// 1 billion tokens × 10^6 (6 decimals)
+const MIN_DEV_BUY_LAMPORTS = 200_000_000; // 0.2 SOL
 const TOTAL_SUPPLY = BigInt(1_000_000_000) * BigInt(1_000_000);
+
+export type CreatorTierLabel = "full" | "no-skin" | "penalized" | "dumped";
 
 export interface CreatorRevTier {
   holdRatio:      number; // 0–1
-  creatorPct:     number; // fraction of total fees that goes to creator
-  holderBonusPct: number; // fraction that goes to holder dividend pool instead
-  label:          "full" | "penalized" | "dumped";
+  creatorPct:     number; // fraction of total fees going to creator (0.005 | 0.15 | 0.25)
+  holderBonusPct: number; // fraction going to holder dividend pool instead
+  label:          CreatorTierLabel;
+  hasMinDevBuy:   boolean;
 }
 
-export function computeRevTier(holdRatio: number): CreatorRevTier {
+export function computeRevTier(holdRatio: number, hasMinDevBuy: boolean): CreatorRevTier {
+  if (!hasMinDevBuy) {
+    return { holdRatio, creatorPct: 0.15, holderBonusPct: 0.10, label: "no-skin",   hasMinDevBuy: false };
+  }
   if (holdRatio >= 0.5) {
-    return { holdRatio, creatorPct: 0.25,  holderBonusPct: 0,     label: "full"      };
+    return { holdRatio, creatorPct: 0.25, holderBonusPct: 0,    label: "full",      hasMinDevBuy: true  };
   }
   if (holdRatio > 0) {
-    return { holdRatio, creatorPct: 0.10,  holderBonusPct: 0.15,  label: "penalized" };
+    return { holdRatio, creatorPct: 0.15, holderBonusPct: 0.10, label: "penalized", hasMinDevBuy: true  };
   }
-  return   { holdRatio, creatorPct: 0.005, holderBonusPct: 0.245, label: "dumped"    };
+  return   { holdRatio, creatorPct: 0.005, holderBonusPct: 0.245, label: "dumped",  hasMinDevBuy: true  };
 }
 
 /**
- * Fetches the creator's current token balance on-chain and returns their
- * revenue tier. Falls back to "full" on RPC errors (benefit of the doubt).
+ * Fetches creator's on-chain token balance and returns their current revenue tier.
+ * Falls back to "no-skin / 15%" on RPC errors.
  */
 export async function getCreatorRevTier(
   creatorWallet: string,
   mint:          string,
   devBuyPct:     number,
+  hasMinDevBuy:  boolean,
   connection:    Connection,
 ): Promise<CreatorRevTier> {
-  // If no dev buy, creator never had an allocation — always full
+  if (!hasMinDevBuy) {
+    return computeRevTier(0, false);
+  }
+
   if (!devBuyPct || devBuyPct <= 0) {
-    return { holdRatio: 1, creatorPct: 0.25, holderBonusPct: 0, label: "full" };
+    return computeRevTier(1, true); // bought ≥ 0.2 SOL but devBuyPct unknown → assume full
   }
 
   const originalAlloc = (TOTAL_SUPPLY * BigInt(Math.round(devBuyPct * 1_000))) / BigInt(100_000);
-  if (originalAlloc === 0n) {
-    return { holdRatio: 1, creatorPct: 0.25, holderBonusPct: 0, label: "full" };
-  }
+  if (originalAlloc === 0n) return computeRevTier(1, true);
 
   try {
     const creatorPk = new PublicKey(creatorWallet);
     const mintPk    = new PublicKey(mint);
-
-    const accounts = await connection.getParsedTokenAccountsByOwner(creatorPk, { mint: mintPk });
-    const balance  = accounts.value.reduce((sum, acc) => {
+    const accounts  = await connection.getParsedTokenAccountsByOwner(creatorPk, { mint: mintPk });
+    const balance   = accounts.value.reduce((sum, acc) => {
       const raw = acc.account.data.parsed?.info?.tokenAmount?.amount ?? "0";
       return sum + BigInt(raw);
     }, 0n);
 
-    // holdRatio capped at 1.0 (in case of rebases or rounding)
     const holdRatio = Math.min(1, Number((balance * 10_000n) / originalAlloc) / 10_000);
-    return computeRevTier(holdRatio);
+    return computeRevTier(holdRatio, true);
   } catch {
-    return { holdRatio: 1, creatorPct: 0.25, holderBonusPct: 0, label: "full" };
+    return computeRevTier(1, true);
   }
 }

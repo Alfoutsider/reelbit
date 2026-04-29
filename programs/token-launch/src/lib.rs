@@ -71,13 +71,19 @@ const JACKPOT_EXPIRY_SECS:    i64 = 30 * 24 * 60 * 60; // 30 days
 const DISTRIBUTION_INTERVAL:  i64 = 30 * 60;            // 30 minutes minimum between claims
 const MIN_DISTRIBUTION_LAMPORTS: u64 = 50_000_000;      // 0.05 SOL minimum to distribute
 
-// Creator loyalty penalty thresholds (hold ratio expressed in basis points of original alloc)
-//   hold_bps >= 5_000 (≥ 50% held) → full 25% creator share
-//   0 < hold_bps < 5_000          → 10% creator, 15% → holder_dividend_vault
-//   hold_bps = 0 (fully sold)     →  0.5% creator, 24.5% → holder_dividend_vault
-const CREATOR_HOLD_FULL_BPS: u64 = 5_000;
-const CREATOR_PENALTY_BPS:   u64 = 1_000; // 10%
-const CREATOR_DUMPED_BPS:    u64 =    50; // 0.5%
+// Creator revenue tiers — determined by dev buy commitment + hold ratio:
+//
+//   dev_buy_sol < MIN_DEV_BUY           → 15% forever ("no skin")
+//   dev_buy_sol >= MIN_DEV_BUY AND:
+//     hold_bps >= CREATOR_HOLD_FULL_BPS → 25% ("full")
+//     0 < hold_bps < CREATOR_HOLD_FULL  → 15% ("penalized — same as no skin")
+//     hold_bps = 0 (fully sold)         →  0.5% ("dumped")
+//
+//   In all non-full cases the difference from 25% routes to holder_dividend_vault.
+const MIN_DEV_BUY_LAMPORTS:  u64 = 200_000_000; // 0.2 SOL minimum to unlock 25% tier
+const CREATOR_HOLD_FULL_BPS: u64 = 5_000;        // must hold ≥ 50% of allocation
+const CREATOR_NO_SKIN_BPS:   u64 = 1_500;         // 15% — no buy or sold > 50%
+const CREATOR_DUMPED_BPS:    u64 =    50;          // 0.5% — sold entire allocation
 
 /// Progressive fee rate based on how close the token is to graduation.
 fn fee_bps(real_sol: u64) -> u64 {
@@ -143,12 +149,13 @@ pub struct BondingCurveVault {
     pub launched_at:           i64, // unix timestamp of launch
     pub last_fee_distribution: i64, // unix timestamp of last claim_fees call
     pub total_fees_accumulated: u64, // lifetime total fees sent to fee_vault
-    pub dev_buy_amount:        u64, // total tokens ever bought by creator (penalty baseline)
+    pub dev_buy_amount:        u64, // total tokens ever bought by creator (hold ratio baseline)
+    pub dev_buy_sol:           u64, // total SOL (lamports) spent by creator buying own token
     pub bump:                  u8,
 }
 
 impl BondingCurveVault {
-    const LEN: usize = 8 + 32 + 32 + 8 + 8 + 8 + 8 + 8 + 8 + 8 + 8 + 1;
+    const LEN: usize = 8 + 32 + 32 + 8 + 8 + 8 + 8 + 8 + 8 + 8 + 8 + 8 + 1;
 
     pub fn tokens_for_sol(&self, sol_in: u64) -> u64 {
         let num = (self.virtual_tokens as u128) * (sol_in as u128);
@@ -788,6 +795,8 @@ pub mod token_launch {
         v.launched_at           = now;
         v.last_fee_distribution = now;
         v.total_fees_accumulated = 0;
+        v.dev_buy_amount        = 0;
+        v.dev_buy_sol           = 0;
         v.bump                  = vault_bump;
 
         // Mint curve supply into vault token account
@@ -922,10 +931,12 @@ pub mod token_launch {
         cap.tokens_held += tokens_out;
         cap.bump        = ctx.bumps.wallet_cap;
 
-        // Track creator's cumulative purchases as penalty baseline
+        // Track creator's cumulative purchases — used for penalty tier calculation
         if ctx.accounts.buyer.key() == ctx.accounts.bonding_curve_vault.creator {
             ctx.accounts.bonding_curve_vault.dev_buy_amount =
                 ctx.accounts.bonding_curve_vault.dev_buy_amount.saturating_add(tokens_out);
+            ctx.accounts.bonding_curve_vault.dev_buy_sol =
+                ctx.accounts.bonding_curve_vault.dev_buy_sol.saturating_add(sol_amount);
         }
 
         let new_real_sol    = vault.real_sol;
@@ -1047,10 +1058,11 @@ pub mod token_launch {
         let jackpot_expired = !ctx.accounts.bonding_curve_vault.slot_metadata_graduated()
             && (now - vault.launched_at) > JACKPOT_EXPIRY_SECS;
 
-        // Compute creator's effective revenue share based on dev allocation hold ratio
-        let dev_buy = ctx.accounts.bonding_curve_vault.dev_buy_amount;
+        // Compute creator's effective revenue share based on dev buy commitment + hold ratio
+        let dev_buy     = ctx.accounts.bonding_curve_vault.dev_buy_amount;
+        let dev_buy_sol = ctx.accounts.bonding_curve_vault.dev_buy_sol;
         let (effective_creator_bps, holder_dividend_bps, creator_hold_bps) =
-            compute_creator_tier(dev_buy, &ctx.accounts.creator_token_account);
+            compute_creator_tier(dev_buy, dev_buy_sol, &ctx.accounts.creator_token_account);
 
         let creator_share         = split_fee(distributable, effective_creator_bps);
         let holder_dividend_share = split_fee(distributable, holder_dividend_bps);
@@ -1344,24 +1356,43 @@ fn read_token_balance(account: &UncheckedAccount) -> u64 {
     u64::from_le_bytes(data[64..72].try_into().unwrap_or([0u8; 8]))
 }
 
-/// Compute creator revenue tier based on dev allocation hold ratio.
+/// Compute creator revenue tier.
 /// Returns (effective_creator_bps, holder_dividend_bps, creator_hold_bps).
-fn compute_creator_tier(dev_buy_amount: u64, creator_token_account: &UncheckedAccount) -> (u64, u64, u64) {
-    if dev_buy_amount == 0 {
-        // No dev buy → no penalty applicable
-        return (CREATOR_SHARE_BPS, 0, 10_000);
+///
+/// Tier logic:
+///   dev_buy_sol < 0.2 SOL               → 15% forever (no skin in game)
+///   dev_buy_sol ≥ 0.2 SOL AND:
+///     holds ≥ 50% of dev_buy_amount     → 25% (full reward)
+///     holds 0–50%                        → 15% (penalized, same as no skin)
+///     holds 0% (fully sold)             → 0.5% (dumped)
+///
+///   In all non-full cases: (CREATOR_SHARE_BPS - effective) → holder_dividend_vault
+fn compute_creator_tier(
+    dev_buy_amount: u64,
+    dev_buy_sol:    u64,
+    creator_token_account: &UncheckedAccount,
+) -> (u64, u64, u64) {
+    // No skin in the game — never committed ≥ 0.2 SOL
+    if dev_buy_sol < MIN_DEV_BUY_LAMPORTS {
+        return (CREATOR_NO_SKIN_BPS, CREATOR_SHARE_BPS - CREATOR_NO_SKIN_BPS, 10_000);
     }
-    let balance = read_token_balance(creator_token_account);
-    let hold_bps = ((balance as u128 * 10_000) / dev_buy_amount as u128).min(10_000) as u64;
+
+    // Has skin: check current hold ratio vs original allocation
+    let balance  = read_token_balance(creator_token_account);
+    let hold_bps = if dev_buy_amount == 0 {
+        0u64
+    } else {
+        ((balance as u128 * 10_000) / dev_buy_amount as u128).min(10_000) as u64
+    };
 
     if hold_bps >= CREATOR_HOLD_FULL_BPS {
-        // Holds ≥ 50% of allocation → full 25%
+        // Holds ≥ 50% → full 25%
         (CREATOR_SHARE_BPS, 0, hold_bps)
     } else if balance > 0 {
-        // Holds 0–50% → penalized: 10% creator, 15% → holders
-        (CREATOR_PENALTY_BPS, CREATOR_SHARE_BPS - CREATOR_PENALTY_BPS, hold_bps)
+        // Holds 0–50% → 15% (same result as never buying)
+        (CREATOR_NO_SKIN_BPS, CREATOR_SHARE_BPS - CREATOR_NO_SKIN_BPS, hold_bps)
     } else {
-        // Fully sold → 0.5% creator, 24.5% → holders
+        // Fully dumped → 0.5%
         (CREATOR_DUMPED_BPS, CREATOR_SHARE_BPS - CREATOR_DUMPED_BPS, 0)
     }
 }
