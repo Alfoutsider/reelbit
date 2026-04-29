@@ -38,6 +38,11 @@ import { recordTrade, getTradesForMint, getGlobalFeed, getVolume24h, getGlobalVo
 import { getComments, addComment, likeComment } from "./commentStore";
 import { addSSEClient, broadcast } from "./sseEmitter";
 import { getCreatorRevTier, computeRevTier } from "./creatorHoldingTracker";
+import {
+  getOrCreateCode, registerReferral, getReferrerStats, getLeaderboard,
+  onTrade as referralOnTrade, onTokenLaunch as referralOnLaunch, onGraduation as referralOnGraduation,
+  POINT_VALUES, TIER_THRESHOLDS,
+} from "./referralService";
 
 const app = express();
 
@@ -346,6 +351,8 @@ app.post("/themes/register", (req: Request, res: Response) => {
     updatedAt: Date.now(),
   };
   setTheme(theme);
+  // Referral: token_launch points for the creator's referrer (fire-and-forget)
+  if (creator) referralOnLaunch(creator, mint).catch(() => {});
   res.status(201).json(theme);
 });
 
@@ -663,6 +670,10 @@ app.post("/webhooks/helius", async (req: Request, res: Response) => {
               recordTrade(tradeEvent);
               broadcast("trade", tradeEvent, mint);
               broadcast("trade", tradeEvent, null);
+              // Referral: award points to referrer of this buyer (fire-and-forget)
+              referralOnTrade(
+                tradeEvent.wallet, mint, tradeEvent.solAmount, payload.signature,
+              ).catch(() => {});
             }
           }
         } catch {}
@@ -676,6 +687,10 @@ app.post("/webhooks/helius", async (req: Request, res: Response) => {
         assignRtp(events.graduated.mint, model);
 
         await handleGraduation(events.graduated, connection);
+        // Referral: graduation bonus for the creator's referrer
+        referralOnGraduation(
+          events.graduated.creator, events.graduated.mint,
+        ).catch(() => {});
         triggerThemeGeneration(
           events.graduated.mint,
           events.graduated.mint.slice(0, 8),
@@ -1205,6 +1220,69 @@ app.get("/dividends/:mint", async (req: Request, res: Response) => {
   const entry = await getDividend(req.params.mint);
   if (!entry) return res.status(404).json({ error: "No dividend record for this mint" });
   res.json({ mint: req.params.mint, ...entry });
+});
+
+// ── Referral program ──────────────────────────────────────────────────────────
+
+/** GET /referral/code/:wallet — get or create referral code for a wallet */
+app.get("/referral/code/:wallet", async (req: Request, res: Response) => {
+  const { wallet } = req.params;
+  if (!wallet || wallet.length < 32) return res.status(400).json({ error: "invalid wallet" });
+  try {
+    const code = await getOrCreateCode(wallet);
+    res.json({ wallet, code, link: `${config.funUrl}/r/${code}` });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+/** POST /referral/register — register referee → referrer relationship */
+app.post("/referral/register", async (req: Request, res: Response) => {
+  const { referee, code, source = "launchpad" } = req.body as {
+    referee?: string; code?: string; source?: string;
+  };
+  if (!referee || !code) return res.status(400).json({ error: "referee and code required" });
+  if (!["launchpad", "casino"].includes(source))
+    return res.status(400).json({ error: "source must be launchpad or casino" });
+
+  const ip = ((req.headers["x-forwarded-for"] as string) ?? "").split(",")[0].trim()
+    || req.ip || "unknown";
+
+  const result = await registerReferral(referee, code, source as "launchpad" | "casino", ip);
+  if (!result.ok) {
+    // already_referred is a silent no-op from the frontend perspective
+    if (result.error === "already_referred" || result.error === "self_referral")
+      return res.json({ ok: false, reason: result.error });
+    return res.status(400).json({ ok: false, reason: result.error });
+  }
+  res.json({ ok: true });
+});
+
+/** GET /referral/stats/:wallet — personal stats for a wallet */
+app.get("/referral/stats/:wallet", async (req: Request, res: Response) => {
+  const { wallet } = req.params;
+  if (!wallet || wallet.length < 32) return res.status(400).json({ error: "invalid wallet" });
+  try {
+    const stats = await getReferrerStats(wallet);
+    res.json(stats);
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+/** GET /referral/leaderboard?limit=50 */
+app.get("/referral/leaderboard", async (req: Request, res: Response) => {
+  const limit = Math.min(100, Math.max(10, parseInt(req.query.limit as string) || 50));
+  try {
+    res.json(await getLeaderboard(limit));
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+/** GET /referral/meta — public: point values + tier thresholds (for frontend display) */
+app.get("/referral/meta", (_req: Request, res: Response) => {
+  res.json({ pointValues: POINT_VALUES, tiers: TIER_THRESHOLDS });
 });
 
 // ── Error handler ─────────────────────────────────────────────────────────────

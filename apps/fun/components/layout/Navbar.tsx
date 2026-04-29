@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { usePrivy, useWallets } from "@/lib/privy";
-import { Wallet, ExternalLink, Zap, BarChart2 } from "lucide-react";
+import { Wallet, ExternalLink, Zap, BarChart2, Gift } from "lucide-react";
 import { RegisterModal } from "@/components/auth/RegisterModal";
 import type { UserProfile } from "@/components/auth/RegisterModal";
 import { UserModal } from "@/components/auth/UserModal";
@@ -22,6 +22,24 @@ export function Navbar() {
   const [profileLoading, setProfileLoading] = useState(false);
   const [showRegister, setShowRegister]   = useState(false);
   const [showUser, setShowUser]           = useState(false);
+
+  // One-shot: register referral cookie when wallet first connects
+  useEffect(() => {
+    if (!authenticated || !address) return;
+    const match = document.cookie.match(/(?:^|;\s*)rb_ref=([^;]+)/);
+    const code  = match?.[1];
+    if (!code) return;
+    fetch(`${API}/referral/register`, {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ referee: address, code, source: "launchpad" }),
+    })
+      .then(() => {
+        // Clear cookie regardless — even if already_referred, we don't want to retry forever
+        document.cookie = "rb_ref=; max-age=0; path=/";
+      })
+      .catch(() => {});
+  }, [authenticated, address]);
 
   // Fetch profile whenever wallet changes; auto-open register for new users
   useEffect(() => {
@@ -50,8 +68,9 @@ export function Navbar() {
   }
 
   const navLinks = [
-    { href: "/",            label: "Explore" },
-    { href: "/launch",      label: "Launch"  },
+    { href: "/",          label: "Explore" },
+    { href: "/launch",    label: "Launch"  },
+    { href: "/referral",  label: "Referral", icon: Gift },
   ];
 
   return (
@@ -72,9 +91,10 @@ export function Navbar() {
 
           {/* Nav links */}
           <div className="hidden md:flex items-center gap-1">
-            {navLinks.map(({ href, label }) => (
+            {navLinks.map(({ href, label, icon: Icon }) => (
               <Link key={href} href={href}
-                className="px-4 py-2 rounded-lg text-sm font-semibold text-white/50 hover:text-white hover:bg-white/5 transition-all font-rajdhani">
+                className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold text-white/50 hover:text-white hover:bg-white/5 transition-all font-rajdhani">
+                {Icon && <Icon size={13} className="opacity-70" />}
                 {label}
               </Link>
             ))}
