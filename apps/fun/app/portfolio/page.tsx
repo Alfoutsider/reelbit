@@ -5,7 +5,7 @@ import { motion } from "framer-motion";
 import { usePrivy, useWallets } from "@/lib/privy";
 import { ArrowLeft, Wallet, TrendingUp, Zap, BarChart2, ExternalLink } from "lucide-react";
 import Link from "next/link";
-import { cn, shortenAddress } from "@/lib/utils";
+import { shortenAddress } from "@/lib/utils";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
 

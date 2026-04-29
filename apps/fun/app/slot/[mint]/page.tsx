@@ -2,7 +2,15 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, ExternalLink, Copy, Zap, TrendingUp, BarChart2, RefreshCw, Twitter, MessageSquare, Users, Heart, Send } from "lucide-react";
+import { ArrowLeft, ExternalLink, Copy, Zap, TrendingUp, BarChart2, RefreshCw, MessageSquare, Users, Heart, Send } from "lucide-react";
+
+function XLogo({ size = 10 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.73-8.835L1.254 2.25H8.08l4.253 5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+    </svg>
+  );
+}
 import Link from "next/link";
 import { usePrivy, useWallets } from "@/lib/privy";
 import { BuySellPanel } from "@/components/slot/BuySellPanel";
@@ -14,7 +22,6 @@ import type { SlotToken, TradeEvent } from "@/types/slot";
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
 const POLL_INTERVAL_MS  = 12_000;
 const CHART_POLL_MS     = 15_000;
-const TRADES_POLL_MS    = 10_000;
 const COMMENTS_POLL_MS  = 15_000;
 
 interface Comment {
@@ -354,7 +361,7 @@ export default function SlotPage({ params }: { params: { mint: string } }) {
                       href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(`Just launched ${slot.name} ($${slot.ticker}) — a slot machine token on @ReelBitFun 🎰\n\nPlay it at reelbit.fun/slot/${mint}`)}`}
                       target="_blank" rel="noopener noreferrer"
                       className="flex items-center gap-1 hover:text-sky-400 transition-colors">
-                      <Twitter size={10} /> Share
+                      <XLogo size={10} /> Share
                     </a>
                   </div>
                 </div>
