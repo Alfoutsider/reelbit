@@ -4,12 +4,27 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { usePrivy, useWallets } from "@/lib/privy";
-import { Wallet, ExternalLink, Zap, BarChart2, Gift } from "lucide-react";
+import { Wallet, ExternalLink, Zap, BarChart2, Gift, Sun, Moon } from "lucide-react";
 import { RegisterModal } from "@/components/auth/RegisterModal";
 import type { UserProfile } from "@/components/auth/RegisterModal";
 import { UserModal } from "@/components/auth/UserModal";
+import { useTheme } from "@/components/layout/ThemeProvider";
+import { LanguageSelector } from "@/components/layout/LanguageSelector";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+
+function ThemeToggle() {
+  const { theme, toggle } = useTheme();
+  return (
+    <button
+      onClick={toggle}
+      className="w-8 h-8 rounded-lg flex items-center justify-center text-white/35 hover:text-white/70 hover:bg-white/5 transition-all"
+      aria-label="Toggle theme"
+    >
+      {theme === "dark" ? <Sun size={14} /> : <Moon size={14} />}
+    </button>
+  );
+}
 
 export function Navbar() {
   const { ready, authenticated, user, login, logout } = usePrivy();
@@ -114,8 +129,11 @@ export function Navbar() {
           </div>
 
           {/* Auth area */}
-          <div className="flex items-center gap-2">
-            {!ready || profileLoading ? (
+          <div className="flex items-center gap-1">
+            <LanguageSelector />
+            <ThemeToggle />
+              <div className="w-px h-5 bg-white/10 mx-1" />
+          {!ready || profileLoading ? (
               <div className="w-8 h-8 rounded-full border border-white/10 animate-pulse bg-white/5" />
             ) : authenticated && profile ? (
               /* ── Logged-in + registered: avatar button ── */

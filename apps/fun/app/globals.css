@@ -366,3 +366,95 @@ select.input-casino {
   color-scheme: dark;
 }
 select.input-casino option { background: var(--bg-dark); color: var(--brand-cream); }
+
+/* ─── Light mode ─────────────────────────────────────────────── */
+html.light {
+  color-scheme: light;
+}
+.light body,
+.light .casino-bg {
+  background: #f2f2f8 !important;
+  color: #1a1a2e !important;
+}
+.light .orb {
+  opacity: 0.06 !important;
+  filter: saturate(0.4);
+}
+.light .nav-border {
+  background: rgba(255,255,255,0.96) !important;
+  border-color: rgba(0,0,0,0.07) !important;
+  box-shadow: 0 1px 0 rgba(0,0,0,0.05) !important;
+}
+.light .card-slot {
+  background: #ffffff !important;
+  border-color: rgba(0,0,0,0.06) !important;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.06) !important;
+}
+.light .card-slot:hover {
+  border-color: rgba(196,30,30,0.25) !important;
+  box-shadow: 0 8px 32px rgba(196,30,30,0.08), 0 0 0 1px rgba(196,30,30,0.1) !important;
+}
+.light .stat-box {
+  background: rgba(0,0,0,0.03) !important;
+  border-color: rgba(0,0,0,0.07) !important;
+}
+.light .stat-box .label { color: rgba(0,0,0,0.35) !important; }
+.light .stat-box .value { color: #1a1a2e !important; }
+.light footer { background: rgba(240,240,248,0.9) !important; border-color: rgba(0,0,0,0.07) !important; }
+.light .grid-overlay { opacity: 0.4; filter: invert(1); }
+::-webkit-scrollbar-thumb { background: rgba(196,30,30,0.3); }
+
+/* ─── Google Translate widget — hide the toolbar banner ─────── */
+.goog-te-banner-frame,
+.goog-te-balloon-frame { display: none !important; }
+body.translated-ltr,
+body.translated-rtl { margin-top: 0 !important; }
+.skiptranslate { display: none !important; }
+
+/* ─── Legal page prose ───────────────────────────────────────── */
+.prose-legal h2 {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  color: rgba(255,255,255,0.8);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+  margin-top: 32px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.prose-legal h3 {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.5);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+  margin-top: 18px;
+}
+.prose-legal ul {
+  list-style: none;
+  padding: 0;
+  space-y: 6px;
+}
+.prose-legal ul li {
+  padding: 5px 0 5px 18px;
+  position: relative;
+  color: rgba(255,255,255,0.6);
+}
+.prose-legal ul li::before {
+  content: '›';
+  position: absolute;
+  left: 0;
+  color: rgba(196,30,30,0.7);
+  font-weight: bold;
+}
+.prose-legal strong { color: rgba(255,255,255,0.75); font-weight: 600; }
+.prose-legal table { border-color: rgba(255,255,255,0.08); }
+.light .prose-legal h2 { color: rgba(20,20,40,0.8); border-color: rgba(0,0,0,0.08); }
+.light .prose-legal h3 { color: rgba(20,20,40,0.5); }
+.light .prose-legal ul li { color: rgba(20,20,40,0.65); }
+.light .prose-legal strong { color: rgba(20,20,40,0.8); }
+.light .prose-legal { color: rgba(20,20,40,0.65) !important; }

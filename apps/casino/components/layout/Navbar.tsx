@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import { Wallet, LogOut, Zap, User, Gamepad2, TrendingUp } from "lucide-react";
+import { Wallet, LogOut, Zap, User, Gamepad2, TrendingUp, Sun, Moon } from "lucide-react";
 import { AnimatePresence } from "framer-motion";
 
 import { usePrivy, useWallets } from "@/lib/privy";
@@ -14,6 +14,18 @@ import { fetchBalance, formatUsdc } from "@/lib/balanceClient";
 import { fetchProfile, type UserProfile } from "@/lib/profileClient";
 import { shortenAddress } from "@/lib/utils";
 import { getDemoSession, exitDemo, type DemoSession } from "@/lib/demoSession";
+import { useTheme } from "@/components/layout/ThemeProvider";
+import { LanguageSelector } from "@/components/layout/LanguageSelector";
+
+function ThemeToggle() {
+  const { theme, toggle } = useTheme();
+  return (
+    <button onClick={toggle} aria-label="Toggle theme"
+      className="w-8 h-8 rounded-lg flex items-center justify-center text-white/30 hover:text-white/60 hover:bg-white/5 transition-all">
+      {theme === "dark" ? <Sun size={13} /> : <Moon size={13} />}
+    </button>
+  );
+}
 
 export function Navbar() {
   const router = useRouter();
@@ -80,13 +92,16 @@ export function Navbar() {
           </Link>
 
           {/* Right */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             <Link href="/calculator" className="hidden sm:flex items-center gap-1 text-[#d4a017]/40 hover:text-[#d4a017]/70 text-[10px] font-orbitron tracking-wider transition-colors">
               <TrendingUp size={10} /> CALCULATOR
             </Link>
             <div className="hidden sm:flex items-center gap-1 text-green-400/50 text-[10px] font-orbitron tracking-wider">
               <Zap size={10} /> UP TO 98% RTP
             </div>
+            <LanguageSelector />
+            <ThemeToggle />
+            <div className="w-px h-5 bg-white/10" />
 
             {demoSession ? (
               /* ── Demo mode ── */
