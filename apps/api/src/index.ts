@@ -41,6 +41,7 @@ import { getCreatorRevTier, computeRevTier } from "./creatorHoldingTracker";
 import {
   getOrCreateCode, registerReferral, getReferrerStats, getLeaderboard,
   onTrade as referralOnTrade, onTokenLaunch as referralOnLaunch, onGraduation as referralOnGraduation,
+  onCasinoBet as referralOnCasinoBet,
   POINT_VALUES, TIER_THRESHOLDS,
 } from "./referralService";
 
@@ -522,6 +523,8 @@ app.post("/internal/debit", requireInternal, async (req: Request, res: Response)
   try {
     const entry = await debit(wallet, usdcUnits);
     await recordWagering(wallet, usdcUnits); // track toward bonus wagering requirement
+    // Referral: casino first-spin + wagering points (fire-and-forget)
+    referralOnCasinoBet(wallet, usdcUnits).catch(() => {});
     res.json({ balance: entry.playable, bonus: entry.bonus });
   } catch (err) {
     res.status(402).json({ error: (err as Error).message });

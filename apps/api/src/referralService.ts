@@ -399,19 +399,60 @@ export async function onGraduation(creator: string, mint: string): Promise<void>
   }
 }
 
-/** Casino hook — first spin by a referred user. */
-export async function onCasinoFirstSpin(player: string): Promise<void> {
+/**
+ * Casino hook — called on every spin debit.
+ * Awards first_spin (150 pts) once, then 50 pts per 100 USDC wagered (capped 1,500 pts).
+ * usdcUnits uses the same unit as balanceStore: 1 USDC = 1_000_000 units.
+ */
+export async function onCasinoBet(player: string, usdcUnits: number): Promise<void> {
   try {
     const ref = await getReferral(player);
     if (!ref || ref.status === "flagged") return;
 
     if (ref.status === "pending") await activateReferral(ref.referrer_wallet, player);
-    if (await hasEvent(ref.referrer_wallet, player, "casino_first_spin")) return;
 
-    await insertEvent(ref.referrer_wallet, player, "casino_first_spin",
-      POINTS.casino_first_spin, "casino", {});
+    // ── First spin bonus ──────────────────────────────────────────────────────
+    if (!await hasEvent(ref.referrer_wallet, player, "casino_first_spin")) {
+      await insertEvent(ref.referrer_wallet, player, "casino_first_spin",
+        POINTS.casino_first_spin, "casino", {});
+    }
+
+    // ── Wagering points: 50 pts per 100 USDC, max 30 events (1,500 pts) ─────
+    const THRESHOLD = 100 * 1_000_000; // 100 USDC in micro-USDC
+    const MAX_WAGER_EVENTS = 30;        // cap at 1,500 pts total from wagering
+
+    // Count events already awarded
+    const { data: prevEvents } = await supabase
+      .from("referral_events")
+      .select("metadata")
+      .eq("referrer_wallet", ref.referrer_wallet)
+      .eq("referee_wallet", player)
+      .eq("event_type", "casino_wager_100");
+
+    const eventsAwarded = (prevEvents ?? []).length;
+    if (eventsAwarded >= MAX_WAGER_EVENTS) return;
+
+    // Sum total wagered so far from event metadata
+    const prevWagered = (prevEvents ?? []).reduce(
+      (s: number, e: { metadata: Record<string, unknown> }) =>
+        s + ((e.metadata?.usdcUnits as number) ?? 0),
+      0,
+    );
+
+    const newTotal      = prevWagered + usdcUnits;
+    const shouldHave    = Math.min(MAX_WAGER_EVENTS, Math.floor(newTotal / THRESHOLD));
+    const newEvents     = shouldHave - eventsAwarded;
+
+    if (newEvents > 0) {
+      await insertEvent(
+        ref.referrer_wallet, player,
+        "casino_wager_100", newEvents * POINTS.casino_per_100usdc,
+        "casino",
+        { usdcUnits, totalWagered: newTotal, eventsAwarded: shouldHave },
+      );
+    }
   } catch (err) {
-    console.error("[referral] onCasinoFirstSpin error:", err);
+    console.error("[referral] onCasinoBet error:", err);
   }
 }
 
