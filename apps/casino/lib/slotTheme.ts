@@ -1,3 +1,13 @@
+export interface CustomAssets {
+  themeDescription: string;
+  palette: { primary: string; accent: string; bg: string };
+  symbols: Record<string, string>;
+  sourceImageUrl: string;
+  bgImageUrl: string;
+  bgPrompt: string;
+  generatedAt: number;
+}
+
 export interface SlotTheme {
   mint: string;
   tokenName: string;
@@ -7,6 +17,7 @@ export interface SlotTheme {
   bgImageUrl: string | null;
   primaryColor: string;
   accentColor: string;
+  customAssets?: CustomAssets;
   updatedAt: number;
 }
 

@@ -5,8 +5,9 @@ import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { config } from "./config";
 import { extractTokenLaunchEvents } from "./decoder";
 import { handleGraduation } from "./migration";
-import { getAllThemes, getTheme, getGraduatedThemes, getThemesByCreator, setTheme, deriveColors, markGraduated, assignRtp, setCreatorHoldRatio } from "./themeStore";
+import { getAllThemes, getTheme, getGraduatedThemes, getThemesByCreator, setTheme, deriveColors, markGraduated, assignRtp, setCreatorHoldRatio, setCustomAssets } from "./themeStore";
 import type { SlotModel } from "./themeStore";
+import { analyzeImage } from "./aiStudio";
 import { apply as demoApply, approve as demoApprove, deny as demoDeny, getApplication, getAllApplications, isDemoUser, DEMO_CREDIT_USDC } from "./demoStore";
 import { getFakeActivity, tickFakeBots } from "./fakeBots";
 import { appendPricePoint, getPriceHistory } from "./priceHistoryStore";
@@ -196,6 +197,76 @@ app.post("/themes/trigger", async (req: Request, res: Response) => {
   }
   res.json({ status: "generating" });
   triggerThemeGeneration(mint, tokenName, tokenSymbol, false).catch(console.error);
+});
+
+// ── AI Slot Studio ────────────────────────────────────────────────────────────
+
+/** POST /studio/analyze — upload image, Claude vision → SVG symbols + palette */
+app.post("/studio/analyze", async (req: Request, res: Response) => {
+  const { base64, ext, mint } = req.body as { base64: string; ext: string; mint: string };
+  if (!base64 || !ext || !mint) return res.status(400).json({ error: "base64, ext, and mint required" });
+  if (base64.length > 10_000_000) return res.status(413).json({ error: "Image too large (max ~7.5 MB)" });
+  const safeExt = ["jpg", "jpeg", "png", "gif", "webp"].includes(ext.toLowerCase()) ? ext.toLowerCase() : "jpg";
+
+  if (!config.anthropicApiKey) return res.status(503).json({ error: "AI Studio not configured" });
+
+  const theme = getTheme(mint);
+  if (!theme) return res.status(404).json({ error: "Slot not found" });
+
+  try {
+    const analysis = await analyzeImage(base64, safeExt, mint);
+    res.json(analysis);
+  } catch (err) {
+    console.error("[studio] analyze error:", err);
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+/** POST /studio/apply — save custom assets to theme */
+app.post("/studio/apply", (req: Request, res: Response) => {
+  const { mint, themeDescription, palette, symbols, sourceImageUrl, bgImageUrl, bgPrompt } =
+    req.body as {
+      mint: string;
+      themeDescription: string;
+      palette: { primary: string; accent: string; bg: string };
+      symbols: Record<string, string>;
+      sourceImageUrl: string;
+      bgImageUrl: string;
+      bgPrompt: string;
+    };
+
+  if (!mint || !symbols) return res.status(400).json({ error: "mint and symbols required" });
+
+  const theme = getTheme(mint);
+  if (!theme) return res.status(404).json({ error: "Slot not found" });
+
+  setCustomAssets(mint, {
+    themeDescription: themeDescription ?? "",
+    palette: palette ?? { primary: "#d4a017", accent: "#8b5cf6", bg: "#06060f" },
+    symbols,
+    sourceImageUrl: sourceImageUrl ?? "",
+    bgImageUrl: bgImageUrl ?? "",
+    bgPrompt: bgPrompt ?? "",
+    generatedAt: Date.now(),
+  });
+
+  res.json({ ok: true, theme: getTheme(mint) });
+});
+
+/** DELETE /studio/reset/:mint — remove custom assets, restore default theme */
+app.delete("/studio/reset/:mint", (req: Request, res: Response) => {
+  const theme = getTheme(req.params.mint);
+  if (!theme) return res.status(404).json({ error: "Slot not found" });
+  setCustomAssets(req.params.mint, {
+    themeDescription: "",
+    palette: { primary: "#d4a017", accent: "#8b5cf6", bg: "#06060f" },
+    symbols: {},
+    sourceImageUrl: "",
+    bgImageUrl: "",
+    bgPrompt: "",
+    generatedAt: 0,
+  });
+  res.json({ ok: true });
 });
 
 // ── Profile endpoints ─────────────────────────────────────────────────────────

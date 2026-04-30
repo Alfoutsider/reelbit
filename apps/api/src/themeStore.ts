@@ -3,6 +3,16 @@ import path from "path";
 
 export type SlotModel = "Classic3Reel" | "Standard5Reel" | "FiveReelFreeSpins";
 
+export interface CustomAssets {
+  themeDescription: string;
+  palette: { primary: string; accent: string; bg: string };
+  symbols: Record<string, string>; // symbolId → SVG string
+  sourceImageUrl: string;
+  bgImageUrl: string;
+  bgPrompt: string;
+  generatedAt: number;
+}
+
 export interface SlotTheme {
   mint: string;
   tokenName: string;
@@ -21,6 +31,7 @@ export interface SlotTheme {
   bgImageUrl: string | null;
   primaryColor: string;
   accentColor: string;
+  customAssets?: CustomAssets; // AI-generated custom slot skin
   updatedAt: number;
 }
 
@@ -112,6 +123,15 @@ export function setCreatorHoldRatio(mint: string, ratio: number): void {
   if (store[mint]) {
     store[mint].creatorHoldRatio     = ratio;
     store[mint].creatorHoldCheckedAt = Date.now();
+    writeStore(store);
+  }
+}
+
+export function setCustomAssets(mint: string, assets: CustomAssets): void {
+  const store = readStore();
+  if (store[mint]) {
+    store[mint].customAssets = assets;
+    store[mint].updatedAt = Date.now();
     writeStore(store);
   }
 }

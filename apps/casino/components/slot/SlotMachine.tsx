@@ -13,6 +13,7 @@ interface Props {
   isSpinning: boolean;
   onSpinComplete?: () => void;
   theme?: SlotTheme | null;
+  customSymbols?: Record<string, string>;
 }
 
 const REEL_COUNT_MAP = { Classic3Reel: 3, Standard5Reel: 5, FiveReelFreeSpins: 5 };
@@ -71,9 +72,10 @@ interface ReelProps {
   stopDelay: number;
   winCells: Set<string>;
   onStop: () => void;
+  customSymbols?: Record<string, string>;
 }
 
-function Reel({ reelIndex, symbols, spinning, stopDelay, winCells, onStop }: ReelProps) {
+function Reel({ reelIndex, symbols, spinning, stopDelay, winCells, onStop, customSymbols }: ReelProps) {
   const [phase, setPhase] = useState<"idle" | "spinning" | "stopping" | "settled">("idle");
   const phaseRef = useRef(phase);
   phaseRef.current = phase;
@@ -113,7 +115,7 @@ function Reel({ reelIndex, symbols, spinning, stopDelay, winCells, onStop }: Ree
           >
             {spinStrip.map((sym, i) => (
               <div key={i} style={{ width: SYMBOL_SIZE, height: SYMBOL_SIZE, flexShrink: 0 }}>
-                <SymbolSVG id={sym} size={SYMBOL_SIZE} />
+                <SymbolSVG id={sym} size={SYMBOL_SIZE} customSvg={customSymbols?.[sym]} />
               </div>
             ))}
           </motion.div>
@@ -132,7 +134,7 @@ function Reel({ reelIndex, symbols, spinning, stopDelay, winCells, onStop }: Ree
             style={{ position: "absolute", top: row * SYMBOL_SIZE, left: 0 }}
             className={isWin ? "symbol-win" : undefined}
           >
-            <SymbolSVG id={sym} size={SYMBOL_SIZE} highlighted={isWin} />
+            <SymbolSVG id={sym} size={SYMBOL_SIZE} highlighted={isWin} customSvg={customSymbols?.[sym]} />
 
             {/* Win glow border around winning cell */}
             {isWin && (
@@ -207,7 +209,7 @@ function WinLineDisplay({ result }: { result: SpinResult }) {
 
 // ── SlotMachine ───────────────────────────────────────────────────────────────
 
-export function SlotMachine({ model, spinResult, isSpinning, onSpinComplete, theme }: Props) {
+export function SlotMachine({ model, spinResult, isSpinning, onSpinComplete, theme, customSymbols }: Props) {
   const primary    = theme?.primaryColor ?? "#d4a017";
   const accent     = theme?.accentColor  ?? "#8b5cf6";
   const reelCount  = REEL_COUNT_MAP[model];
@@ -308,15 +310,15 @@ export function SlotMachine({ model, spinResult, isSpinning, onSpinComplete, the
           padding: "18px 36px",
         }}
       >
-        {/* Subtle BG image */}
-        {theme?.bgImageUrl && (
+        {/* Subtle BG image — prefer custom, fall back to generated */}
+        {(customSymbols ? theme?.customAssets?.bgImageUrl : theme?.bgImageUrl) && (
           <div
             className="absolute inset-0 pointer-events-none"
             style={{
-              backgroundImage: `url(${theme.bgImageUrl})`,
+              backgroundImage: `url(${customSymbols ? theme?.customAssets?.bgImageUrl : theme?.bgImageUrl})`,
               backgroundSize: "cover",
               backgroundPosition: "center",
-              opacity: 0.1,
+              opacity: 0.15,
               filter: "blur(2px)",
             }}
           />
@@ -353,6 +355,7 @@ export function SlotMachine({ model, spinResult, isSpinning, onSpinComplete, the
               stopDelay={stopDelay(r)}
               winCells={winCells}
               onStop={handleReelStop}
+              customSymbols={customSymbols}
             />
           ))}
         </div>

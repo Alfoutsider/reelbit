@@ -5,9 +5,21 @@ interface Props {
   id: SymbolId;
   size?: number;
   highlighted?: boolean;
+  customSvg?: string;
 }
 
-export function SymbolSVG({ id, size = 100, highlighted = false }: Props) {
+export function SymbolSVG({ id, size = 100, highlighted = false, customSvg }: Props) {
+  if (customSvg) {
+    const filter = highlighted
+      ? "drop-shadow(0 0 10px rgba(255,215,0,1)) drop-shadow(0 0 20px rgba(255,215,0,0.7))"
+      : "drop-shadow(0 2px 4px rgba(0,0,0,0.6))";
+    return (
+      <div
+        style={{ width: size, height: size, filter, flexShrink: 0 }}
+        dangerouslySetInnerHTML={{ __html: customSvg }}
+      />
+    );
+  }
   // useId gives a unique per-instance prefix, preventing gradient ID collisions
   // when the same symbol appears on multiple reels simultaneously
   const uid = useId().replace(/:/g, "");

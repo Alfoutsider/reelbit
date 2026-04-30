@@ -271,6 +271,12 @@ export default function CasinoSlotPage({ params }: { params: { mint: string } })
             <div className="flex items-center gap-1 text-green-400/70">
               <Shield size={11} /> PROVABLY FAIR
             </div>
+            {authenticated && !isDemo && (
+              <Link href={`/studio/${mint}`}
+                className="flex items-center gap-1 text-[#d4a017]/40 hover:text-[#d4a017]/70 transition-colors font-orbitron tracking-wider text-[10px]">
+                <Zap size={10} /> AI STUDIO
+              </Link>
+            )}
             {isLoggedIn && (
               <button
                 onClick={() => !isDemo && setWalletOpen(true)}
@@ -351,6 +357,8 @@ export default function CasinoSlotPage({ params }: { params: { mint: string } })
               spinResult={spinResult}
               isSpinning={isSpinning}
               onSpinComplete={handleSpinComplete}
+              theme={theme}
+              customSymbols={theme?.customAssets?.symbols && Object.keys(theme.customAssets.symbols).length > 0 ? theme.customAssets.symbols : undefined}
             />
 
             {error && (

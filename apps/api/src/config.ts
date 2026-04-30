@@ -38,4 +38,5 @@ export const config = {
   frontendUrl:         process.env.FRONTEND_URL ?? "http://localhost:3002",
   supabaseUrl:         process.env.SUPABASE_URL ?? "",
   supabaseKey:         process.env.SUPABASE_KEY ?? "",
+  anthropicApiKey:     process.env.ANTHROPIC_API_KEY ?? "",
 };
