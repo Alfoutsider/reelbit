@@ -11,7 +11,7 @@ import { apply as demoApply, approve as demoApprove, deny as demoDeny, getApplic
 import { getFakeActivity, tickFakeBots } from "./fakeBots";
 import { appendPricePoint, getPriceHistory } from "./priceHistoryStore";
 import { triggerThemeGeneration } from "./slotTheme";
-import { getPlayable, credit, debit, transfer, isSeenDeposit, markDepositSeen } from "./balanceStore";
+import { getPlayable, credit, debit, transfer, isSeenDeposit, markDepositSeen, forfeitBonus, getBonusStatus } from "./balanceStore";
 import { getHouseKeypair, getHouseWalletAddress, sendSol, verifyDepositTx } from "./houseWallet";
 import { getProfile, createProfile, updateProfile, getProfileByUserId, savePfpFile } from "./profileStore";
 import type { HeliusWebhookPayload } from "./types";
@@ -378,6 +378,35 @@ app.get("/balance/:wallet", async (req: Request, res: Response) => {
   res.json({ wallet: req.params.wallet, ...entry });
 });
 
+/**
+ * GET /bonus/status/:wallet
+ * Returns the current welcome bonus state, wagering progress, and expiry.
+ */
+app.get("/bonus/status/:wallet", async (req: Request, res: Response) => {
+  try {
+    const status = await getBonusStatus(req.params.wallet);
+    res.json({ wallet: req.params.wallet, ...status });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+/**
+ * POST /bonus/forfeit
+ * Body: { wallet }
+ * Allows the player to voluntarily burn their active bonus so they can withdraw.
+ */
+app.post("/bonus/forfeit", async (req: Request, res: Response) => {
+  const { wallet } = req.body as { wallet: string };
+  if (!wallet) return res.status(400).json({ error: "wallet required" });
+  try {
+    const entry = await forfeitBonus(wallet);
+    res.json({ ok: true, playable: entry.playable, bonusState: entry.bonusState });
+  } catch (err) {
+    res.status(400).json({ error: (err as Error).message });
+  }
+});
+
 /** GET /sol-price — live SOL/USD from Pyth (used by wallet modal for conversion display) */
 app.get("/sol-price", async (_req: Request, res: Response) => {
   const price = await getSolUsdPrice(connection);
@@ -390,7 +419,7 @@ app.get("/sol-price", async (_req: Request, res: Response) => {
  * 1. Verifies the SOL transfer to house wallet
  * 2. Swaps SOL → USDC via Jupiter
  * 3. Credits USDC balance
- * 4. Applies welcome bonus on first deposit (100% match, max $200, 35× wagering)
+ * 4. Applies welcome bonus on first deposit (100% match, max $200, 45× wagering, 7-day expiry)
  */
 app.post("/deposit/confirm", async (req: Request, res: Response) => {
   const { txSignature, wallet } = req.body as { txSignature: string; wallet: string };
@@ -456,6 +485,15 @@ app.post("/withdraw", async (req: Request, res: Response) => {
   }
   if (await isDemoUser(wallet)) {
     return res.status(403).json({ error: "Demo balances cannot be withdrawn. Deposit real funds to unlock withdrawals." });
+  }
+  // Withdrawal gate — block while welcome bonus is active (anti-abuse)
+  const bonusStatus = await getBonusStatus(wallet);
+  if (bonusStatus.state === 'active') {
+    return res.status(403).json({
+      error:  "Withdrawal locked while welcome bonus is active.",
+      detail: `Complete your ${bonusStatus.wageringRemaining.toLocaleString()} μUSDC wagering requirement first, or forfeit the bonus via POST /bonus/forfeit.`,
+      bonus:  bonusStatus,
+    });
   }
   const to = wallet;
   try {
