@@ -4,21 +4,31 @@ const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
 
 export const USDC_UNIT = 1_000_000; // 1 USDC in micro-units
 
+export type BonusState = 'none' | 'active' | 'completed' | 'forfeited' | 'expired';
+
 export interface BalanceEntry {
   playable:            number;
   bonus:               number;
   wageringRequired:    number;
   wageringCompleted:   number;
   welcomeBonusClaimed: boolean;
+  bonusState:          BonusState;
+  bonusAmount:         number;
+  bonusExpiresAt:      string | null;
 }
 
 export function formatUsdc(usdcUnits: number): string {
   return `$${(usdcUnits / USDC_UNIT).toFixed(2)}`;
 }
 
+const EMPTY_BALANCE: BalanceEntry = {
+  playable: 0, bonus: 0, wageringRequired: 0, wageringCompleted: 0,
+  welcomeBonusClaimed: false, bonusState: 'none', bonusAmount: 0, bonusExpiresAt: null,
+};
+
 export async function fetchBalance(wallet: string): Promise<BalanceEntry> {
   const res = await fetch(`${API}/balance/${wallet}`);
-  if (!res.ok) return { playable: 0, bonus: 0, wageringRequired: 0, wageringCompleted: 0, welcomeBonusClaimed: false };
+  if (!res.ok) return EMPTY_BALANCE;
   return res.json();
 }
 

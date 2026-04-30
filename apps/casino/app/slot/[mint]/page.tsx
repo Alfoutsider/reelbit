@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { usePrivy, useWallets } from "@/lib/privy";
 import { Connection, PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
@@ -81,6 +81,11 @@ export default function CasinoSlotPage({ params }: { params: { mint: string } })
   const [walletOpen,     setWalletOpen]     = useState(false);
   const [jackpotLamports, setJackpotLamports] = useState(0);
   const [jackpotPrev,    setJackpotPrev]    = useState(0);
+  const [autoSpinRemaining, setAutoSpinRemaining] = useState(0);
+
+  const autoSpinStopRef = useRef(true);
+  // Always holds the latest handleSpin without stale closure issues
+  const handleSpinRef = useRef<() => Promise<void>>(async () => {});
 
   const wallet = wallets[0];
   const walletAddress = wallet?.address ?? "";
@@ -100,7 +105,7 @@ export default function CasinoSlotPage({ params }: { params: { mint: string } })
       const s = getDemoSession();
       if (s) {
         setDemoSession(s);
-        setBalance({ playable: s.balance, bonus: 0, wageringRequired: 0, wageringCompleted: 0, welcomeBonusClaimed: true });
+        setBalance({ playable: s.balance, bonus: 0, wageringRequired: 0, wageringCompleted: 0, welcomeBonusClaimed: true, bonusState: 'none', bonusAmount: 0, bonusExpiresAt: null });
       }
     };
     sync();
@@ -184,10 +189,50 @@ export default function CasinoSlotPage({ params }: { params: { mint: string } })
       const msg = e instanceof Error ? e.message : "Spin failed";
       setError(msg);
       setIsSpinning(false);
+      // Stop auto-spin on any error (e.g. insufficient balance)
+      autoSpinStopRef.current = true;
+      setAutoSpinRemaining(0);
       if (!isDemo && msg.toLowerCase().includes("insufficient")) setWalletOpen(true);
       throw e;
     }
   }, [isSpinning, isDemo, session, freeSpinsLeft, betUsdc, clientSeed, refreshBalance, theme]);
+
+  // Keep the ref updated so auto-spin loop always calls the latest version
+  useEffect(() => { handleSpinRef.current = handleSpin; }, [handleSpin]);
+
+  // Stop auto-spin on unmount
+  useEffect(() => () => { autoSpinStopRef.current = true; }, []);
+
+  const stopAutoSpin = useCallback(() => {
+    autoSpinStopRef.current = true;
+    setAutoSpinRemaining(0);
+  }, []);
+
+  const startAutoSpin = useCallback(async (totalCount: number) => {
+    if (!autoSpinStopRef.current) return; // already running
+    autoSpinStopRef.current = false;
+    let remaining = totalCount; // -1 = infinite
+    setAutoSpinRemaining(remaining);
+
+    while (!autoSpinStopRef.current) {
+      try {
+        await handleSpinRef.current();
+      } catch {
+        break; // stop on any spin error
+      }
+      if (autoSpinStopRef.current) break;
+      if (remaining > 0) {
+        remaining--;
+        setAutoSpinRemaining(remaining);
+        if (remaining === 0) break;
+      }
+      // Small pause between auto-spins
+      await new Promise<void>((r) => setTimeout(r, 500));
+    }
+
+    autoSpinStopRef.current = true;
+    setAutoSpinRemaining(0);
+  }, []);
 
   function handleSpinComplete() {
     setIsSpinning(false);
@@ -197,12 +242,14 @@ export default function CasinoSlotPage({ params }: { params: { mint: string } })
     function onKey(e: KeyboardEvent) {
       if (e.code === "Space" && !isSpinning && isLoggedIn) {
         e.preventDefault();
+        // Manual spin cancels auto-spin
+        if (autoSpinRemaining !== 0) { stopAutoSpin(); return; }
         handleSpin();
       }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [handleSpin, isSpinning, isLoggedIn]);
+  }, [handleSpin, isSpinning, isLoggedIn, autoSpinRemaining, stopAutoSpin]);
 
   const sessionRtp = totalWagered > 0 ? ((totalWon / totalWagered) * 100).toFixed(1) : "—";
   const slotName = theme?.tokenName ?? mint.slice(0, 8);
@@ -325,9 +372,15 @@ export default function CasinoSlotPage({ params }: { params: { mint: string } })
                 betUsdc={betUsdc}
                 onBetChange={setBetUsdc}
                 balance={balance?.playable ?? 0}
+                bonus={balance?.bonus}
+                wageringRequired={balance?.wageringRequired}
+                wageringCompleted={balance?.wageringCompleted}
                 isSpinning={isSpinning}
                 onSpin={handleSpin}
                 freeSpinsLeft={freeSpinsLeft}
+                autoSpinRemaining={autoSpinRemaining}
+                onStartAutoSpin={startAutoSpin}
+                onStopAutoSpin={stopAutoSpin}
               />
             ) : (
               <motion.button

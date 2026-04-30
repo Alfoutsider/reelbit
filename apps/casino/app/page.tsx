@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Search, Flame, Star, Trophy, Loader2, Zap, TrendingUp, User, Rocket } from "lucide-react";
+import { Search, Flame, Star, Trophy, Loader2, Zap, TrendingUp, User, Rocket, Gift, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { usePrivy, useWallets } from "@/lib/privy";
 import { cn } from "@/lib/utils";
@@ -51,9 +51,10 @@ const SAMPLE_WINS = [
   { wallet: "9xQ…Fin", sol: "2.1",  slot: "Dragon's Fortune", mult: 21  },
 ];
 
-type Tab      = "lobby" | "my-slots";
-type Filter   = "all" | "demo" | "graduated";
-type SortMode = "featured" | "new" | "name";
+type Tab       = "lobby" | "my-slots";
+type Filter    = "all" | "demo" | "graduated";
+type ModelFilter = "all" | "Classic3Reel" | "Standard5Reel" | "FiveReelFreeSpins";
+type SortMode  = "featured" | "new" | "name";
 
 // ── Live wins ticker ──────────────────────────────────────────────────────────
 
@@ -99,6 +100,7 @@ export default function CasinoLobby() {
   const [myLoading,     setMyLoading]     = useState(false);
   const [search,        setSearch]        = useState("");
   const [filter,        setFilter]        = useState<Filter>("all");
+  const [modelFilter,   setModelFilter]   = useState<ModelFilter>("all");
   const [sort,          setSort]          = useState<SortMode>("featured");
 
   // Detect demo session
@@ -149,14 +151,15 @@ export default function CasinoLobby() {
 
   const filtered = activeSlots
     .filter((s) => {
-      if (tab === "my-slots") return true; // no filter on My Slots
+      if (tab === "my-slots") return true;
       const q = search.toLowerCase();
       const matchSearch = s.tokenName.toLowerCase().includes(q) || s.tokenSymbol.toLowerCase().includes(q);
       const matchFilter =
         filter === "all" ||
         (filter === "demo" && s.isDemo) ||
         (filter === "graduated" && s.isGraduated);
-      return matchSearch && matchFilter;
+      const matchModel = modelFilter === "all" || s.slotModel === modelFilter;
+      return matchSearch && matchFilter && matchModel;
     })
     .sort((a, b) => {
       if (sort === "name") return a.tokenName.localeCompare(b.tokenName);
@@ -214,11 +217,46 @@ export default function CasinoLobby() {
 
       <div className="max-w-7xl mx-auto px-4 py-10 space-y-8">
 
+        {/* Welcome bonus banner — shown to unauthenticated non-demo users */}
+        {!authenticated && !isDemo && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="relative overflow-hidden rounded-2xl border border-purple-500/20 cursor-pointer group"
+            style={{ background: "linear-gradient(135deg, rgba(88,28,135,0.25) 0%, rgba(109,40,217,0.12) 50%, rgba(6,6,15,0.8) 100%)" }}
+          >
+            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_left,rgba(139,92,246,0.15),transparent_60%)]" />
+            <div className="relative flex items-center justify-between px-5 py-4">
+              <div className="flex items-center gap-4">
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "rgba(139,92,246,0.2)", border: "1px solid rgba(139,92,246,0.3)" }}>
+                  <Gift size={18} className="text-purple-400" />
+                </div>
+                <div>
+                  <p className="font-orbitron text-sm font-black text-white tracking-wide">
+                    100% Welcome Bonus <span className="text-purple-400">up to $200</span>
+                  </p>
+                  <p className="text-white/40 text-xs font-rajdhani mt-0.5">
+                    First deposit · 45× wagering · 7 days to complete
+                  </p>
+                </div>
+              </div>
+              <motion.button
+                whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
+                onClick={login}
+                className="flex items-center gap-1.5 rounded-xl px-4 py-2 text-[11px] font-orbitron font-bold flex-shrink-0"
+                style={{ background: "linear-gradient(135deg, #7c3aed, #6d28d9)", boxShadow: "0 0 20px rgba(139,92,246,0.35)" }}
+              >
+                CLAIM <ChevronRight size={11} />
+              </motion.button>
+            </div>
+          </motion.div>
+        )}
+
         {/* Hero */}
         <motion.div
           initial={{ opacity: 0, y: -16 }}
           animate={{ opacity: 1, y: 0 }}
-          className="text-center space-y-4 pt-4"
+          className="text-center space-y-4 pt-2"
         >
           <div className="inline-flex items-center gap-2 bg-green-500/8 border border-green-500/20 rounded-full px-4 py-1.5 mb-1">
             <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
@@ -234,20 +272,46 @@ export default function CasinoLobby() {
           </p>
 
           {/* Stats strip */}
-          <div className="flex items-center justify-center gap-8 pt-2">
+          <div className="flex items-center justify-center gap-6 sm:gap-10 pt-2 flex-wrap">
             {[
-              { label: "Live Slots",  value: loading ? "…" : String(allSlots.length) },
-              { label: "Graduated",   value: loading ? "…" : String(graduatedSlots.length) },
-              { label: "Max RTP",      value: "98%" },
-              { label: "House Edge",  value: "4%" },
-            ].map(({ label, value }) => (
+              { label: "Live Slots",   value: loading ? "…" : String(allSlots.length), color: "gold-text" },
+              { label: "Graduated",    value: loading ? "…" : String(graduatedSlots.length), color: "gold-text" },
+              { label: "Max RTP",      value: "98%",   color: "text-green-400" },
+              { label: "House Edge",   value: "4%",    color: "text-white/60" },
+              { label: "Auto Spin",    value: "✓",     color: "text-purple-400" },
+            ].map(({ label, value, color }) => (
               <div key={label} className="text-center">
-                <p className="font-orbitron text-xl font-black gold-text">{value}</p>
+                <p className={`font-orbitron text-xl font-black ${color}`}>{value}</p>
                 <p className="text-[9px] text-white/20 font-orbitron tracking-widest uppercase mt-0.5">{label}</p>
               </div>
             ))}
           </div>
         </motion.div>
+
+        {/* Model filter chips — lobby only */}
+        {tab === "lobby" && (
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-hide">
+            {([
+              { id: "all"               as ModelFilter, label: "All Games",   icon: "🎰" },
+              { id: "Classic3Reel"      as ModelFilter, label: "Classic 3-Reel", icon: "🍒" },
+              { id: "Standard5Reel"     as ModelFilter, label: "5-Reel",      icon: "💎" },
+              { id: "FiveReelFreeSpins" as ModelFilter, label: "Free Spins",  icon: "🔔" },
+            ]).map(({ id, label, icon }) => (
+              <button
+                key={id}
+                onClick={() => setModelFilter(id)}
+                className={cn(
+                  "flex items-center gap-1.5 rounded-full px-4 py-1.5 text-[11px] font-orbitron font-bold whitespace-nowrap transition-all flex-shrink-0",
+                  modelFilter === id
+                    ? "bg-gold/15 border border-gold/40 text-gold"
+                    : "bg-white/[0.04] border border-white/8 text-white/35 hover:text-white/60",
+                )}
+              >
+                <span>{icon}</span> {label}
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* My Slots tab content */}
         {tab === "my-slots" && (
@@ -444,12 +508,17 @@ export default function CasinoLobby() {
   );
 }
 
+// ── RTP map per model (displayed on cards) ───────────────────────────────────
+const MODEL_RTP: Record<string, string> = {
+  Classic3Reel: "96%", Standard5Reel: "97%", FiveReelFreeSpins: "98%",
+};
+
 // ── Slot Card ─────────────────────────────────────────────────────────────────
 
 function SlotCard({ slot, index }: { slot: SlotEntry; index: number }) {
-  const symbolFallback = slot.tokenSymbol.slice(0, 2).toUpperCase();
-  const modelColor     = MODEL_COLOR[slot.slotModel] ?? "#8b5cf6";
-  const isHot          = index < 2 && slot.isGraduated;
+  const modelColor = MODEL_COLOR[slot.slotModel] ?? "#8b5cf6";
+  const isHot      = index < 2 && slot.isGraduated;
+  const rtp        = MODEL_RTP[slot.slotModel] ?? "96%";
 
   return (
     <motion.div
@@ -480,6 +549,14 @@ function SlotCard({ slot, index }: { slot: SlotEntry; index: number }) {
               <PlaceholderArt slot={slot} />
             )}
 
+            {/* Hover play overlay */}
+            <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+              style={{ background: "rgba(0,0,0,0.45)" }}>
+              <div className="font-orbitron text-[11px] font-black text-white tracking-widest bg-white/15 backdrop-blur-sm rounded-xl px-5 py-2.5 border border-white/20">
+                PLAY NOW →
+              </div>
+            </div>
+
             {/* Badges */}
             <div className="absolute top-2.5 left-2.5 flex gap-1.5 flex-wrap">
               {slot.isGraduated && (
@@ -493,14 +570,12 @@ function SlotCard({ slot, index }: { slot: SlotEntry; index: number }) {
                 </span>
               )}
               {isHot && (
-                <span className="badge badge-hot text-[9px]">
-                  🔥 HOT
-                </span>
+                <span className="badge badge-hot text-[9px]">🔥 HOT</span>
               )}
             </div>
 
-            {/* Model badge */}
-            <div className="absolute top-2.5 right-2.5">
+            {/* Model + RTP */}
+            <div className="absolute top-2.5 right-2.5 flex flex-col items-end gap-1">
               <span
                 className="badge text-[9px]"
                 style={{ background: `${modelColor}18`, border: `1px solid ${modelColor}35`, color: modelColor }}
@@ -509,21 +584,33 @@ function SlotCard({ slot, index }: { slot: SlotEntry; index: number }) {
               </span>
             </div>
 
-            {/* Bottom gradient */}
+            {/* Bottom info strip */}
+            <div className="absolute bottom-0 inset-x-0 px-3 pb-2.5">
+              <div className="h-px bg-white/5 mb-2" />
+              <div className="flex items-center justify-between">
+                <span className="text-[9px] font-orbitron text-white/30 tracking-wider">RTP</span>
+                <span className="text-[9px] font-orbitron font-bold text-green-400/70">{rtp}</span>
+              </div>
+            </div>
+
             <div className="absolute bottom-0 inset-x-0 h-16 bg-gradient-to-t from-[#10101e] to-transparent" />
           </div>
 
           {/* Info */}
           <div className="p-4 space-y-3">
-            <div>
-              <p className="font-orbitron text-sm font-bold text-white/90 leading-tight">{slot.tokenName}</p>
-              <p className="text-[11px] text-white/30 font-rajdhani mt-0.5">${slot.tokenSymbol}</p>
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="font-orbitron text-sm font-bold text-white/90 leading-tight">{slot.tokenName}</p>
+                <p className="text-[11px] text-white/30 font-rajdhani mt-0.5">${slot.tokenSymbol}</p>
+              </div>
+              <div className="text-right">
+                <p className="font-orbitron text-[8px] text-white/20 tracking-widest">AUTO SPIN</p>
+                <p className="font-orbitron text-[10px] font-bold text-purple-400/60 mt-0.5">✓</p>
+              </div>
             </div>
 
-            <motion.div
-              whileHover={{ scale: 1.03 }}
-              whileTap={{ scale: 0.97 }}
-              className="w-full py-2.5 rounded-xl text-center text-[11px] font-orbitron font-bold tracking-wider transition-all"
+            <div
+              className="w-full py-2.5 rounded-xl text-center text-[11px] font-orbitron font-bold tracking-wider transition-all group-hover:brightness-110"
               style={{
                 background: `${slot.primaryColor}18`,
                 color: slot.primaryColor,
@@ -531,7 +618,7 @@ function SlotCard({ slot, index }: { slot: SlotEntry; index: number }) {
               }}
             >
               PLAY NOW →
-            </motion.div>
+            </div>
           </div>
         </div>
       </Link>
