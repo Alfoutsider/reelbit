@@ -97,7 +97,7 @@ export default function PrivacyPage() {
           </section>
 
           <section>
-            <h2>9. Children's Privacy</h2>
+            <h2>9. Children&apos;s Privacy</h2>
             <p>
               The Platform is not intended for users under 18. We do not knowingly collect data from minors. If you believe we have collected data from a minor, contact us immediately.
             </p>
