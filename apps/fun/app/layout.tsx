@@ -5,6 +5,7 @@ import { Providers } from "@/components/layout/Providers";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { ThemeProvider } from "@/components/layout/ThemeProvider";
+import { LanguagePrompt } from "@/components/layout/LanguagePrompt";
 
 export const metadata: Metadata = {
   title: "ReelBit — Launch Slot Tokens on Solana",
@@ -36,6 +37,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <Navbar />
             <main className="relative z-10 flex-1">{children}</main>
             <Footer />
+            <LanguagePrompt />
           </ThemeProvider>
         </Providers>
 
