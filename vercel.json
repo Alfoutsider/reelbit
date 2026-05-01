@@ -1,0 +1,4 @@
+{
+  "framework": "nextjs",
+  "buildCommand": "turbo run build --filter=fun"
+}
