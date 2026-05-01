@@ -14,6 +14,7 @@ import { fetchBalance, formatUsdc, USDC_UNIT, type BalanceEntry } from "@/lib/ba
 import { getDemoSession, demoSpin, type DemoSession } from "@/lib/demoSession";
 import { shortenAddress } from "@/lib/utils";
 import type { SpinResult } from "@/components/slot/types";
+import type { SlotTheme } from "@/lib/slotTheme";
 
 const API_URL  = process.env.NEXT_PUBLIC_API_URL  ?? "http://localhost:3001";
 const RPC_URL  = process.env.NEXT_PUBLIC_RPC_URL  ?? "https://api.devnet.solana.com";
@@ -37,16 +38,6 @@ async function fetchJackpotLamports(mintStr: string): Promise<number> {
   } catch {
     return 0;
   }
-}
-
-interface SlotTheme {
-  tokenName: string;
-  tokenSymbol: string;
-  slotModel: "Classic3Reel" | "Standard5Reel" | "FiveReelFreeSpins";
-  primaryColor: string;
-  accentColor: string;
-  heroImageUrl: string | null;
-  bgImageUrl: string | null;
 }
 
 interface RecentSpin {
@@ -258,9 +249,10 @@ export default function CasinoSlotPage({ params }: { params: { mint: string } })
     <>
       <div
         className="min-h-screen text-white relative"
-        style={theme?.bgImageUrl ? {
-          background: `linear-gradient(to bottom, rgba(6,6,15,0.92), rgba(6,6,15,0.98)), url(${theme.bgImageUrl}) center/cover no-repeat fixed`,
-        } : undefined}
+        style={(() => {
+          const bg = theme?.customAssets?.bgImageUrl || theme?.bgImageUrl;
+          return bg ? { background: `linear-gradient(to bottom, rgba(6,6,15,0.92), rgba(6,6,15,0.98)), url(${bg}) center/cover no-repeat fixed` } : undefined;
+        })()}
       >
         {/* Sub-header */}
         <div className="border-b border-white/5 bg-[#06060f]/60 backdrop-blur px-6 py-3 flex items-center justify-between">

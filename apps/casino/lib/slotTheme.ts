@@ -12,6 +12,7 @@ export interface SlotTheme {
   mint: string;
   tokenName: string;
   tokenSymbol: string;
+  slotModel: "Classic3Reel" | "Standard5Reel" | "FiveReelFreeSpins";
   status: "generating" | "ready" | "failed";
   heroImageUrl: string | null;
   bgImageUrl: string | null;
