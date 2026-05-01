@@ -9,10 +9,14 @@ interface Props {
 }
 
 export function SymbolSVG({ id, size = 100, highlighted = false, customSvg }: Props) {
+  // Hooks must be called unconditionally — before any early returns
+  // useId gives a unique per-instance prefix, preventing gradient ID collisions
+  const uid = useId().replace(/:/g, "");
+  const filter = highlighted
+    ? "drop-shadow(0 0 10px rgba(255,215,0,1)) drop-shadow(0 0 20px rgba(255,215,0,0.7))"
+    : "drop-shadow(0 2px 4px rgba(0,0,0,0.6))";
+
   if (customSvg) {
-    const filter = highlighted
-      ? "drop-shadow(0 0 10px rgba(255,215,0,1)) drop-shadow(0 0 20px rgba(255,215,0,0.7))"
-      : "drop-shadow(0 2px 4px rgba(0,0,0,0.6))";
     return (
       <div
         style={{ width: size, height: size, filter, flexShrink: 0 }}
@@ -20,12 +24,6 @@ export function SymbolSVG({ id, size = 100, highlighted = false, customSvg }: Pr
       />
     );
   }
-  // useId gives a unique per-instance prefix, preventing gradient ID collisions
-  // when the same symbol appears on multiple reels simultaneously
-  const uid = useId().replace(/:/g, "");
-  const filter = highlighted
-    ? "drop-shadow(0 0 10px rgba(255,215,0,1)) drop-shadow(0 0 20px rgba(255,215,0,0.7))"
-    : "drop-shadow(0 2px 4px rgba(0,0,0,0.6))";
 
   const symbols: Record<SymbolId, JSX.Element> = {
     SEVEN: (
