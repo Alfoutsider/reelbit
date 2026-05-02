@@ -9,7 +9,6 @@ import { RegisterModal } from "@/components/auth/RegisterModal";
 import type { UserProfile } from "@/components/auth/RegisterModal";
 import { UserModal } from "@/components/auth/UserModal";
 import { useTheme } from "@/components/layout/ThemeProvider";
-import { LanguageSelector } from "@/components/layout/LanguageSelector";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
 
@@ -106,7 +105,7 @@ export function Navbar() {
             <span className="font-orbitron text-[15px] font-black leading-none">
               <span style={{ color: "var(--brand-cream)" }}>Reel</span>
               <span style={{ color: "var(--brand-red)" }}>Bit</span>
-              <span style={{ color: "rgba(240,235,224,0.22)" }}>.fun</span>
+              <span style={{ color: "var(--fg4)" }}>.fun</span>
             </span>
           </Link>
 
@@ -129,7 +128,6 @@ export function Navbar() {
 
           {/* Auth area */}
           <div className="flex items-center gap-1">
-            <LanguageSelector />
             <ThemeToggle />
             <div className="w-px h-5 bg-white/10 mx-1" />
             {/* Hamburger — mobile only */}

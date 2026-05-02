@@ -24,6 +24,30 @@
   --bg-dark:    #0a0a0f;
   --bg-surface: #0f0f18;
   --bg-card:    #131320;
+
+  /* Foreground scale — warm cream */
+  --fg:  #f0ebe0;
+  --fg2: rgba(240,235,224,0.65);
+  --fg3: rgba(240,235,224,0.4);
+  --fg4: rgba(240,235,224,0.22);
+
+  /* Footer */
+  --footer-bg:  #040408;
+  --footer-bdr: rgba(196,30,30,0.1);
+  --footer-t:   rgba(240,235,224,0.3);
+  --footer-l:   rgba(240,235,224,0.52);
+}
+
+/* ─── Light mode CSS variable overrides ─────────────────────── */
+html.light {
+  --fg:  #1a1010;
+  --fg2: rgba(26,16,16,0.72);
+  --fg3: rgba(26,16,16,0.50);
+  --fg4: rgba(26,16,16,0.34);
+  --footer-bg:  #f4efe6;
+  --footer-bdr: rgba(196,30,30,0.14);
+  --footer-t:   rgba(26,16,16,0.45);
+  --footer-l:   rgba(26,16,16,0.65);
 }
 
 * { box-sizing: border-box; }
@@ -456,7 +480,7 @@ html.light { color-scheme: light; }
 .light .bonding-bar-track  { background: rgba(0,0,20,0.08) !important; }
 
 /* Footer / grid */
-.light footer              { background: rgba(240,240,248,0.95) !important; border-color: rgba(0,0,20,0.07) !important; }
+.light footer              { background: var(--footer-bg) !important; border-color: var(--footer-bdr) !important; }
 .light .grid-overlay       { opacity: 0.3; filter: invert(1); }
 
 /* Casino bg utility classes */

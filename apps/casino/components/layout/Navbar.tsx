@@ -15,7 +15,6 @@ import { fetchProfile, type UserProfile } from "@/lib/profileClient";
 import { shortenAddress } from "@/lib/utils";
 import { getDemoSession, exitDemo, type DemoSession } from "@/lib/demoSession";
 import { useTheme } from "@/components/layout/ThemeProvider";
-import { LanguageSelector } from "@/components/layout/LanguageSelector";
 
 function ThemeToggle() {
   const { theme, toggle } = useTheme();
@@ -100,7 +99,6 @@ export function Navbar() {
             <div className="hidden sm:flex items-center gap-1 text-green-400/50 text-[10px] font-orbitron tracking-wider">
               <Zap size={10} /> UP TO 98% RTP
             </div>
-            <LanguageSelector />
             <ThemeToggle />
             {/* Hamburger — mobile only */}
             <button

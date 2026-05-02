@@ -53,6 +53,21 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   includedLanguages: 'en,es,pt,zh-CN,ja,ko,ru,ar,fr,de,tr,vi',
                   autoDisplay: false
                 }, 'google_translate_element');
+                // Auto-detect browser language on first visit
+                try {
+                  if (!localStorage.getItem('rb_gt_init')) {
+                    localStorage.setItem('rb_gt_init', '1');
+                    var lang = (navigator.language || 'en').split('-')[0].toLowerCase();
+                    var supported = ['es','pt','zh','ja','ko','ru','ar','fr','de','tr','vi'];
+                    if (lang !== 'en' && supported.indexOf(lang) !== -1) {
+                      setTimeout(function() {
+                        var code = lang === 'zh' ? 'zh-CN' : lang;
+                        var sel = document.querySelector('.goog-te-combo');
+                        if (sel) { sel.value = code; sel.dispatchEvent(new Event('change')); }
+                      }, 1500);
+                    }
+                  }
+                } catch(e) {}
               };
             `,
           }}
