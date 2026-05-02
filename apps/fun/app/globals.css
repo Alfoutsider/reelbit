@@ -513,6 +513,25 @@ html.light { color-scheme: light; }
 .light .hover\:border-white\/20:hover { border-color: rgba(0,0,20,0.16) !important; }
 .light .hover\:border-white\/30:hover { border-color: rgba(0,0,20,0.22) !important; }
 
+/* ─── Gradient text — light mode fallback ───────────────────── */
+.light .grad-text {
+  background: linear-gradient(135deg, #8b1010 0%, var(--brand-red) 60%, #c44 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.light .gold-text {
+  background: linear-gradient(135deg, #a07010 0%, #c8900a 60%, #8b6010 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.light .purple-text {
+  background: none !important;
+  -webkit-text-fill-color: #5b21b6 !important;
+  color: #5b21b6 !important;
+}
+
 /* ─── Google Translate widget — hide the toolbar banner ─────── */
 .goog-te-banner-frame,
 .goog-te-balloon-frame { display: none !important; }

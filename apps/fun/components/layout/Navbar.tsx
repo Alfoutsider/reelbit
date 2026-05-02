@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { usePrivy, useWallets } from "@/lib/privy";
-import { Wallet, ExternalLink, Zap, BarChart2, Gift, Sun, Moon } from "lucide-react";
+import { Wallet, ExternalLink, Zap, BarChart2, Gift, Sun, Moon, Menu, X } from "lucide-react";
 import { RegisterModal } from "@/components/auth/RegisterModal";
 import type { UserProfile } from "@/components/auth/RegisterModal";
 import { UserModal } from "@/components/auth/UserModal";
@@ -37,6 +37,7 @@ export function Navbar() {
   const [profileLoading, setProfileLoading] = useState(false);
   const [showRegister, setShowRegister]   = useState(false);
   const [showUser, setShowUser]           = useState(false);
+  const [mobileOpen, setMobileOpen]       = useState(false);
 
   // One-shot: register referral cookie when wallet first connects
   useEffect(() => {
@@ -88,13 +89,18 @@ export function Navbar() {
     { href: "/referral",  label: "Referral", icon: Gift },
   ];
 
+  const allNavLinks = [
+    ...navLinks,
+    ...(authenticated ? [{ href: "/portfolio", label: "Portfolio", icon: BarChart2 }] : []),
+  ];
+
   return (
     <>
-      <nav className="sticky top-0 z-40 nav-border bg-[#06060a]/90 backdrop-blur-xl">
+      <nav className="sticky top-0 z-40 nav-border bg-[#06060a]/90 backdrop-blur-xl relative">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3.5">
 
           {/* Logo */}
-          <Link href="/" className="flex items-center gap-2.5 group">
+          <Link href="/" className="flex items-center gap-2.5 group" onClick={() => setMobileOpen(false)}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/logo-icon.png" alt="ReelBit" className="w-10 h-10 object-contain" />
             <span className="font-rajdhani text-[20px] font-bold leading-none">
@@ -104,22 +110,15 @@ export function Navbar() {
             </span>
           </Link>
 
-          {/* Nav links */}
+          {/* Nav links — desktop */}
           <div className="hidden md:flex items-center gap-1">
-            {navLinks.map(({ href, label, icon: Icon }) => (
+            {allNavLinks.map(({ href, label, icon: Icon }) => (
               <Link key={href} href={href}
                 className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold text-white/50 hover:text-white hover:bg-white/5 transition-all font-rajdhani">
                 {Icon && <Icon size={13} className="opacity-70" />}
                 {label}
               </Link>
             ))}
-            {authenticated && (
-              <Link href="/portfolio"
-                className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold text-white/50 hover:text-white hover:bg-white/5 transition-all font-rajdhani">
-                <BarChart2 size={13} className="opacity-70" />
-                Portfolio
-              </Link>
-            )}
             <a href="https://reelbit-casino.vercel.app" target="_blank" rel="noopener noreferrer"
               className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold text-gold/70 hover:text-gold hover:bg-gold/5 transition-all font-rajdhani">
               <Zap size={13} className="text-gold" />
@@ -132,8 +131,16 @@ export function Navbar() {
           <div className="flex items-center gap-1">
             <LanguageSelector />
             <ThemeToggle />
-              <div className="w-px h-5 bg-white/10 mx-1" />
-          {!ready || profileLoading ? (
+            <div className="w-px h-5 bg-white/10 mx-1" />
+            {/* Hamburger — mobile only */}
+            <button
+              onClick={() => setMobileOpen((p) => !p)}
+              className="md:hidden w-8 h-8 rounded-lg flex items-center justify-center text-white/40 hover:text-white/70 hover:bg-white/5 transition-all"
+              aria-label={mobileOpen ? "Close menu" : "Open menu"}
+            >
+              {mobileOpen ? <X size={16} /> : <Menu size={16} />}
+            </button>
+            {!ready || profileLoading ? (
               <div className="w-8 h-8 rounded-full border border-white/10 animate-pulse bg-white/5" />
             ) : authenticated && profile ? (
               /* ── Logged-in + registered: avatar button ── */
@@ -142,7 +149,7 @@ export function Navbar() {
                 onClick={() => setShowUser(true)}
                 className="flex items-center gap-2.5 rounded-xl px-2 py-1.5 transition-all"
                 style={{ background: "rgba(196,30,30,0.08)", border: "1px solid rgba(196,30,30,0.22)" }}>
-                <div className="w-[84px] h-[84px] rounded-full overflow-hidden border-2 border-red-700/40 shrink-0"
+                <div className="w-7 h-7 rounded-full overflow-hidden border border-red-700/40 shrink-0"
                   style={{ background: "var(--bg-deep)" }}>
                   {profile.pfpUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
@@ -186,6 +193,40 @@ export function Navbar() {
           </div>
 
         </div>
+
+        {/* Mobile nav menu */}
+        <AnimatePresence>
+          {mobileOpen && (
+            <motion.div
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.18 }}
+              className="md:hidden absolute left-0 right-0 bg-[#06060a]/97 backdrop-blur-xl border-b border-white/5 px-4 py-3 flex flex-col gap-1 z-50"
+            >
+              {allNavLinks.map(({ href, label, icon: Icon }) => (
+                <Link key={href} href={href} onClick={() => setMobileOpen(false)}
+                  className="flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-semibold text-white/50 hover:text-white hover:bg-white/5 transition-all font-rajdhani">
+                  {Icon && <Icon size={13} className="opacity-70" />}
+                  {label}
+                </Link>
+              ))}
+              <a href="https://reelbit-casino.vercel.app" target="_blank" rel="noopener noreferrer"
+                onClick={() => setMobileOpen(false)}
+                className="flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-semibold text-gold/70 hover:text-gold hover:bg-gold/5 transition-all font-rajdhani">
+                <Zap size={13} className="text-gold" />
+                Casino
+                <ExternalLink size={10} className="opacity-50" />
+              </a>
+              {authenticated && profile && (
+                <button onClick={() => { setMobileOpen(false); setShowUser(true); }}
+                  className="flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-semibold text-white/50 hover:text-white hover:bg-white/5 transition-all font-rajdhani text-left">
+                  <span className="font-orbitron uppercase">{profile.username}</span>
+                </button>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </nav>
 
       {/* Modals */}
