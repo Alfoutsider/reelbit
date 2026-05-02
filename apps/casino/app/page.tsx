@@ -61,7 +61,7 @@ type SortMode  = "featured" | "new" | "name";
 function LiveTicker() {
   const wins = [...SAMPLE_WINS, ...SAMPLE_WINS]; // doubled for seamless loop
   return (
-    <div className="border-b border-white/5 bg-[#07070f] py-2 overflow-hidden">
+    <div className="border-b py-2 overflow-hidden" style={{ background: "var(--ticker-bg)", borderColor: "var(--bdr2)" }}>
       <div className="marquee-track">
         <div className="marquee-inner">
           {wins.map((w, i) => (
@@ -176,7 +176,7 @@ export default function CasinoLobby() {
       <LiveTicker />
 
       {/* Tab bar */}
-      <div className="border-b border-white/5 bg-[#07070f]">
+      <div className="border-b" style={{ background: "var(--bg2)", borderColor: "var(--bdr2)" }}>
         <div className="max-w-7xl mx-auto px-4 flex items-center gap-1">
           {([
             { id: "lobby" as Tab,    label: "Casino Lobby", icon: <Zap size={13} /> },
@@ -301,12 +301,16 @@ export default function CasinoLobby() {
               <button
                 key={id}
                 onClick={() => setModelFilter(id)}
-                className={cn(
-                  "flex items-center gap-1.5 rounded-full px-4 py-1.5 text-[11px] font-orbitron font-bold whitespace-nowrap transition-all flex-shrink-0",
-                  modelFilter === id
-                    ? "bg-gold/15 border border-gold/40 text-gold"
-                    : "bg-white/[0.04] border border-white/8 text-white/35 hover:text-white/60",
-                )}
+                className="flex items-center gap-1.5 rounded-full px-4 py-1.5 text-[11px] font-orbitron font-bold whitespace-nowrap transition-all flex-shrink-0"
+                style={modelFilter === id ? {
+                  background: "var(--chip-active-bg)",
+                  border: "1px solid var(--chip-active-bdr)",
+                  color: "var(--chip-active-c)",
+                } : {
+                  background: "var(--chip-bg)",
+                  border: "1px solid var(--chip-bdr)",
+                  color: "var(--chip-c)",
+                }}
               >
                 <span>{icon}</span> {label}
               </button>

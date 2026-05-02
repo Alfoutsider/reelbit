@@ -6,17 +6,60 @@
 
 /* ─── Design tokens ─────────────────────────────────────────── */
 :root {
-  --gold:        #d4a017;
-  --gold-light:  #f5c842;
-  --gold-dim:    #a07810;
-  --purple:      #8b5cf6;
-  --purple-dark: #5b21b6;
-  --cyan:        #06b6d4;
+  /* Gold scale — primary accent */
+  --gold: #d4a017; --gold-l: #f5c842; --gold-d: #a07810; --gold-dim: rgba(212,160,23,.15);
+  /* Silver — secondary accent (replaces purple) */
+  --silver: #c0c0c0; --silver-l: #e8e8e8; --silver-d: #8a8a8a;
 
-  --bg-deep:    #06060f;
-  --bg-dark:    #0a0a18;
-  --bg-surface: #0f0f22;
-  --bg-card:    #12122a;
+  /* Background scale */
+  --bg: #07070c; --bg2: #0b0b14; --bg3: #10101c; --bgc: #14141e; --bgc2: #1c1c28;
+  /* Foreground scale — warm cream */
+  --fg: #ede8d8; --fg2: rgba(237,232,216,.65); --fg3: rgba(237,232,216,.4); --fg4: rgba(237,232,216,.22);
+
+  /* Borders */
+  --bdr: rgba(212,160,23,.1); --bdr2: rgba(212,160,23,.06);
+  --bdr-gold: rgba(212,160,23,.28); --bdr-silver: rgba(192,192,192,.2);
+
+  /* Navigation */
+  --nav-bg: rgba(7,7,12,.93); --ticker-bg: #040408;
+
+  /* Inputs */
+  --inp-bg: rgba(212,160,23,.03); --inp-bdr: rgba(212,160,23,.12);
+
+  /* Stat boxes */
+  --stat-bg: rgba(212,160,23,.04); --stat-bdr: rgba(212,160,23,.1);
+  --stat-lbl: rgba(237,232,216,.32); --stat-val: #ede8d8;
+
+  /* Ghost elements */
+  --ghost-bg: rgba(237,232,216,.04); --ghost-c: rgba(237,232,216,.45); --ghost-bdr: rgba(237,232,216,.1);
+
+  /* Sort buttons */
+  --sort-bg: rgba(237,232,216,.05); --sort-c: rgba(237,232,216,.4);
+  --sort-active-bg: #d4a017; --sort-active-c: #0a0a10;
+
+  /* Tabs */
+  --tab-c: rgba(237,232,216,.3); --tab-active-c: #f5c842; --tab-active-bdr: #d4a017;
+
+  /* Model chips */
+  --chip-bg: rgba(237,232,216,.05); --chip-bdr: rgba(237,232,216,.1); --chip-c: rgba(237,232,216,.38);
+  --chip-active-bg: rgba(212,160,23,.15); --chip-active-bdr: rgba(212,160,23,.45); --chip-active-c: #f5c842;
+
+  /* Panels */
+  --panel-bg: #10101c; --panel-bdr: rgba(212,160,23,.08);
+
+  /* LCD */
+  --lcd-bg: #020205; --lcd-bdr: rgba(212,160,23,.28); --lcd-c: #f5c842;
+
+  /* Footer */
+  --footer-bg: #040408; --footer-bdr: rgba(212,160,23,.1);
+  --footer-t: rgba(237,232,216,.3); --footer-l: rgba(237,232,216,.52);
+
+  /* Welcome banner */
+  --banner-bdr: rgba(212,160,23,.3);
+
+  /* Legacy aliases for components still using old names */
+  --bg-deep: #07070c; --bg-dark: #0b0b14; --bg-surface: #10101c; --bg-card: #14141e;
+  --gold-light: #f5c842;
 }
 
 /* ─── Base ──────────────────────────────────────────────────── */
@@ -24,18 +67,18 @@
 html { scroll-behavior: smooth; }
 
 body {
-  background: var(--bg-deep);
-  color: #e8e8f4;
+  background: var(--bg);
+  color: var(--fg);
   font-family: 'Rajdhani', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 
 /* ─── Background helpers ─────────────────────────────────────── */
 .casino-bg {
-  background: var(--bg-deep);
+  background: var(--bg);
   background-image:
     radial-gradient(ellipse 80% 40% at 50% -10%, rgba(212,160,23,0.05) 0%, transparent 70%),
-    radial-gradient(ellipse 60% 30% at 80% 80%, rgba(212,160,23,0.025) 0%, transparent 60%);
+    radial-gradient(ellipse 60% 30% at 80% 80%, rgba(212,160,23,0.03) 0%, transparent 60%);
 }
 
 /* ─── Scrollbar ──────────────────────────────────────────────── */
@@ -48,14 +91,23 @@ body {
 .font-rajdhani { font-family: 'Rajdhani', sans-serif; }
 
 .gold-text {
-  background: linear-gradient(135deg, var(--gold-light) 0%, var(--gold) 50%, var(--gold-dim) 100%);
+  background: linear-gradient(135deg, #f5c842, #d4a017, #a07810);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
 
+/* Silver gradient — replaces purple throughout casino */
+.silver-text {
+  background: linear-gradient(135deg, #e8e8e8, #c0c0c0, #8a8a8a);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Legacy alias */
 .purple-text {
-  background: linear-gradient(135deg, #c084fc 0%, var(--purple) 100%);
+  background: linear-gradient(135deg, #e8e8e8, #c0c0c0, #8a8a8a);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -63,31 +115,21 @@ body {
 
 /* ─── Card ───────────────────────────────────────────────────── */
 .card-slot {
-  background: linear-gradient(135deg, var(--bg-card) 0%, var(--bg-surface) 100%);
-  border: 1px solid rgba(255,255,255,0.05);
+  background: var(--bgc);
+  border: 1px solid var(--bdr2);
   border-radius: 16px;
   transition: border-color 0.25s, box-shadow 0.25s, transform 0.25s;
   position: relative;
   overflow: hidden;
-}
-
-.card-slot::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: 16px;
-  background: linear-gradient(135deg, rgba(212,160,23,0.05), transparent 60%);
-  opacity: 0;
-  transition: opacity 0.25s;
-  pointer-events: none;
+  display: flex;
+  flex-direction: column;
 }
 
 .card-slot:hover {
-  border-color: rgba(212,160,23,0.3);
-  box-shadow: 0 8px 40px rgba(212,160,23,0.1), 0 0 0 1px rgba(212,160,23,0.08);
+  border-color: var(--bdr-gold);
+  box-shadow: 0 8px 36px rgba(212,160,23,0.1);
   transform: translateY(-3px);
 }
-.card-slot:hover::before { opacity: 1; }
 
 /* ─── Shimmer on hover ───────────────────────────────────────── */
 .card-slot::after {
@@ -122,41 +164,41 @@ body {
 /* ─── Inputs ─────────────────────────────────────────────────── */
 .input-casino {
   width: 100%;
-  background: rgba(255,255,255,0.03);
-  border: 1px solid rgba(255,255,255,0.07);
+  background: var(--inp-bg);
+  border: 1px solid var(--inp-bdr);
   border-radius: 10px;
   padding: 10px 14px;
   font-family: 'Rajdhani', sans-serif;
   font-size: 14px;
   font-weight: 500;
-  color: #e8e8f4;
+  color: var(--fg);
   outline: none;
   transition: border-color 0.2s, box-shadow 0.2s;
 }
-.input-casino::placeholder { color: rgba(255,255,255,0.2); }
-.input-casino:focus { border-color: rgba(212,160,23,0.5); box-shadow: 0 0 0 3px rgba(212,160,23,0.08); }
+.input-casino::placeholder { color: var(--fg4); }
+.input-casino:focus { border-color: rgba(212,160,23,0.55); box-shadow: 0 0 0 3px rgba(212,160,23,0.10); }
 
 /* ─── Stat box ───────────────────────────────────────────────── */
 .stat-box {
-  background: rgba(255,255,255,0.02);
-  border: 1px solid rgba(255,255,255,0.05);
+  background: var(--stat-bg);
+  border: 1px solid var(--stat-bdr);
   border-radius: 12px;
   padding: 12px 16px;
 }
 .stat-box .label {
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  color: rgba(255,255,255,0.3);
   font-family: 'Orbitron', sans-serif;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.11em;
+  color: var(--stat-lbl);
   text-transform: uppercase;
 }
 .stat-box .value {
-  font-size: 18px;
-  font-weight: 700;
   font-family: 'Orbitron', sans-serif;
-  color: #e8e8f4;
-  margin-top: 2px;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--stat-val);
+  margin-top: 3px;
 }
 
 /* ─── Model card (launch page slot picker) ───────────────────── */
@@ -335,10 +377,34 @@ body {
 /* ─── Light mode ─────────────────────────────────────────────── */
 html.light { color-scheme: light; }
 
+/* Light mode CSS variable overrides */
+html.light {
+  --bg: #f8f4e8; --bg2: #f0ecd8; --bg3: #ffffff; --bgc: #ffffff; --bgc2: #f9f6ec;
+  --fg: #1a1408; --fg2: rgba(26,20,8,.7); --fg3: rgba(26,20,8,.46); --fg4: rgba(26,20,8,.26);
+  --bdr: rgba(160,120,16,.18); --bdr2: rgba(160,120,16,.1);
+  --bdr-gold: rgba(160,120,16,.35); --bdr-silver: rgba(100,100,100,.2);
+  --nav-bg: rgba(248,244,232,.97); --ticker-bg: #ede8d4;
+  --inp-bg: rgba(26,20,8,.04); --inp-bdr: rgba(26,20,8,.14);
+  --stat-bg: rgba(160,120,16,.06); --stat-bdr: rgba(160,120,16,.14);
+  --stat-lbl: rgba(26,20,8,.42); --stat-val: #1a1408;
+  --ghost-bg: rgba(26,20,8,.06); --ghost-c: rgba(26,20,8,.55); --ghost-bdr: rgba(26,20,8,.14);
+  --sort-bg: rgba(26,20,8,.05); --sort-c: rgba(26,20,8,.5);
+  --sort-active-bg: #d4a017; --sort-active-c: #fff;
+  --tab-c: rgba(26,20,8,.35); --tab-active-c: #8b6800; --tab-active-bdr: #d4a017;
+  --chip-bg: rgba(160,120,16,.08); --chip-bdr: rgba(160,120,16,.18); --chip-c: rgba(26,20,8,.46);
+  --chip-active-bg: rgba(160,120,16,.12); --chip-active-bdr: rgba(160,120,16,.45); --chip-active-c: #6b4e00;
+  --panel-bg: #ffffff; --panel-bdr: rgba(160,120,16,.12);
+  --lcd-bg: #faf7ec; --lcd-bdr: rgba(160,120,16,.35); --lcd-c: #6b4e00;
+  --footer-bg: #ede8d4; --footer-bdr: rgba(160,120,16,.14);
+  --footer-t: rgba(26,20,8,.4); --footer-l: rgba(26,20,8,.6);
+  --banner-bdr: rgba(160,120,16,.3);
+  --bg-deep: #f8f4e8; --bg-dark: #f0ecd8; --bg-surface: #ffffff; --bg-card: #ffffff;
+}
+
 .light body,
 .light .casino-bg {
-  background: #f5f2e8 !important;
-  color: #1a1a2e !important;
+  background: var(--bg) !important;
+  color: var(--fg) !important;
 }
 .light .orb {
   opacity: 0.04 !important;
@@ -347,72 +413,30 @@ html.light { color-scheme: light; }
 
 /* Navbar */
 .light nav {
-  background: rgba(255,255,255,0.97) !important;
-  border-color: rgba(0,0,20,0.07) !important;
-  box-shadow: 0 1px 0 rgba(0,0,0,0.06) !important;
+  background: var(--nav-bg) !important;
+  border-color: var(--bdr) !important;
 }
 
-/* Cards */
+/* Light mode: cards, inputs, text — all handled via CSS variable overrides on html.light above */
 .light .card-slot {
-  background: #ffffff !important;
-  border-color: rgba(0,0,0,0.06) !important;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.06) !important;
+  box-shadow: 0 2px 10px rgba(0,0,0,.07) !important;
 }
 .light .card-slot:hover {
-  border-color: rgba(212,160,23,0.3) !important;
-  box-shadow: 0 8px 32px rgba(212,160,23,0.08) !important;
-}
-.light .model-card {
-  background: rgba(0,0,20,0.03) !important;
-  border-color: rgba(0,0,20,0.09) !important;
-}
-.light .model-card:hover {
-  background: rgba(212,160,23,0.05) !important;
-  border-color: rgba(212,160,23,0.25) !important;
-}
-.light .model-card.selected {
-  background: rgba(212,160,23,0.1) !important;
-  border-color: rgba(212,160,23,0.5) !important;
+  box-shadow: 0 8px 28px rgba(160,120,16,.1) !important;
 }
 
-/* Stats */
-.light .stat-box {
-  background: rgba(0,0,20,0.03) !important;
-  border-color: rgba(0,0,20,0.07) !important;
-}
-.light .stat-box .label { color: rgba(0,0,20,0.38) !important; }
-.light .stat-box .value { color: #1a1a2e !important; }
-
-/* LCD */
-.light .lcd-display {
-  background: #f0ecdc !important;
-  border-color: rgba(212,160,23,0.3) !important;
+/* Gold text — solid color in light mode, no transparent gradient */
+.light .gold-text {
+  background: none !important;
+  -webkit-text-fill-color: #7a5800 !important;
   color: #7a5800 !important;
 }
-
-/* Gold text light mode — don't go transparent */
-.light .gold-text {
-  background: linear-gradient(135deg, #8a6000 0%, #a07010 60%, #6e4a00 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
+.light .silver-text,
 .light .purple-text {
-  -webkit-text-fill-color: #6d4a9a !important;
-  color: #6d4a9a !important;
   background: none !important;
+  -webkit-text-fill-color: #5a5a5a !important;
+  color: #5a5a5a !important;
 }
-
-/* Inputs */
-.light .input-casino {
-  background: rgba(0,0,20,0.04) !important;
-  border-color: rgba(0,0,20,0.12) !important;
-  color: #1a1a2e !important;
-}
-.light .input-casino::placeholder { color: rgba(0,0,20,0.28) !important; }
-
-/* Footer */
-.light footer { background: rgba(240,237,225,0.95) !important; border-color: rgba(0,0,20,0.07) !important; }
 
 /* ── text-white/XX → dark equivalent ──────────────────────────── */
 .light .text-white          { color: #1a1a2e !important; }

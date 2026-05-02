@@ -9,7 +9,14 @@ const config: Config = {
   theme: {
     extend: {
       fontFamily: {
-        sans: ["var(--font-geist-sans)", "system-ui", "sans-serif"],
+        orbitron: ["Orbitron", "sans-serif"],
+        rajdhani: ["Rajdhani", "sans-serif"],
+        sans: ["Rajdhani", "system-ui", "sans-serif"],
+      },
+      colors: {
+        gold: { DEFAULT: "#d4a017", light: "#f5c842", dim: "#a07810" },
+        silver: { DEFAULT: "#c0c0c0", light: "#e8e8e8", dark: "#8a8a8a" },
+        casino: { deep: "#07070c", dark: "#0b0b14", surface: "#10101c", card: "#14141e" },
       },
     },
   },

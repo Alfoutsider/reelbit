@@ -31,7 +31,7 @@ html { scroll-behavior: smooth; }
 
 body {
   background: var(--bg-deep);
-  color: #e8e8f4;
+  color: var(--brand-cream);
   font-family: 'Rajdhani', system-ui, sans-serif;
   font-size: 15px;
   -webkit-font-smoothing: antialiased;
@@ -372,8 +372,8 @@ html.light { color-scheme: light; }
 
 .light body,
 .light .casino-bg {
-  background: #f0f0f8 !important;
-  color: #0f0f1e !important;
+  background: #f4efe6 !important;
+  color: #1a1a1a !important;
 }
 
 .light .orb {
@@ -383,9 +383,9 @@ html.light { color-scheme: light; }
 
 /* Navbar */
 .light .nav-border {
-  background: rgba(255,255,255,0.97) !important;
-  border-color: rgba(0,0,20,0.08) !important;
-  box-shadow: 0 1px 0 rgba(0,0,0,0.06) !important;
+  background: rgba(244,239,230,0.97) !important;
+  border-color: rgba(196,30,30,0.14) !important;
+  box-shadow: 0 1px 0 rgba(0,0,0,0.04) !important;
 }
 
 /* Cards */
