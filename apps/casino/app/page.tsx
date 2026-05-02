@@ -236,7 +236,7 @@ export default function CasinoLobby() {
                 </div>
                 <div>
                   <p className="font-orbitron text-sm font-black tracking-wide" style={{ color: "var(--fg)" }}>
-                    100% Welcome Bonus <span style={{ color: "#e8e8e8" }}>up to $200</span>
+                    100% Welcome Bonus <span style={{ color: "var(--silver-text)" }}>up to $200</span>
                   </p>
                   <p className="text-xs font-rajdhani mt-0.5" style={{ color: "var(--fg3)" }}>
                     First deposit · 45× wagering · 7 days to complete

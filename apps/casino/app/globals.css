@@ -10,6 +10,8 @@
   --gold: #d4a017; --gold-l: #f5c842; --gold-d: #a07810; --gold-dim: rgba(212,160,23,.15);
   /* Silver — secondary accent (replaces purple) */
   --silver: #c0c0c0; --silver-l: #e8e8e8; --silver-d: #8a8a8a;
+  /* Silver text — flips to dark in light mode */
+  --silver-text: #e8e8e8;
 
   /* Background scale */
   --bg: #07070c; --bg2: #0b0b14; --bg3: #10101c; --bgc: #14141e; --bgc2: #1c1c28;
@@ -414,10 +416,11 @@ html.light { color-scheme: light; }
 /* Light mode CSS variable overrides */
 html.light {
   --bg: #f8f4e8; --bg2: #f0ecd8; --bg3: #ffffff; --bgc: #ffffff; --bgc2: #f9f6ec;
-  --fg: #1a1408; --fg2: rgba(26,20,8,.7); --fg3: rgba(26,20,8,.46); --fg4: rgba(26,20,8,.26);
+  --fg: #1a1408; --fg2: rgba(26,20,8,.78); --fg3: rgba(0,0,0,.62); --fg4: rgba(0,0,0,.44);
+  --silver-text: #1a1a1a;
   --bdr: rgba(160,120,16,.18); --bdr2: rgba(160,120,16,.1);
   --bdr-gold: rgba(160,120,16,.35); --bdr-silver: rgba(100,100,100,.2);
-  --nav-bg: rgba(248,244,232,.97); --ticker-bg: #ede8d4;
+  --nav-bg: rgba(248,244,232,.97); --ticker-bg: rgba(212,160,23,0.12);
   --inp-bg: rgba(26,20,8,.04); --inp-bdr: rgba(26,20,8,.14);
   --stat-bg: rgba(160,120,16,.06); --stat-bdr: rgba(160,120,16,.14);
   --stat-lbl: rgba(26,20,8,.42); --stat-val: #1a1408;
@@ -517,6 +520,47 @@ html.light {
 .light .border-white\/30    { border-color: rgba(0,0,20,0.22) !important; }
 .light .border-white\/40    { border-color: rgba(0,0,20,0.28) !important; }
 .light .border-white\/50    { border-color: rgba(0,0,20,0.35) !important; }
+
+/* ─── Light mode: badges → dark readable versions ───────────── */
+.light .badge-graduated {
+  color: #166534 !important;
+  background: rgba(22,101,52,0.1) !important;
+  border-color: rgba(22,101,52,0.28) !important;
+}
+.light .badge-model {
+  color: rgba(30,30,50,0.65) !important;
+  background: rgba(30,30,50,0.07) !important;
+  border-color: rgba(30,30,50,0.16) !important;
+}
+.light .badge-hot {
+  color: #b91c1c !important;
+  background: rgba(185,28,28,0.08) !important;
+  border-color: rgba(185,28,28,0.25) !important;
+}
+.light .badge-gold {
+  color: #7a5800 !important;
+  background: rgba(122,88,0,0.08) !important;
+  border-color: rgba(122,88,0,0.2) !important;
+}
+
+/* ─── Light mode: green text → dark green ─────────────────────── */
+.light .text-green-400 { color: #15803d !important; }
+.light .text-green-400\/80 { color: rgba(21,128,61,0.8) !important; }
+.light .text-green-400\/50 { color: rgba(21,128,61,0.6) !important; }
+.light .bg-green-400 { background-color: #16a34a !important; }
+.light .bg-green-500\/8 { background-color: rgba(22,163,74,0.08) !important; }
+.light .border-green-500\/20 { border-color: rgba(22,163,74,0.25) !important; }
+
+/* ─── Light mode: btn-silver → visible dark style ─────────────── */
+.light .btn-silver {
+  background: linear-gradient(135deg, #3a3a3a 0%, #5a5a5a 50%, #7a7a7a 100%) !important;
+  color: #ffffff !important;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.2) !important;
+}
+.light .btn-silver:hover {
+  box-shadow: 0 0 24px rgba(0,0,0,0.35) !important;
+  filter: brightness(1.1) !important;
+}
 
 /* ─── Google Translate — suppress toolbar ───────────────────── */
 .goog-te-banner-frame,
