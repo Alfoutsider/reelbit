@@ -170,8 +170,8 @@ export default function CasinoLobby() {
   return (
     <div className="min-h-screen">
       {/* Ambient orbs */}
-      <div className="orb w-[500px] h-[500px] bg-purple-600/6 top-10 -left-48" style={{ animationDelay: "0s" }} />
-      <div className="orb w-80 h-80 bg-cyan-500/4 bottom-40 right-10" style={{ animationDelay: "4s" }} />
+      <div className="orb w-[500px] h-[500px] top-10 -left-48" style={{ background: "rgba(212,160,23,0.05)", animationDelay: "0s" }} />
+      <div className="orb w-80 h-80 bottom-40 right-10" style={{ background: "rgba(160,120,16,0.04)", animationDelay: "4s" }} />
 
       <LiveTicker />
 
@@ -188,7 +188,7 @@ export default function CasinoLobby() {
               className={cn(
                 "flex items-center gap-1.5 px-4 py-3 text-xs font-orbitron font-bold tracking-wide border-b-2 transition-all -mb-px",
                 tab === id
-                  ? "border-purple-500 text-purple-400"
+                  ? "border-[#d4a017] text-[#f5c842]"
                   : "border-transparent text-white/30 hover:text-white/60",
               )}
             >
@@ -199,14 +199,16 @@ export default function CasinoLobby() {
             {isDemo ? (
               <Link
                 href="/demo/launch"
-                className="flex items-center gap-1.5 text-[10px] font-orbitron font-bold text-purple-400/60 hover:text-purple-400 transition-colors px-3 py-3"
+                className="flex items-center gap-1.5 text-[10px] font-orbitron font-bold transition-colors px-3 py-3"
+                style={{ color: "rgba(212,160,23,0.65)" }}
               >
                 <Rocket size={11} /> Launch a Slot
               </Link>
             ) : (
               <Link
                 href="/demo"
-                className="flex items-center gap-1.5 text-[10px] font-orbitron font-bold text-purple-400/60 hover:text-purple-400 transition-colors px-3 py-3"
+                className="flex items-center gap-1.5 text-[10px] font-orbitron font-bold transition-colors px-3 py-3"
+                style={{ color: "rgba(212,160,23,0.65)" }}
               >
                 <Zap size={11} /> Try Demo
               </Link>
@@ -222,18 +224,18 @@ export default function CasinoLobby() {
           <motion.div
             initial={{ opacity: 0, y: -8 }}
             animate={{ opacity: 1, y: 0 }}
-            className="relative overflow-hidden rounded-2xl border border-purple-500/20 cursor-pointer group"
-            style={{ background: "linear-gradient(135deg, rgba(88,28,135,0.25) 0%, rgba(109,40,217,0.12) 50%, rgba(6,6,15,0.8) 100%)" }}
+            className="relative overflow-hidden rounded-2xl cursor-pointer group"
+            style={{ background: "linear-gradient(135deg, rgba(160,120,16,0.22) 0%, rgba(212,160,23,0.10) 50%, rgba(6,6,15,0.8) 100%)", border: "1px solid rgba(212,160,23,0.25)" }}
           >
-            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_left,rgba(139,92,246,0.15),transparent_60%)]" />
+            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_left,rgba(212,160,23,0.12),transparent_60%)]" />
             <div className="relative flex items-center justify-between px-5 py-4">
               <div className="flex items-center gap-4">
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "rgba(139,92,246,0.2)", border: "1px solid rgba(139,92,246,0.3)" }}>
-                  <Gift size={18} className="text-purple-400" />
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "rgba(212,160,23,0.15)", border: "1px solid rgba(212,160,23,0.3)" }}>
+                  <Gift size={18} style={{ color: "#d4a017" }} />
                 </div>
                 <div>
                   <p className="font-orbitron text-sm font-black text-white tracking-wide">
-                    100% Welcome Bonus <span className="text-purple-400">up to $200</span>
+                    100% Welcome Bonus <span style={{ color: "#f5c842" }}>up to $200</span>
                   </p>
                   <p className="text-white/40 text-xs font-rajdhani mt-0.5">
                     First deposit · 45× wagering · 7 days to complete
@@ -243,8 +245,7 @@ export default function CasinoLobby() {
               <motion.button
                 whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
                 onClick={login}
-                className="flex items-center gap-1.5 rounded-xl px-4 py-2 text-[11px] font-orbitron font-bold flex-shrink-0"
-                style={{ background: "linear-gradient(135deg, #7c3aed, #6d28d9)", boxShadow: "0 0 20px rgba(139,92,246,0.35)" }}
+                className="btn-launch flex items-center gap-1.5 rounded-xl px-4 py-2 text-[11px] font-orbitron font-bold flex-shrink-0"
               >
                 CLAIM <ChevronRight size={11} />
               </motion.button>
@@ -278,7 +279,7 @@ export default function CasinoLobby() {
               { label: "Graduated",    value: loading ? "…" : String(graduatedSlots.length), color: "gold-text" },
               { label: "Max RTP",      value: "98%",   color: "text-green-400" },
               { label: "House Edge",   value: "4%",    color: "text-white/60" },
-              { label: "Auto Spin",    value: "✓",     color: "text-purple-400" },
+              { label: "Auto Spin",    value: "✓",     color: "text-green-400" },
             ].map(({ label, value, color }) => (
               <div key={label} className="text-center">
                 <p className={`font-orbitron text-xl font-black ${color}`}>{value}</p>
@@ -360,7 +361,7 @@ export default function CasinoLobby() {
                 <p className="font-orbitron text-sm text-white/15 tracking-widest">NO SLOTS YET</p>
                 <p className="text-white/25 text-sm font-rajdhani">
                   Launch your slot on{" "}
-                  <a href="https://reelbit.fun" target="_blank" rel="noopener noreferrer" className="text-purple-400 hover:underline">
+                  <a href="https://reelbit.fun" target="_blank" rel="noopener noreferrer" style={{ color: "#d4a017" }} className="hover:underline">
                     reelbit.fun
                   </a>{" "}
                   — when it graduates it appears here.
@@ -397,9 +398,14 @@ export default function CasinoLobby() {
                 className={cn(
                   "flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-[11px] font-bold font-rajdhani transition-all",
                   filter === id
-                    ? "bg-purple-600 text-white"
+                    ? "border"
                     : "bg-white/[0.04] text-white/40 hover:text-white border border-white/5",
                 )}
+                style={filter === id ? {
+                  background: "linear-gradient(135deg, rgba(160,120,16,0.9), rgba(212,160,23,0.85))",
+                  color: "#0a0a18",
+                  borderColor: "rgba(212,160,23,0.6)",
+                } : {}}
               >
                 {icon} {label}
               </button>
@@ -466,9 +472,10 @@ export default function CasinoLobby() {
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
-          className="relative overflow-hidden rounded-2xl border border-purple-500/15 bg-gradient-to-r from-purple-900/20 via-purple-800/10 to-purple-900/20 px-8 py-7 text-center"
+          className="relative overflow-hidden rounded-2xl px-8 py-7 text-center"
+          style={{ border: "1px solid rgba(212,160,23,0.15)", background: "linear-gradient(135deg, rgba(160,120,16,0.15) 0%, rgba(212,160,23,0.06) 50%, rgba(6,6,15,0.85) 100%)" }}
         >
-          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(139,92,246,0.08),transparent_70%)]" />
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(212,160,23,0.07),transparent_70%)]" />
           {isDemo ? (
             <>
               <p className="relative font-orbitron text-sm font-bold text-white/80 tracking-wide mb-1">
@@ -516,7 +523,7 @@ const MODEL_RTP: Record<string, string> = {
 // ── Slot Card ─────────────────────────────────────────────────────────────────
 
 function SlotCard({ slot, index }: { slot: SlotEntry; index: number }) {
-  const modelColor = MODEL_COLOR[slot.slotModel] ?? "#8b5cf6";
+  const modelColor = MODEL_COLOR[slot.slotModel] ?? "#c0c0c0";
   const isHot      = index < 2 && slot.isGraduated;
   const rtp        = MODEL_RTP[slot.slotModel] ?? "96%";
 
@@ -605,7 +612,7 @@ function SlotCard({ slot, index }: { slot: SlotEntry; index: number }) {
               </div>
               <div className="text-right">
                 <p className="font-orbitron text-[8px] text-white/20 tracking-widest">AUTO SPIN</p>
-                <p className="font-orbitron text-[10px] font-bold text-purple-400/60 mt-0.5">✓</p>
+                <p className="font-orbitron text-[10px] font-bold mt-0.5" style={{ color: "rgba(212,160,23,0.6)" }}>✓</p>
               </div>
             </div>
 
