@@ -25,9 +25,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
       </head>
       <body className="casino-bg min-h-screen antialiased flex flex-col">
-        <div className="orb w-[600px] h-[600px] top-[-200px] left-[-200px] bg-purple-900/20" style={{ animationDelay: "0s" }} />
-        <div className="orb w-[400px] h-[400px] bottom-[10%] right-[-100px] bg-cyan-900/15" style={{ animationDelay: "4s" }} />
-        <div className="orb w-[300px] h-[300px] top-[40%] left-[60%]" style={{ background: "rgba(212,160,23,0.04)", animationDelay: "8s" }} />
+        <div className="orb w-[600px] h-[600px] top-[-200px] left-[-200px]" style={{ background: "rgba(196,30,30,0.07)", animationDelay: "0s" }} />
+        <div className="orb w-[400px] h-[400px] bottom-[10%] right-[-100px]" style={{ background: "rgba(139,0,0,0.05)", animationDelay: "4s" }} />
+        <div className="orb w-[300px] h-[300px] top-[40%] left-[60%]" style={{ background: "rgba(196,30,30,0.03)", animationDelay: "8s" }} />
 
         {/* Google Translate element (hidden — driven by LanguageSelector) */}
         <div id="google_translate_element" className="hidden" />

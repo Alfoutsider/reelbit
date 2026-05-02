@@ -22,6 +22,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
       </head>
       <body className="casino-bg antialiased flex flex-col min-h-screen">
+        <div className="orb w-[600px] h-[600px] top-[-200px] right-[-150px]" style={{ background: "rgba(212,160,23,0.06)", animationDelay: "0s" }} />
+        <div className="orb w-[400px] h-[400px] bottom-[15%] left-[-100px]" style={{ background: "rgba(160,120,16,0.04)", animationDelay: "5s" }} />
         <div id="google_translate_element" className="hidden" />
 
         <Providers>

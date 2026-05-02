@@ -2,8 +2,8 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import { Wallet, LogOut, Zap, User, Gamepad2, TrendingUp, Sun, Moon } from "lucide-react";
-import { AnimatePresence } from "framer-motion";
+import { Wallet, LogOut, Zap, User, Gamepad2, TrendingUp, Sun, Moon, Menu, X } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 
 import { usePrivy, useWallets } from "@/lib/privy";
 import { useRouter } from "next/navigation";
@@ -38,6 +38,7 @@ export function Navbar() {
   const [balance,       setBalance]       = useState(0);
   const [profile,       setProfile]       = useState<UserProfile | null>(null);
   const [demoSession,   setDemoSession]   = useState<DemoSession | null>(null);
+  const [mobileOpen,    setMobileOpen]    = useState(false);
 
   // Prefer embedded wallet (available immediately after email OTP) over useWallets() which populates async
   const walletAddress = user?.wallet?.address ?? wallets[0]?.address ?? "";
@@ -81,7 +82,7 @@ export function Navbar() {
         <div className="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between">
 
           {/* Logo */}
-          <Link href="/" className="flex items-center gap-2 group">
+          <Link href="/" className="flex items-center gap-2 group" onClick={() => setMobileOpen(false)}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/logo-icon.png" alt="ReelBit" className="w-9 h-9 object-contain" />
             <span className="font-rajdhani text-[20px] font-bold leading-none">
@@ -101,6 +102,14 @@ export function Navbar() {
             </div>
             <LanguageSelector />
             <ThemeToggle />
+            {/* Hamburger — mobile only */}
+            <button
+              onClick={() => setMobileOpen((p) => !p)}
+              className="sm:hidden w-8 h-8 rounded-lg flex items-center justify-center text-white/40 hover:text-white/70 hover:bg-white/5 transition-all"
+              aria-label={mobileOpen ? "Close menu" : "Open menu"}
+            >
+              {mobileOpen ? <X size={16} /> : <Menu size={16} />}
+            </button>
             <div className="w-px h-5 bg-white/10" />
 
             {demoSession ? (
@@ -209,6 +218,40 @@ export function Navbar() {
             )}
           </div>
         </div>
+
+        {/* Mobile nav menu */}
+        <AnimatePresence>
+          {mobileOpen && (
+            <motion.div
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.18 }}
+              className="sm:hidden absolute left-0 right-0 bg-[#06060f]/97 backdrop-blur-xl border-b border-white/5 px-4 py-3 flex flex-col gap-1 z-50"
+            >
+              <Link href="/calculator" onClick={() => setMobileOpen(false)}
+                className="flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-semibold transition-all font-orbitron tracking-wider"
+                style={{ color: "rgba(212,160,23,0.7)" }}>
+                <TrendingUp size={12} /> CALCULATOR
+              </Link>
+              <div className="flex items-center gap-2 px-3 py-2 text-green-400/50 text-[11px] font-orbitron tracking-wider">
+                <Zap size={11} /> UP TO 98% RTP
+              </div>
+              {demoSession && (
+                <button onClick={() => { setMobileOpen(false); handleExitDemo(); }}
+                  className="flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-orbitron text-red-400/70 hover:text-red-400 transition-colors text-left">
+                  <LogOut size={12} /> EXIT DEMO
+                </button>
+              )}
+              {authenticated && walletAddress && (
+                <button onClick={() => { setMobileOpen(false); setWalletOpen(true); }}
+                  className="flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-semibold text-white/50 hover:text-white hover:bg-white/5 transition-all font-rajdhani">
+                  <Wallet size={12} style={{ color: "#d4a017" }} /> Balance
+                </button>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </nav>
 
       <WalletModal

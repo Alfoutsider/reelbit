@@ -36,7 +36,7 @@ const MODEL_LABEL: Record<string, string> = {
 };
 
 const MODEL_COLOR: Record<string, string> = {
-  Classic3Reel: "#d4a017", Standard5Reel: "#8b5cf6", FiveReelFreeSpins: "#22c55e",
+  Classic3Reel: "#d4a017", Standard5Reel: "#c0c0c0", FiveReelFreeSpins: "#22c55e",
 };
 
 // Sample recent-win events — will be replaced by live feed post-launch
