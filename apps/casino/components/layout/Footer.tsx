@@ -34,7 +34,7 @@ const LINKS = {
 
 export function Footer() {
   return (
-    <footer className="mt-auto border-t border-white/5 pt-10 pb-6 px-4" style={{ background: "rgba(6,6,15,0.8)" }}>
+    <footer className="mt-auto pt-10 pb-6 px-4" style={{ background: "var(--footer-bg)", borderTop: "1px solid var(--footer-bdr)" }}>
       <div className="max-w-7xl mx-auto">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-8">
 
@@ -44,24 +44,24 @@ export function Footer() {
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src="/logo-icon.png" alt="ReelBit Casino" className="w-8 h-8 object-contain" />
               <span className="font-rajdhani text-[18px] font-bold leading-none">
-                <span className="text-white">Reel</span>
+                <span style={{ color: "var(--footer-l)" }}>Reel</span>
                 <span className="gold-text">Bit</span>
-                <span style={{ color: "rgba(212,160,23,0.4)" }}>.casino</span>
+                <span style={{ color: "var(--footer-t)" }}>.casino</span>
               </span>
             </div>
-            <p className="text-white/30 text-xs font-rajdhani leading-relaxed max-w-[180px]">
+            <p className="text-xs font-rajdhani leading-relaxed max-w-[180px]" style={{ color: "var(--footer-t)" }}>
               Provably fair slots on Solana. Up to 98% RTP. Every spin verifiable on-chain.
             </p>
             <div className="flex items-center gap-1.5">
               <Shield size={10} className="text-green-400/60" />
               <span className="font-orbitron text-[9px] text-green-400/50 tracking-wider">PROVABLY FAIR</span>
             </div>
-            <div className="flex gap-2">
-              {LINKS.social.map(({ href, label, icon }) => (
+            <div className="flex flex-wrap gap-1.5">
+              {LINKS.social.map(({ href, label }) => (
                 <a key={href} href={href} target="_blank" rel="noopener noreferrer"
-                  title={label}
-                  className="w-7 h-7 rounded-lg bg-white/5 border border-white/8 flex items-center justify-center text-white/30 hover:text-white/70 hover:bg-white/10 transition-all">
-                  {icon ?? <ExternalLink size={11} />}
+                  className="inline-flex items-center rounded-full px-3 py-1 text-[10px] font-orbitron transition-all hover:opacity-80"
+                  style={{ background: "var(--stat-bg)", border: "1px solid var(--bdr)", color: "var(--footer-l)" }}>
+                  {label}
                 </a>
               ))}
             </div>
@@ -69,17 +69,19 @@ export function Footer() {
 
           {/* Casino */}
           <div>
-            <p className="font-orbitron text-[9px] font-bold text-white/25 tracking-widest mb-3 uppercase">Casino</p>
+            <p className="font-orbitron text-[9px] font-bold tracking-widest mb-3 uppercase" style={{ color: "var(--footer-t)" }}>Casino</p>
             <ul className="space-y-2">
               {LINKS.casino.map(({ href, label, external }) => (
                 <li key={href}>
                   {external ? (
                     <a href={href} target="_blank" rel="noopener noreferrer"
-                      className="text-white/40 hover:text-white text-sm font-rajdhani transition-colors flex items-center gap-1">
+                      className="text-sm font-rajdhani transition-colors flex items-center gap-1 hover:opacity-100"
+                      style={{ color: "var(--footer-l)" }}>
                       {label} <ExternalLink size={9} className="opacity-50" />
                     </a>
                   ) : (
-                    <Link href={href} className="text-white/40 hover:text-white text-sm font-rajdhani transition-colors">
+                    <Link href={href} className="text-sm font-rajdhani transition-colors hover:opacity-100"
+                      style={{ color: "var(--footer-l)" }}>
                       {label}
                     </Link>
                   )}
@@ -90,11 +92,12 @@ export function Footer() {
 
           {/* Legal */}
           <div>
-            <p className="font-orbitron text-[9px] font-bold text-white/25 tracking-widest mb-3 uppercase">Legal & Safety</p>
+            <p className="font-orbitron text-[9px] font-bold tracking-widest mb-3 uppercase" style={{ color: "var(--footer-t)" }}>Legal & Safety</p>
             <ul className="space-y-2">
               {LINKS.legal.map(({ href, label }) => (
                 <li key={href}>
-                  <Link href={href} className="text-white/40 hover:text-white text-sm font-rajdhani transition-colors">
+                  <Link href={href} className="text-sm font-rajdhani transition-colors hover:opacity-100"
+                    style={{ color: "var(--footer-l)" }}>
                     {label}
                   </Link>
                 </li>
@@ -104,8 +107,8 @@ export function Footer() {
 
           {/* Responsible gambling */}
           <div>
-            <p className="font-orbitron text-[9px] font-bold text-white/25 tracking-widest mb-3 uppercase">Responsible Play</p>
-            <p className="text-white/25 text-[11px] font-rajdhani leading-relaxed mb-3">
+            <p className="font-orbitron text-[9px] font-bold tracking-widest mb-3 uppercase" style={{ color: "var(--footer-t)" }}>Responsible Play</p>
+            <p className="text-[11px] font-rajdhani leading-relaxed mb-3" style={{ color: "var(--footer-t)" }}>
               Gambling can be addictive. Play responsibly. If you need help:
             </p>
             <ul className="space-y-1.5">
@@ -116,7 +119,8 @@ export function Footer() {
               ].map(({ href, label }) => (
                 <li key={href}>
                   <a href={href} target="_blank" rel="noopener noreferrer"
-                    className="text-white/30 hover:text-white text-xs font-rajdhani transition-colors flex items-center gap-1">
+                    className="text-xs font-rajdhani transition-colors flex items-center gap-1 hover:opacity-100"
+                    style={{ color: "var(--footer-l)" }}>
                     <ExternalLink size={9} className="opacity-50" /> {label}
                   </a>
                 </li>
@@ -130,15 +134,18 @@ export function Footer() {
         </div>
 
         {/* Bottom bar */}
-        <div className="border-t border-white/5 pt-5 space-y-2 text-center">
-          <p className="text-[10px] text-white/20 font-rajdhani leading-relaxed max-w-2xl mx-auto">
+        <div className="pt-5 space-y-2 text-center" style={{ borderTop: "1px solid var(--footer-bdr)" }}>
+          <p className="text-[10px] font-rajdhani leading-relaxed max-w-2xl mx-auto" style={{ color: "var(--footer-t)" }}>
             ReelBit Casino is a cryptocurrency-based gaming platform. Gambling involves risk and may be illegal in your jurisdiction.
             Users are solely responsible for compliance with local laws. Not available in the United States, United Kingdom, and other restricted territories.
           </p>
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-2 text-[10px] text-white/15 font-orbitron tracking-wide">
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-2 text-[10px] font-orbitron tracking-wide" style={{ color: "var(--footer-t)" }}>
             <span>© {new Date().getFullYear()} ReelBit. All rights reserved.</span>
             <span className="hidden sm:inline">·</span>
-            <span>Provably Fair · Built on Solana</span>
+            <span className="flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-green-400 inline-block" />
+              Responsible Gambling · Built on Solana
+            </span>
           </div>
         </div>
       </div>

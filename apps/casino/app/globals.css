@@ -116,7 +116,7 @@ body {
 /* ─── Card ───────────────────────────────────────────────────── */
 .card-slot {
   background: var(--bgc);
-  border: 1px solid var(--bdr2);
+  border: 1px solid var(--bdr);
   border-radius: 16px;
   transition: border-color 0.25s, box-shadow 0.25s, transform 0.25s;
   position: relative;
@@ -231,9 +231,43 @@ body {
 }
 .btn-launch:hover { box-shadow: 0 0 28px rgba(212,160,23,0.55); filter: brightness(1.08); }
 
+/* Gold button alias */
+.btn-gold {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  background: linear-gradient(135deg, var(--gold-dim) 0%, var(--gold) 50%, var(--gold-light) 100%);
+  color: #0a0a18;
+  border: none;
+  border-radius: 12px;
+  padding: 10px 20px;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 2px 16px rgba(212,160,23,0.25);
+}
+.btn-gold:hover { box-shadow: 0 0 28px rgba(212,160,23,0.55); filter: brightness(1.08); }
+
+/* Silver button — CLAIM bonus, secondary CTAs */
+.btn-silver {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  background: linear-gradient(135deg, #6a6a6a 0%, #a0a0a0 50%, #c8c8c8 100%);
+  color: #0a0a0a;
+  border: none;
+  border-radius: 12px;
+  padding: 10px 20px;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 2px 16px rgba(192,192,192,0.2);
+}
+.btn-silver:hover { box-shadow: 0 0 28px rgba(192,192,192,0.4); filter: brightness(1.08); }
+
 /* ─── Slot img placeholder ───────────────────────────────────── */
 .slot-img-placeholder {
-  background: linear-gradient(135deg, #0f0f28 0%, #1a0a2e 50%, #0a1428 100%);
+  background: linear-gradient(135deg, #0a0a10 0%, #111118 50%, #0c0c14 100%);
   display: flex;
   align-items: center;
   justify-content: center;

@@ -292,7 +292,7 @@ export default function HomePage() {
             Create your slot machine token for free. Reach{" "}
             <span className="text-white/80 font-bold">85 SOL</span> on the bonding curve and
             your slot goes live on reelbit.casino — earning you{" "}
-            <span className="text-gold font-bold">25% of all fees forever.</span>
+            <span className="font-bold" style={{ color: "#f5c842" }}>25% of all fees forever.</span>
           </p>
 
           <div className="flex items-center justify-center gap-4 flex-wrap pt-2">

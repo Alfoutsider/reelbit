@@ -67,11 +67,11 @@ function LiveTicker() {
           {wins.map((w, i) => (
             <div key={i} className="flex items-center gap-2 px-8 text-[11px] whitespace-nowrap">
               <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse flex-shrink-0" />
-              <span className="text-white/35 font-mono">{w.wallet}</span>
-              <span className="text-white/20">won</span>
+              <span className="font-mono" style={{ color: "var(--fg4)" }}>{w.wallet}</span>
+              <span style={{ color: "var(--fg4)" }}>won</span>
               <span className="font-bold text-green-400">{w.sol} SOL</span>
-              <span className="text-white/20">on</span>
-              <span className="text-white/60 font-rajdhani font-semibold">{w.slot}</span>
+              <span style={{ color: "var(--fg4)" }}>on</span>
+              <span className="font-rajdhani font-semibold" style={{ color: "var(--fg2)" }}>{w.slot}</span>
               {w.mult >= 50 && (
                 <span className="badge badge-gold text-[9px] px-1.5 py-0.5">×{w.mult}</span>
               )}
@@ -179,20 +179,21 @@ export default function CasinoLobby() {
       <div className="border-b" style={{ background: "var(--bg2)", borderColor: "var(--bdr2)" }}>
         <div className="max-w-7xl mx-auto px-4 flex items-center gap-1">
           {([
-            { id: "lobby" as Tab,    label: "Casino Lobby", icon: <Zap size={13} /> },
-            { id: "my-slots" as Tab, label: "My Slots",     icon: <User size={13} /> },
-          ]).map(({ id, label, icon }) => (
+            { id: "lobby" as Tab,    label: "Casino Lobby" },
+            { id: "my-slots" as Tab, label: "My Slots" },
+          ]).map(({ id, label }) => (
             <button
               key={id}
               onClick={() => { if (id === "my-slots" && !authenticated && !isDemo) { login(); return; } setTab(id); }}
               className={cn(
-                "flex items-center gap-1.5 px-4 py-3 text-xs font-orbitron font-bold tracking-wide border-b-2 transition-all -mb-px",
+                "px-4 py-3 text-xs font-orbitron font-bold tracking-wide border-b-2 transition-all -mb-px",
                 tab === id
                   ? "border-[#d4a017] text-[#f5c842]"
-                  : "border-transparent text-white/30 hover:text-white/60",
+                  : "border-transparent hover:text-white/60",
               )}
+              style={tab !== id ? { color: "var(--tab-c)" } : undefined}
             >
-              {icon} {label}
+              {label}
             </button>
           ))}
           <div className="ml-auto">
@@ -200,7 +201,7 @@ export default function CasinoLobby() {
               <Link
                 href="/demo/launch"
                 className="flex items-center gap-1.5 text-[10px] font-orbitron font-bold transition-colors px-3 py-3"
-                style={{ color: "rgba(212,160,23,0.65)" }}
+                style={{ color: "var(--fg3)" }}
               >
                 <Rocket size={11} /> Launch a Slot
               </Link>
@@ -208,9 +209,9 @@ export default function CasinoLobby() {
               <Link
                 href="/demo"
                 className="flex items-center gap-1.5 text-[10px] font-orbitron font-bold transition-colors px-3 py-3"
-                style={{ color: "rgba(212,160,23,0.65)" }}
+                style={{ color: "var(--fg3)" }}
               >
-                <Zap size={11} /> Try Demo
+                Try Demo
               </Link>
             )}
           </div>
@@ -234,10 +235,10 @@ export default function CasinoLobby() {
                   <Gift size={18} style={{ color: "#d4a017" }} />
                 </div>
                 <div>
-                  <p className="font-orbitron text-sm font-black text-white tracking-wide">
-                    100% Welcome Bonus <span style={{ color: "#f5c842" }}>up to $200</span>
+                  <p className="font-orbitron text-sm font-black tracking-wide" style={{ color: "var(--fg)" }}>
+                    100% Welcome Bonus <span style={{ color: "#e8e8e8" }}>up to $200</span>
                   </p>
-                  <p className="text-white/40 text-xs font-rajdhani mt-0.5">
+                  <p className="text-xs font-rajdhani mt-0.5" style={{ color: "var(--fg3)" }}>
                     First deposit · 45× wagering · 7 days to complete
                   </p>
                 </div>
@@ -245,7 +246,7 @@ export default function CasinoLobby() {
               <motion.button
                 whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
                 onClick={login}
-                className="btn-launch flex items-center gap-1.5 rounded-xl px-4 py-2 text-[11px] font-orbitron font-bold flex-shrink-0"
+                className="btn-silver flex items-center gap-1.5 rounded-xl px-4 py-2 text-[11px] font-orbitron font-bold flex-shrink-0"
               >
                 CLAIM <ChevronRight size={11} />
               </motion.button>
@@ -268,22 +269,22 @@ export default function CasinoLobby() {
             <span className="gold-text">Casino</span>{" "}
             <span className="text-white">Lobby</span>
           </h1>
-          <p className="text-white/30 text-sm font-rajdhani max-w-md mx-auto">
+          <p className="text-sm font-rajdhani max-w-md mx-auto" style={{ color: "var(--fg3)" }}>
             Every spin provably fair. Deposit SOL, pick a machine, and play.
           </p>
 
           {/* Stats strip */}
           <div className="flex items-center justify-center gap-6 sm:gap-10 pt-2 flex-wrap">
-            {[
-              { label: "Live Slots",   value: loading ? "…" : String(allSlots.length), color: "gold-text" },
-              { label: "Graduated",    value: loading ? "…" : String(graduatedSlots.length), color: "gold-text" },
-              { label: "Max RTP",      value: "98%",   color: "text-green-400" },
-              { label: "House Edge",   value: "4%",    color: "text-white/60" },
-              { label: "Auto Spin",    value: "✓",     color: "text-green-400" },
-            ].map(({ label, value, color }) => (
+            {([
+              { label: "Live Slots",   value: loading ? "…" : String(allSlots.length), color: "gold-text",     valueStyle: undefined as React.CSSProperties | undefined },
+              { label: "Graduated",    value: loading ? "…" : String(graduatedSlots.length), color: "gold-text", valueStyle: undefined },
+              { label: "Max RTP",      value: "98%",   color: "text-green-400", valueStyle: undefined },
+              { label: "House Edge",   value: "4%",    color: "",               valueStyle: { color: "var(--fg2)" } },
+              { label: "Auto Spin",    value: "✓",     color: "",               valueStyle: { color: "#c0c0c0" } },
+            ]).map(({ label, value, color, valueStyle }) => (
               <div key={label} className="text-center">
-                <p className={`font-orbitron text-xl font-black ${color}`}>{value}</p>
-                <p className="text-[9px] text-white/20 font-orbitron tracking-widest uppercase mt-0.5">{label}</p>
+                <p className={`font-orbitron text-xl font-black ${color}`} style={valueStyle}>{value}</p>
+                <p className="text-[9px] font-orbitron tracking-widest uppercase mt-0.5" style={{ color: "var(--fg4)" }}>{label}</p>
               </div>
             ))}
           </div>
@@ -477,15 +478,15 @@ export default function CasinoLobby() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
           className="relative overflow-hidden rounded-2xl px-8 py-7 text-center"
-          style={{ border: "1px solid rgba(212,160,23,0.15)", background: "linear-gradient(135deg, rgba(160,120,16,0.15) 0%, rgba(212,160,23,0.06) 50%, rgba(6,6,15,0.85) 100%)" }}
+          style={{ border: "1px solid rgba(212,160,23,0.28)", background: "linear-gradient(135deg, rgba(160,120,16,0.15) 0%, rgba(212,160,23,0.06) 50%, rgba(6,6,15,0.85) 100%)" }}
         >
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(212,160,23,0.07),transparent_70%)]" />
           {isDemo ? (
             <>
-              <p className="relative font-orbitron text-sm font-bold text-white/80 tracking-wide mb-1">
+              <p className="relative font-orbitron text-sm font-bold tracking-wide mb-1" style={{ color: "var(--fg)" }}>
                 Want to try the creator side?
               </p>
-              <p className="relative text-white/30 text-sm font-rajdhani mb-4">
+              <p className="relative text-sm font-rajdhani mb-4" style={{ color: "var(--fg3)" }}>
                 Launch a simulated slot token and watch bots drive it to $100k.
               </p>
               <Link
@@ -497,10 +498,10 @@ export default function CasinoLobby() {
             </>
           ) : (
             <>
-              <p className="relative font-orbitron text-sm font-bold text-white/80 tracking-wide mb-1">
+              <p className="relative font-orbitron text-sm font-bold tracking-wide mb-1" style={{ color: "var(--fg)" }}>
                 Have a token on reelbit.fun?
               </p>
-              <p className="relative text-white/30 text-sm font-rajdhani mb-4">
+              <p className="relative text-sm font-rajdhani mb-4" style={{ color: "var(--fg3)" }}>
                 Reach 85 SOL on the bonding curve and your slot graduates here automatically.
               </p>
               <a

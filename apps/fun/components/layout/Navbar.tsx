@@ -103,10 +103,10 @@ export function Navbar() {
           <Link href="/" className="flex items-center gap-2.5 group" onClick={() => setMobileOpen(false)}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/logo-icon.png" alt="ReelBit" className="w-10 h-10 object-contain" />
-            <span className="font-rajdhani text-[20px] font-bold leading-none">
-              <span className="text-white">Reel</span>
+            <span className="font-orbitron text-[15px] font-black leading-none">
+              <span style={{ color: "var(--brand-cream)" }}>Reel</span>
               <span style={{ color: "var(--brand-red)" }}>Bit</span>
-              <span style={{ color: "rgba(255,255,255,0.3)" }}>.fun</span>
+              <span style={{ color: "rgba(240,235,224,0.22)" }}>.fun</span>
             </span>
           </Link>
 

@@ -78,7 +78,7 @@ export function Navbar() {
 
   return (
     <>
-      <nav className="fixed top-0 inset-x-0 z-30 bg-[#06060f]/85 backdrop-blur border-b border-white/5">
+      <nav className="fixed top-0 inset-x-0 z-30 backdrop-blur border-b" style={{ background: "var(--nav-bg)", borderColor: "rgba(212,160,23,0.1)" }}>
         <div className="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between">
 
           {/* Logo */}
@@ -86,9 +86,9 @@ export function Navbar() {
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/logo-icon.png" alt="ReelBit" className="w-9 h-9 object-contain" />
             <span className="font-rajdhani text-[20px] font-bold leading-none">
-              <span className="text-white">Reel</span>
+              <span style={{ color: "var(--fg)" }}>Reel</span>
               <span className="gold-text">Bit</span>
-              <span style={{ color: "rgba(212,160,23,0.4)" }}>.casino</span>
+              <span style={{ color: "var(--fg4)" }}>.casino</span>
             </span>
           </Link>
 
@@ -199,18 +199,18 @@ export function Navbar() {
             ) : (
               /* ── Not connected ── */
               <div className="flex items-center gap-3">
-                <Link href="/demo" className="text-[10px] font-orbitron transition-colors px-2" style={{ color: "rgba(212,160,23,0.6)" }}
-                  onMouseEnter={(e) => (e.currentTarget.style.color = "#d4a017")}
-                  onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(212,160,23,0.6)")}>
+                <Link href="/demo" className="text-[10px] font-orbitron transition-colors px-2" style={{ color: "var(--fg3)" }}
+                  onMouseEnter={(e) => (e.currentTarget.style.color = "var(--fg)")}
+                  onMouseLeave={(e) => (e.currentTarget.style.color = "var(--fg3)")}>
                   Demo
                 </Link>
                 <div className="flex flex-col items-center gap-0.5">
                   <button onClick={login} className="btn-launch py-1.5 px-5 text-[11px]">
                     Login
                   </button>
-                  <button onClick={login} className="text-[9px] font-orbitron transition-colors" style={{ color: "rgba(212,160,23,0.5)" }}
-                    onMouseEnter={(e) => (e.currentTarget.style.color = "#d4a017")}
-                    onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(212,160,23,0.5)")}>
+                  <button onClick={login} className="text-[9px] font-orbitron transition-colors" style={{ color: "var(--fg4)" }}
+                    onMouseEnter={(e) => (e.currentTarget.style.color = "var(--fg2)")}
+                    onMouseLeave={(e) => (e.currentTarget.style.color = "var(--fg4)")}>
                     Register
                   </button>
                 </div>

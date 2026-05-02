@@ -33,7 +33,7 @@ const LINKS = {
 
 export function Footer() {
   return (
-    <footer className="mt-auto border-t border-white/5 bg-[#06060a]/80 pt-10 pb-6 px-4">
+    <footer className="mt-auto pt-10 pb-6 px-4" style={{ background: "#040408", borderTop: "1px solid rgba(196,30,30,0.1)" }}>
       <div className="max-w-7xl mx-auto">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-8">
 
@@ -42,21 +42,21 @@ export function Footer() {
             <div className="flex items-center gap-2">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src="/logo-icon.png" alt="ReelBit" className="w-8 h-8 object-contain" />
-              <span className="font-rajdhani text-[18px] font-bold leading-none">
-                <span className="text-white">Reel</span>
+              <span className="font-orbitron text-[14px] font-black leading-none">
+                <span style={{ color: "rgba(240,235,224,0.52)" }}>Reel</span>
                 <span style={{ color: "var(--brand-red)" }}>Bit</span>
-                <span style={{ color: "rgba(255,255,255,0.3)" }}>.fun</span>
+                <span style={{ color: "rgba(240,235,224,0.3)" }}>.fun</span>
               </span>
             </div>
-            <p className="text-white/30 text-xs font-rajdhani leading-relaxed max-w-[180px]">
+            <p className="text-xs font-rajdhani leading-relaxed max-w-[180px]" style={{ color: "rgba(240,235,224,0.3)" }}>
               Pump.fun meets Vegas. Launch slot tokens on Solana.
             </p>
-            <div className="flex gap-2">
-              {LINKS.social.map(({ href, label, icon }) => (
+            <div className="flex flex-wrap gap-1.5">
+              {LINKS.social.map(({ href, label }) => (
                 <a key={href} href={href} target="_blank" rel="noopener noreferrer"
-                  title={label}
-                  className="w-7 h-7 rounded-lg bg-white/5 border border-white/8 flex items-center justify-center text-white/30 hover:text-white/70 hover:bg-white/10 transition-all">
-                  {icon ?? <ExternalLink size={11} />}
+                  className="inline-flex items-center rounded-full px-3 py-1 text-[10px] font-orbitron transition-all hover:opacity-80"
+                  style={{ background: "rgba(196,30,30,0.04)", border: "1px solid rgba(196,30,30,0.12)", color: "rgba(240,235,224,0.52)" }}>
+                  {label}
                 </a>
               ))}
             </div>
@@ -64,17 +64,19 @@ export function Footer() {
 
           {/* Platform */}
           <div>
-            <p className="font-orbitron text-[9px] font-bold text-white/25 tracking-widest mb-3 uppercase">Platform</p>
+            <p className="font-orbitron text-[9px] font-bold tracking-widest mb-3 uppercase" style={{ color: "rgba(240,235,224,0.3)" }}>Platform</p>
             <ul className="space-y-2">
               {LINKS.platform.map(({ href, label, external }) => (
                 <li key={href}>
                   {external ? (
                     <a href={href} target="_blank" rel="noopener noreferrer"
-                      className="text-white/40 hover:text-white text-sm font-rajdhani transition-colors flex items-center gap-1">
+                      className="text-sm font-rajdhani transition-colors flex items-center gap-1 hover:opacity-100"
+                      style={{ color: "rgba(240,235,224,0.52)" }}>
                       {label} <ExternalLink size={9} className="opacity-50" />
                     </a>
                   ) : (
-                    <Link href={href} className="text-white/40 hover:text-white text-sm font-rajdhani transition-colors">
+                    <Link href={href} className="text-sm font-rajdhani transition-colors hover:opacity-100"
+                      style={{ color: "rgba(240,235,224,0.52)" }}>
                       {label}
                     </Link>
                   )}
@@ -85,11 +87,12 @@ export function Footer() {
 
           {/* Legal */}
           <div>
-            <p className="font-orbitron text-[9px] font-bold text-white/25 tracking-widest mb-3 uppercase">Legal</p>
+            <p className="font-orbitron text-[9px] font-bold tracking-widest mb-3 uppercase" style={{ color: "rgba(240,235,224,0.3)" }}>Legal</p>
             <ul className="space-y-2">
               {LINKS.legal.map(({ href, label }) => (
                 <li key={href}>
-                  <Link href={href} className="text-white/40 hover:text-white text-sm font-rajdhani transition-colors">
+                  <Link href={href} className="text-sm font-rajdhani transition-colors hover:opacity-100"
+                    style={{ color: "rgba(240,235,224,0.52)" }}>
                     {label}
                   </Link>
                 </li>
@@ -99,8 +102,8 @@ export function Footer() {
 
           {/* Risk warning */}
           <div>
-            <p className="font-orbitron text-[9px] font-bold text-white/25 tracking-widest mb-3 uppercase">Risk Warning</p>
-            <p className="text-white/25 text-[11px] font-rajdhani leading-relaxed">
+            <p className="font-orbitron text-[9px] font-bold tracking-widest mb-3 uppercase" style={{ color: "rgba(240,235,224,0.3)" }}>Risk Warning</p>
+            <p className="text-[11px] font-rajdhani leading-relaxed" style={{ color: "rgba(240,235,224,0.3)" }}>
               Token trading involves significant risk. Only trade with funds you can afford to lose.
               Tokens launched on this platform are speculative assets.
             </p>
@@ -109,9 +112,13 @@ export function Footer() {
         </div>
 
         {/* Bottom bar */}
-        <div className="border-t border-white/5 pt-5 flex flex-col sm:flex-row items-center justify-between gap-3 text-[10px] text-white/20 font-orbitron tracking-wide">
+        <div className="pt-5 flex flex-col sm:flex-row items-center justify-between gap-3 text-[10px] font-orbitron tracking-wide"
+          style={{ borderTop: "1px solid rgba(196,30,30,0.1)", color: "rgba(240,235,224,0.3)" }}>
           <span>© {new Date().getFullYear()} ReelBit. All rights reserved.</span>
-          <span>Built on Solana · Not available in restricted jurisdictions</span>
+          <span className="flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-green-400 inline-block" />
+            Provably Fair · Built on Solana
+          </span>
         </div>
       </div>
     </footer>
