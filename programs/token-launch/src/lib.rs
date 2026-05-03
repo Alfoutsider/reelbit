@@ -507,9 +507,11 @@ pub struct SellTokens<'info> {
     pub vault_token_account: Account<'info, TokenAccount>,
 
     #[account(
-        mut,
+        init_if_needed,
+        payer = seller,
+        space = WalletCap::LEN,
         seeds = [b"wallet_cap", mint.key().as_ref(), seller.key().as_ref()],
-        bump = wallet_cap.bump,
+        bump,
     )]
     pub wallet_cap: Account<'info, WalletCap>,
 
@@ -1007,8 +1009,14 @@ pub mod token_launch {
         vault.real_tokens            += token_amount;
         vault.total_fees_accumulated += fee_amount;
 
-        ctx.accounts.wallet_cap.tokens_held =
-            ctx.accounts.wallet_cap.tokens_held.saturating_sub(token_amount);
+        // Initialize cap fields on first use (wallets that received tokens via transfer, not buy)
+        let cap = &mut ctx.accounts.wallet_cap;
+        if cap.mint == Pubkey::default() {
+            cap.mint   = ctx.accounts.mint.key();
+            cap.wallet = ctx.accounts.seller.key();
+            cap.bump   = ctx.bumps.wallet_cap;
+        }
+        cap.tokens_held = cap.tokens_held.saturating_sub(token_amount);
 
         let new_real_sol    = vault.real_sol;
         let new_real_tokens = vault.real_tokens;

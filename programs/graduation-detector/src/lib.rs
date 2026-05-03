@@ -16,6 +16,8 @@ const TOKEN_LAUNCH_PROGRAM: Pubkey = pubkey!("5vy9vYy9A6wAy59nRvvpGd5drVwQU1JYqR
 pub struct GraduationState {
     pub mint: Pubkey,
     pub creator: Pubkey,
+    /// Platform authority (migration bot) — may also call record_migration
+    pub platform_authority: Pubkey,
     pub dlmm_pool: Pubkey,
     /// Set once migration completes
     pub dynamic_amm_pool: Pubkey,
@@ -25,7 +27,7 @@ pub struct GraduationState {
 }
 
 impl GraduationState {
-    const LEN: usize = 8 + 32 + 32 + 32 + 32 + 1 + 8 + 1;
+    const LEN: usize = 8 + 32 + 32 + 32 + 32 + 32 + 1 + 8 + 1;
 }
 
 // ── Errors ────────────────────────────────────────────────────────────────────
@@ -115,10 +117,12 @@ pub mod graduation_detector {
         ctx: Context<RegisterSlot>,
         mint: Pubkey,
         dlmm_pool: Pubkey,
+        platform_authority: Pubkey,
     ) -> Result<()> {
         let gs = &mut ctx.accounts.grad_state;
         gs.mint = mint;
         gs.creator = ctx.accounts.creator.key();
+        gs.platform_authority = platform_authority;
         gs.dlmm_pool = dlmm_pool;
         gs.dynamic_amm_pool = Pubkey::default();
         gs.graduated = false;
@@ -161,12 +165,15 @@ pub mod graduation_detector {
 
     /// Called after the off-chain migration bot completes the DLMM→Dynamic AMM swap.
     /// Records the new pool address so the casino program can find it.
+    /// Accepts either the creator or the platform_authority (migration bot).
     pub fn record_migration(
         ctx: Context<RecordMigration>,
         dynamic_amm_pool: Pubkey,
     ) -> Result<()> {
+        let caller = ctx.accounts.authority.key();
+        let gs     = &ctx.accounts.grad_state;
         require!(
-            ctx.accounts.authority.key() == ctx.accounts.grad_state.creator,
+            caller == gs.creator || caller == gs.platform_authority,
             GraduationError::Unauthorized
         );
         ctx.accounts.grad_state.dynamic_amm_pool = dynamic_amm_pool;

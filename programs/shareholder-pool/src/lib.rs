@@ -109,7 +109,8 @@ pub struct RegisterShareholder<'info> {
 
 #[derive(Accounts)]
 pub struct DepositRewards<'info> {
-    /// Distribution program's PDA — only it may deposit
+    /// Distribution program's authority — enforced by constraint below
+    #[account(constraint = depositor.key() == config.authority @ ShareholderError::Unauthorized)]
     pub depositor: Signer<'info>,
 
     #[account(

@@ -218,5 +218,5 @@ pub mod distribution {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 fn bps(amount: u64, rate: u64) -> u64 {
-    amount.saturating_mul(rate) / BPS_TOTAL
+    (amount as u128 * rate as u128 / BPS_TOTAL as u128) as u64
 }

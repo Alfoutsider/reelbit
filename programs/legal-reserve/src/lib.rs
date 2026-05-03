@@ -92,6 +92,8 @@ pub struct Initialize<'info> {
 
 #[derive(Accounts)]
 pub struct Deposit<'info> {
+    /// Authority (distribution program) — enforced by constraint below
+    #[account(constraint = depositor.key() == config.authority @ LegalReserveError::Unauthorized)]
     pub depositor: Signer<'info>,
 
     #[account(
