@@ -73,7 +73,7 @@ export default function CasinoPage() {
             <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
             <XAxis dataKey="day" tick={{ fill: "#71717a", fontSize: 10 }} />
             <YAxis tick={{ fill: "#71717a", fontSize: 10 }} tickFormatter={(v) => `$${v.toFixed(0)}`} />
-            <Tooltip contentStyle={{ background: "#18181b", border: "1px solid #3f3f46", borderRadius: 8 }} formatter={(v: number) => [fmtUsd(v), "GGR"]} />
+            <Tooltip contentStyle={{ background: "#18181b", border: "1px solid #3f3f46", borderRadius: 8 }} formatter={(v) => [fmtUsd(Number(v ?? 0)), "GGR"]} />
             <Line type="monotone" dataKey="ggr" stroke="#10B981" strokeWidth={2} dot={false} />
           </LineChart>
         </ResponsiveContainer>

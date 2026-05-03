@@ -77,7 +77,7 @@ export default function LaunchpadPage() {
               <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
               <XAxis dataKey="day" tick={{ fill: "#71717a", fontSize: 10 }} />
               <YAxis tick={{ fill: "#71717a", fontSize: 10 }} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
-              <Tooltip contentStyle={{ background: "#18181b", border: "1px solid #3f3f46", borderRadius: 8 }} formatter={(v: number) => [fmtUsd(v), "Volume"]} />
+              <Tooltip contentStyle={{ background: "#18181b", border: "1px solid #3f3f46", borderRadius: 8 }} formatter={(v) => [fmtUsd(Number(v ?? 0)), "Volume"]} />
               <Bar dataKey="volUsd" fill="#7C3AED" radius={[2, 2, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>

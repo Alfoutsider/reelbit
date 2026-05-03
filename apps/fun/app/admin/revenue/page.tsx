@@ -88,7 +88,7 @@ export default function RevenuePage() {
             <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
             <XAxis dataKey="day" tick={{ fill: "#71717a", fontSize: 10 }} />
             <YAxis tick={{ fill: "#71717a", fontSize: 10 }} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
-            <Tooltip contentStyle={{ background: "#18181b", border: "1px solid #3f3f46", borderRadius: 8 }} formatter={(v: number) => fmtUsd(v)} />
+            <Tooltip contentStyle={{ background: "#18181b", border: "1px solid #3f3f46", borderRadius: 8 }} formatter={(v) => fmtUsd(Number(v ?? 0))} />
             <Legend />
             <Area type="monotone" dataKey="vol"  stroke="#7C3AED" fill="url(#gVol)" strokeWidth={1.5} name="Volume" />
             <Area type="monotone" dataKey="fees" stroke="#10B981" fill="url(#gFee)" strokeWidth={1.5} name="Fees" />

@@ -96,7 +96,7 @@ export default function DashboardPage() {
             <YAxis tick={{ fill: "#71717a", fontSize: 10 }} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
             <Tooltip
               contentStyle={{ background: "#18181b", border: "1px solid #3f3f46", borderRadius: 8 }}
-              formatter={(v: number) => [fmtUsd(v), "Volume"]}
+              formatter={(v) => [fmtUsd(Number(v ?? 0)), "Volume"]}
             />
             <Line type="monotone" dataKey="volUsd" stroke="#7C3AED" strokeWidth={2} dot={false} />
           </LineChart>
