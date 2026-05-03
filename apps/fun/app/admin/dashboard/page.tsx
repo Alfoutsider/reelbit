@@ -5,12 +5,9 @@ import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from "recharts";
 
-const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
-
-async function apiFetch(path: string) {
-  const res = await fetch(`${API}${path}`, { cache: "no-store" });
-  if (!res.ok) throw new Error(`API ${res.status}`);
-  return res.json();
+function apiFetch(path: string, params: Record<string, string | number> = {}) {
+  const qs = new URLSearchParams({ path, ...Object.fromEntries(Object.entries(params).map(([k,v]) => [k, String(v)])) });
+  return fetch(`/api/admin/proxy?${qs}`, { cache: "no-store" }).then((r) => r.json());
 }
 
 function fmtUsd(n: number) {
@@ -30,27 +27,32 @@ function StatCard({ label, value, sub }: { label: string; value: string; sub?: s
   );
 }
 
-const DAYS = [7, 30, 90];
-
 export default function DashboardPage() {
   const [days, setDays]   = useState(30);
   const [kpis, setKpis]   = useState<Record<string, unknown> | null>(null);
   const [chart, setChart] = useState<Record<string, unknown>[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     setLoading(true);
+    setError("");
     Promise.all([
-      apiFetch(`/admin/kpis?days=${days}`),
-      apiFetch(`/admin/chart?platform=launchpad&days=${days}`),
+      apiFetch("/admin/kpis", { days }),
+      apiFetch("/admin/chart", { platform: "launchpad", days }),
     ])
-      .then(([k, c]) => { setKpis(k); setChart(c); })
-      .catch(console.error)
+      .then(([k, c]) => {
+        if (k.error) { setError(k.error); return; }
+        setKpis(k);
+        setChart(Array.isArray(c) ? c : []);
+      })
+      .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
   }, [days]);
 
   if (loading) return <p className="text-zinc-500 text-sm">Loading…</p>;
-  if (!kpis) return null;
+  if (error)   return <p className="text-red-400 text-sm">{error}</p>;
+  if (!kpis)   return null;
 
   const lp = kpis.launchpad as Record<string, number>;
   const ca = kpis.casino   as Record<string, number>;
@@ -65,7 +67,7 @@ export default function DashboardPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">Overview</h1>
         <div className="flex gap-2">
-          {DAYS.map((d) => (
+          {[7, 30, 90].map((d) => (
             <button key={d} onClick={() => setDays(d)}
               className={`px-3 py-1 rounded text-xs ${days === d ? "bg-violet-600 text-white" : "bg-zinc-800 text-zinc-400 hover:text-zinc-100"}`}>
               {d}d

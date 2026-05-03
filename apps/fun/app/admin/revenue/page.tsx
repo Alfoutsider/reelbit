@@ -3,8 +3,11 @@
 import { useEffect, useState } from "react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from "recharts";
 
-const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
-const apiFetch = (p: string) => fetch(`${API}${p}`, { cache: "no-store" }).then((r) => r.json());
+function apiFetch(path: string, params: Record<string, string | number> = {}) {
+  const qs = new URLSearchParams({ path, ...Object.fromEntries(Object.entries(params).map(([k,v]) => [k, String(v)])) });
+  return fetch(`/api/admin/proxy?${qs}`, { cache: "no-store" }).then((r) => r.json());
+}
+
 const fmtUsd = (n: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n);
 
 function StatCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
@@ -30,8 +33,11 @@ export default function RevenuePage() {
 
   useEffect(() => {
     setLoading(true);
-    Promise.all([apiFetch(`/admin/kpis?days=${days}`), apiFetch(`/admin/chart?platform=launchpad&days=${days}`)])
-      .then(([k, c]) => { setKpis(k); setChart(c); })
+    Promise.all([
+      apiFetch("/admin/kpis", { days }),
+      apiFetch("/admin/chart", { platform: "launchpad", days }),
+    ])
+      .then(([k, c]) => { setKpis(k); setChart(Array.isArray(c) ? c : []); })
       .catch(console.error)
       .finally(() => setLoading(false));
   }, [days]);
@@ -65,10 +71,10 @@ export default function RevenuePage() {
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Trading Volume"   value={fmtUsd(lp.volumeUsd)} sub={`${days}d`} />
+        <StatCard label="Trading Volume"    value={fmtUsd(lp.volumeUsd)} sub={`${days}d`} />
         <StatCard label="Est. Fees (~1.5%)" value={fmtUsd(estFees)} />
         <StatCard label="Platform Cut (20%)" value={fmtUsd(estPlatform)} />
-        <StatCard label="Casino GGR"       value={fmtUsd(ca.ggrUsdc / 1e6)} />
+        <StatCard label="Casino GGR"        value={fmtUsd(ca.ggrUsdc / 1e6)} />
       </div>
 
       <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">

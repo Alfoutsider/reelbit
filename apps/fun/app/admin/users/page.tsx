@@ -3,8 +3,10 @@
 import { useEffect, useState } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 
-const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
-const apiFetch = (p: string) => fetch(`${API}${p}`, { cache: "no-store" }).then((r) => r.json());
+function apiFetch(path: string, params: Record<string, string | number> = {}) {
+  const qs = new URLSearchParams({ path, ...Object.fromEntries(Object.entries(params).map(([k,v]) => [k, String(v)])) });
+  return fetch(`/api/admin/proxy?${qs}`, { cache: "no-store" }).then((r) => r.json());
+}
 const fmtNum = (n: number) => new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(n);
 
 function StatCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
@@ -25,7 +27,7 @@ export default function UsersPage() {
 
   useEffect(() => {
     setLoading(true);
-    Promise.all([apiFetch(`/admin/kpis?days=${days}`), apiFetch(`/admin/chart?platform=launchpad&days=${days}`)])
+    Promise.all([apiFetch("/admin/kpis", { days }), apiFetch("/admin/chart", { platform: "launchpad", days })])
       .then(([k, c]) => { setKpis(k); setChart(c); })
       .catch(console.error)
       .finally(() => setLoading(false));
