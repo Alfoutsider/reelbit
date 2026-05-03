@@ -225,6 +225,8 @@ pub enum TokenLaunchError {
     NotGraduated,
     #[msg("Token has already been migrated to AMM")]
     AlreadyMigrated,
+    #[msg("creator_token_account must be the creator's ATA for this mint")]
+    InvalidCreatorTokenAccount,
 }
 
 // ── Events ────────────────────────────────────────────────────────────────────
@@ -858,7 +860,7 @@ pub mod token_launch {
         require!(sol_amount > 0, TokenLaunchError::ZeroAmount);
 
         let current_fee_bps = fee_bps(ctx.accounts.bonding_curve_vault.real_sol);
-        let fee_amount       = sol_amount * current_fee_bps / 10_000;
+        let fee_amount       = (sol_amount as u128 * current_fee_bps as u128 / 10_000) as u64;
         let trading_sol      = sol_amount.saturating_sub(fee_amount);
 
         let tokens_out = ctx.accounts.bonding_curve_vault.tokens_for_sol(trading_sol);
@@ -918,6 +920,7 @@ pub mod token_launch {
             tokens_out,
         )?;
 
+        let buyer_key = ctx.accounts.buyer.key();
         let vault = &mut ctx.accounts.bonding_curve_vault;
         vault.virtual_sol             += sol_amount;    // virtual tracks full amount including fee
         vault.virtual_tokens          -= tokens_out;
@@ -925,22 +928,20 @@ pub mod token_launch {
         vault.real_tokens             -= tokens_out;
         vault.total_fees_accumulated  += fee_amount;
 
-        let cap = &mut ctx.accounts.wallet_cap;
-        cap.mint        = mint_key;
-        cap.wallet      = ctx.accounts.buyer.key();
-        cap.tokens_held += tokens_out;
-        cap.bump        = ctx.bumps.wallet_cap;
-
         // Track creator's cumulative purchases — used for penalty tier calculation
-        if ctx.accounts.buyer.key() == ctx.accounts.bonding_curve_vault.creator {
-            ctx.accounts.bonding_curve_vault.dev_buy_amount =
-                ctx.accounts.bonding_curve_vault.dev_buy_amount.saturating_add(tokens_out);
-            ctx.accounts.bonding_curve_vault.dev_buy_sol =
-                ctx.accounts.bonding_curve_vault.dev_buy_sol.saturating_add(sol_amount);
+        if buyer_key == vault.creator {
+            vault.dev_buy_amount = vault.dev_buy_amount.saturating_add(tokens_out);
+            vault.dev_buy_sol    = vault.dev_buy_sol.saturating_add(sol_amount);
         }
 
         let new_real_sol    = vault.real_sol;
         let new_real_tokens = vault.real_tokens;
+
+        let cap = &mut ctx.accounts.wallet_cap;
+        cap.mint        = mint_key;
+        cap.wallet      = buyer_key;
+        cap.tokens_held += tokens_out;
+        cap.bump        = ctx.bumps.wallet_cap;
 
         emit!(TokensBought {
             mint:        mint_key,
@@ -973,7 +974,7 @@ pub mod token_launch {
         require!(gross_sol <= ctx.accounts.bonding_curve_vault.real_sol, TokenLaunchError::InsufficientSol);
 
         let current_fee_bps = fee_bps(ctx.accounts.bonding_curve_vault.real_sol);
-        let fee_amount       = gross_sol * current_fee_bps / 10_000;
+        let fee_amount       = (gross_sol as u128 * current_fee_bps as u128 / 10_000) as u64;
         let net_sol          = gross_sol.saturating_sub(fee_amount);
         require!(net_sol >= min_sol_out, TokenLaunchError::SlippageExceeded);
 
@@ -1032,6 +1033,17 @@ pub mod token_launch {
     ///   • 30-day jackpot expiry (expired → jackpot share goes to platform)
     ///   • All destination wallets validated against PlatformConfig
     pub fn claim_fees(ctx: Context<ClaimFees>) -> Result<()> {
+        // Verify creator_token_account is the creator's actual ATA for this mint
+        let expected_ata = anchor_spl::associated_token::get_associated_token_address(
+            &ctx.accounts.creator.key(),
+            &ctx.accounts.mint.key(),
+        );
+        require_keys_eq!(
+            ctx.accounts.creator_token_account.key(),
+            expected_ata,
+            TokenLaunchError::InvalidCreatorTokenAccount,
+        );
+
         let vault = &ctx.accounts.bonding_curve_vault;
         let now   = Clock::get()?.unix_timestamp;
 

@@ -2,11 +2,13 @@ use anchor_lang::prelude::*;
 
 declare_id!("HjrWDt8x46beDUP33NCzHc4VdswYKEE2axf6F2CoDxha");
 
-// Graduation threshold: $100k market cap denominated in lamports (6-decimal token).
-// This constant is the SOL-equivalent amount kept in the bonding curve vault.
-// Sprint 3 will replace this with a Pyth/Switchboard oracle price feed.
-// For Sprint 1 we express it as a raw lamport threshold (100k USD at ~$150/SOL ≈ 667 SOL).
-const GRADUATION_LAMPORTS: u64 = 667_000_000_000; // ~667 SOL
+// Graduation is primarily triggered off-chain: the API watches Pyth SOL/USD and calls
+// migrate_to_amm when virtual MCap crosses $100k. This constant is the on-chain fallback
+// used if the crank fires directly — must match token-launch's GRADUATION_LAMPORTS (85 SOL).
+const GRADUATION_LAMPORTS: u64 = 85_000_000_000; // 85 SOL — matches token-launch program
+
+// token-launch program ID — used to verify the bonding curve vault PDA
+const TOKEN_LAUNCH_PROGRAM: Pubkey = pubkey!("5vy9vYy9A6wAy59nRvvpGd5drVwQU1JYqRuSg7xQZDD8");
 
 // ── State ─────────────────────────────────────────────────────────────────────
 
@@ -36,6 +38,8 @@ pub enum GraduationError {
     AlreadyGraduated,
     #[msg("Unauthorized — only creator or platform authority")]
     Unauthorized,
+    #[msg("bonding_curve_vault does not match the expected PDA for this mint")]
+    InvalidVault,
 }
 
 // ── Events ────────────────────────────────────────────────────────────────────
@@ -126,6 +130,17 @@ pub mod graduation_detector {
     /// Permissionless crank: checks vault balance and marks slot as graduated.
     /// Sprint 3 will follow this with a CPI to Meteora to atomically migrate the pool.
     pub fn check_and_graduate(ctx: Context<CheckAndGraduate>) -> Result<()> {
+        // Verify the passed vault is actually the bonding curve PDA for this mint
+        let (expected_vault, _) = Pubkey::find_program_address(
+            &[b"bonding_curve", ctx.accounts.grad_state.mint.as_ref()],
+            &TOKEN_LAUNCH_PROGRAM,
+        );
+        require_keys_eq!(
+            ctx.accounts.bonding_curve_vault.key(),
+            expected_vault,
+            GraduationError::InvalidVault,
+        );
+
         let vault_lamports = ctx.accounts.bonding_curve_vault.lamports();
         require!(vault_lamports >= GRADUATION_LAMPORTS, GraduationError::BelowThreshold);
 

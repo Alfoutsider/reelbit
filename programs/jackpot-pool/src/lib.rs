@@ -243,15 +243,15 @@ pub mod jackpot_pool {
         Ok(())
     }
 
-    /// Called by authority after VRF callback (Sprint 4) provides randomness.
-    /// vrf_result is the 32-byte Switchboard output — jackpot if first 2 bytes == 0.
+    /// Called by authority to pay out a verified jackpot winner.
+    /// The authority is the game server / platform — winner verification is off-chain
+    /// (session nonce + server-seed proof). Sprint 4 will replace this with on-chain
+    /// Switchboard VRF so anyone can verify the result trustlessly.
     pub fn settle_jackpot(
         ctx: Context<SettleJackpot>,
         vrf_result: [u8; 32],
     ) -> Result<()> {
-        // Sprint 4: replace with on-chain VRF account verification
-        let is_winner = vrf_result[0] == 0 && vrf_result[1] == 0;
-        require!(is_winner, JackpotError::NotWinner);
+        // vrf_result stored for auditability; Sprint 4 adds on-chain VRF verification here
 
         let payout = ctx.accounts.pool_ta.amount;
         require!(payout > 0, JackpotError::ZeroAmount);
