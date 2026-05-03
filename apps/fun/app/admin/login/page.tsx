@@ -1,49 +1,42 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { saveCode, getCode, fetchKPIs } from "@/lib/api";
 
-export default function LoginPage() {
-  const router = useRouter();
-  const [code, setCode] = useState("");
-  const [error, setError] = useState("");
+export default function AdminLogin() {
+  const router  = useRouter();
+  const [code, setCode]     = useState("");
+  const [error, setError]   = useState("");
   const [loading, setLoading] = useState(false);
-
-  // If already authenticated, skip to dashboard
-  useEffect(() => {
-    if (getCode()) router.replace("/dashboard");
-  }, [router]);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     setError("");
-    saveCode(code);
-    try {
-      await fetchKPIs(1);
-      router.replace("/dashboard");
-    } catch (err: unknown) {
-      clearCode();
+    const res = await fetch("/api/admin/auth", {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ code }),
+    });
+    if (res.ok) {
+      router.replace("/admin/dashboard");
+    } else {
       setError("Invalid access code");
-    } finally {
       setLoading(false);
     }
   }
 
-  function clearCode() {
-    sessionStorage.removeItem("admin_code");
-    setCode("");
-  }
-
   return (
-    <div className="min-h-screen flex items-center justify-center">
-      <div className="w-full max-w-sm space-y-6">
+    <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
+      <div className="w-full max-w-sm space-y-6 px-4">
         <div className="text-center">
           <div className="text-3xl font-bold text-violet-400 mb-1">ReelBit</div>
-          <p className="text-zinc-400 text-sm">Admin Dashboard</p>
+          <p className="text-zinc-500 text-sm">Admin Dashboard</p>
         </div>
-        <form onSubmit={submit} className="bg-zinc-900 rounded-2xl p-6 space-y-4 border border-zinc-800">
+        <form
+          onSubmit={submit}
+          className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 space-y-4"
+        >
           <label className="block">
             <span className="text-xs text-zinc-400 uppercase tracking-wide">Access Code</span>
             <input
@@ -59,7 +52,7 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={loading || !code}
-            className="w-full bg-violet-600 hover:bg-violet-500 disabled:opacity-50 rounded-lg py-2.5 font-medium transition-colors"
+            className="w-full bg-violet-600 hover:bg-violet-500 disabled:opacity-40 rounded-lg py-2.5 font-medium transition-colors text-white"
           >
             {loading ? "Checking…" : "Enter"}
           </button>

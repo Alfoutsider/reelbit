@@ -1,35 +1,45 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
-} from "recharts";
-import { fetchKPIs, fetchChart, fmtNum } from "@/lib/api";
-import StatCard from "@/components/StatCard";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 
-type ChartRow = { hour: string; new_wallets: number; trade_count: number };
+const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+const apiFetch = (p: string) => fetch(`${API}${p}`, { cache: "no-store" }).then((r) => r.json());
+const fmtNum = (n: number) => new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(n);
+
+function StatCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
+  return (
+    <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
+      <p className="text-xs text-zinc-500 uppercase tracking-wide mb-1">{label}</p>
+      <p className="text-2xl font-bold">{value}</p>
+      {sub && <p className="text-xs text-zinc-500 mt-0.5">{sub}</p>}
+    </div>
+  );
+}
 
 export default function UsersPage() {
-  const [days, setDays]     = useState(30);
-  const [kpis, setKpis]     = useState<Record<string, unknown> | null>(null);
-  const [chart, setChart]   = useState<ChartRow[]>([]);
+  const [days, setDays]   = useState(30);
+  const [kpis, setKpis]   = useState<Record<string, unknown> | null>(null);
+  const [chart, setChart] = useState<Record<string, unknown>[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     setLoading(true);
-    Promise.all([fetchKPIs(days), fetchChart("launchpad", days)])
+    Promise.all([apiFetch(`/admin/kpis?days=${days}`), apiFetch(`/admin/chart?platform=launchpad&days=${days}`)])
       .then(([k, c]) => { setKpis(k); setChart(c); })
       .catch(console.error)
       .finally(() => setLoading(false));
   }, [days]);
 
-  if (loading) return <div className="text-zinc-500 text-sm">Loading…</div>;
+  if (loading) return <p className="text-zinc-500 text-sm">Loading…</p>;
   if (!kpis) return null;
 
+  const lp = kpis.launchpad as Record<string, number>;
+  const ca = kpis.casino   as Record<string, number>;
+
   const chartData = chart.map((r) => ({
-    hour:    new Date(r.hour).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
-    trades:  Number(r.trade_count ?? 0),
-    wallets: Number(r.new_wallets ?? 0),
+    day:    new Date(r.hour as string).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+    trades: Number(r.trade_count ?? 0),
   }));
 
   return (
@@ -48,8 +58,8 @@ export default function UsersPage() {
 
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
         <StatCard label="Unique Traders" value={fmtNum(kpis.uniqueTraders as number)} sub={`${days}d`} />
-        <StatCard label="Total Trades" value={fmtNum((kpis.launchpad as Record<string, number>).tradeCount)} />
-        <StatCard label="Casino Spins" value={fmtNum((kpis.casino as Record<string, number>).spins)} />
+        <StatCard label="Total Trades"   value={fmtNum(lp.tradeCount)} />
+        <StatCard label="Casino Spins"   value={fmtNum(ca.spins)} />
       </div>
 
       <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
@@ -57,7 +67,7 @@ export default function UsersPage() {
         <ResponsiveContainer width="100%" height={220}>
           <BarChart data={chartData}>
             <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
-            <XAxis dataKey="hour" tick={{ fill: "#71717a", fontSize: 10 }} />
+            <XAxis dataKey="day" tick={{ fill: "#71717a", fontSize: 10 }} />
             <YAxis tick={{ fill: "#71717a", fontSize: 10 }} allowDecimals={false} />
             <Tooltip contentStyle={{ background: "#18181b", border: "1px solid #3f3f46", borderRadius: 8 }} />
             <Bar dataKey="trades" fill="#7C3AED" radius={[2, 2, 0, 0]} name="Trades" />
@@ -70,22 +80,16 @@ export default function UsersPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
           <div className="bg-zinc-800 rounded-lg p-3">
             <p className="text-xs text-zinc-500 mb-1">Launchpad</p>
-            <p className="text-zinc-200">
-              <span className="font-semibold">{fmtNum((kpis.launchpad as Record<string, number>).tokensLaunched)}</span> tokens launched,{" "}
-              <span className="font-semibold">{fmtNum((kpis.launchpad as Record<string, number>).tokensGraduated)}</span> graduated
-            </p>
+            <p className="font-semibold">{fmtNum(lp.tokensLaunched)} tokens launched</p>
             <p className="text-zinc-400 text-xs mt-1">
-              {(((kpis.launchpad as Record<string, number>).tokensGraduated /
-                ((kpis.launchpad as Record<string, number>).tokensLaunched || 1)) * 100).toFixed(1)}% graduation rate
+              {fmtNum(lp.tokensGraduated)} graduated ({((lp.tokensGraduated / (lp.tokensLaunched || 1)) * 100).toFixed(1)}% rate)
             </p>
           </div>
           <div className="bg-zinc-800 rounded-lg p-3">
             <p className="text-xs text-zinc-500 mb-1">Casino</p>
-            <p className="text-zinc-200">
-              <span className="font-semibold">{fmtNum((kpis.casino as Record<string, number>).spins)}</span> spins in {days}d
-            </p>
+            <p className="font-semibold">{fmtNum(ca.spins)} spins in {days}d</p>
             <p className="text-zinc-400 text-xs mt-1">
-              Avg {fmtNum((kpis.casino as Record<string, number>).spins / days)} spins / day
+              Avg {fmtNum(ca.spins / days)} spins / day
             </p>
           </div>
         </div>
