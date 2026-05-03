@@ -729,12 +729,12 @@ app.post("/internal/jackpot-won", requireInternal, async (req: Request, res: Res
     const tx      = new Transaction().add(ix);
     const txSignature = await sendAndConfirmTransaction(connection, tx, [keypair]);
     console.log(`[jackpot] Paid jackpot to ${wallet} for mint ${mintStr} — ${txSignature}`);
-    const { usdcUnits: poolBalance } = (await getBalance(JACKPOT_KEY));
+    const poolEntry = await getBalance(JACKPOT_KEY);
     analyticsLogJackpotPayout({
       txSig:        txSignature,
       mint:         mintStr,
       winnerWallet: wallet,
-      usdcUnits:    poolBalance,
+      usdcUnits:    poolEntry.playable,
     }).catch(() => {});
     res.json({ txSignature });
   } catch (err) {
