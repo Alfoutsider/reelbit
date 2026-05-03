@@ -45,16 +45,26 @@ import {
   onCasinoBet as referralOnCasinoBet,
   POINT_VALUES, TIER_THRESHOLDS,
 } from "./referralService";
+import {
+  logTrade as analyticsLogTrade,
+  logGraduation as analyticsLogGraduation,
+  logTokenLaunched as analyticsLogTokenLaunched,
+  logJackpotPayout as analyticsLogJackpotPayout,
+  logCasinoSpin as analyticsLogCasinoSpin,
+  getKPIs, getHourlyChart, getTopTokens, getRecentJackpots,
+} from "./analyticsStore";
 
 const app = express();
 
 const ALLOWED_ORIGINS = [
   "https://reelbit-fun.vercel.app",
   "https://reelbit-casino.vercel.app",
+  process.env.ADMIN_URL ?? "",
   config.funUrl,
   config.frontendUrl,
   "http://localhost:3000",
   "http://localhost:3002",
+  "http://localhost:3003",
 ].filter(Boolean);
 
 app.use((req: Request, res: Response, next: NextFunction) => {
@@ -62,7 +72,7 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   if (ALLOWED_ORIGINS.includes(origin)) {
     res.setHeader("Access-Control-Allow-Origin", origin);
     res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type,Authorization");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type,Authorization,x-admin-code");
     res.setHeader("Access-Control-Allow-Credentials", "true");
   }
   if (req.method === "OPTIONS") { res.sendStatus(204); return; }
@@ -687,6 +697,7 @@ app.post("/internal/jackpot-fund", requireInternal, async (req: Request, res: Re
   const { usdcUnits } = req.body as { usdcUnits: number };
   if (!usdcUnits || usdcUnits <= 0) return res.status(400).json({ error: "usdcUnits required" });
   await credit(JACKPOT_KEY, usdcUnits);
+  analyticsLogCasinoSpin(usdcUnits).catch(() => {});
   const entry = await getBalance(JACKPOT_KEY);
   res.json({ poolBalance: entry.playable });
 });
@@ -718,6 +729,13 @@ app.post("/internal/jackpot-won", requireInternal, async (req: Request, res: Res
     const tx      = new Transaction().add(ix);
     const txSignature = await sendAndConfirmTransaction(connection, tx, [keypair]);
     console.log(`[jackpot] Paid jackpot to ${wallet} for mint ${mintStr} — ${txSignature}`);
+    const { usdcUnits: poolBalance } = (await getBalance(JACKPOT_KEY));
+    analyticsLogJackpotPayout({
+      txSig:        txSignature,
+      mint:         mintStr,
+      winnerWallet: wallet,
+      usdcUnits:    poolBalance,
+    }).catch(() => {});
     res.json({ txSignature });
   } catch (err) {
     console.error("[jackpot] pay_jackpot failed:", err);
@@ -782,6 +800,7 @@ app.post("/webhooks/helius", async (req: Request, res: Response) => {
               recordTrade(tradeEvent);
               broadcast("trade", tradeEvent, mint);
               broadcast("trade", tradeEvent, null);
+              analyticsLogTrade(tradeEvent).catch(() => {});
               // Referral: award points to referrer of this buyer (fire-and-forget)
               referralOnTrade(
                 tradeEvent.wallet, mint, tradeEvent.solAmount, payload.signature,
@@ -799,6 +818,7 @@ app.post("/webhooks/helius", async (req: Request, res: Response) => {
         assignRtp(events.graduated.mint, model);
 
         await handleGraduation(events.graduated, connection);
+        analyticsLogGraduation(events.graduated.mint).catch(() => {});
         // Referral: graduation bonus for the creator's referrer
         referralOnGraduation(
           events.graduated.creator, events.graduated.mint,
@@ -1395,6 +1415,59 @@ app.get("/referral/leaderboard", async (req: Request, res: Response) => {
 /** GET /referral/meta — public: point values + tier thresholds (for frontend display) */
 app.get("/referral/meta", (_req: Request, res: Response) => {
   res.json({ pointValues: POINT_VALUES, tiers: TIER_THRESHOLDS });
+});
+
+// ── Admin analytics API ───────────────────────────────────────────────────────
+// Requires ADMIN_ACCESS_CODE header (set via ADMIN_ACCESS_CODE env var).
+
+function requireAdminCode(req: Request, res: Response, next: NextFunction) {
+  const code = req.headers["x-admin-code"] as string | undefined;
+  const expected = process.env.ADMIN_ACCESS_CODE ?? "change-me";
+  if (!code || code !== expected) {
+    return res.status(401).json({ error: "Invalid access code" });
+  }
+  next();
+}
+
+/** GET /admin/kpis?days=30 */
+app.get("/admin/kpis", requireAdminCode, async (req: Request, res: Response) => {
+  const days = Math.min(365, Math.max(1, parseInt(req.query.days as string) || 30));
+  try {
+    res.json(await getKPIs(days));
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+/** GET /admin/chart?platform=launchpad&days=7 */
+app.get("/admin/chart", requireAdminCode, async (req: Request, res: Response) => {
+  const platform = (req.query.platform as string) === "casino" ? "casino" : "launchpad";
+  const days = Math.min(90, Math.max(1, parseInt(req.query.days as string) || 7));
+  try {
+    res.json(await getHourlyChart(platform, days));
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+/** GET /admin/top-tokens?limit=10 */
+app.get("/admin/top-tokens", requireAdminCode, async (req: Request, res: Response) => {
+  const limit = Math.min(50, Math.max(1, parseInt(req.query.limit as string) || 10));
+  try {
+    res.json(await getTopTokens(limit));
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+/** GET /admin/jackpots?limit=20 */
+app.get("/admin/jackpots", requireAdminCode, async (req: Request, res: Response) => {
+  const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 20));
+  try {
+    res.json(await getRecentJackpots(limit));
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
 });
 
 // ── Error handler ─────────────────────────────────────────────────────────────
