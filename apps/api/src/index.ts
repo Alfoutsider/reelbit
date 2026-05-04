@@ -31,13 +31,14 @@ import { startLpHarvestCron } from "./lpHarvestCron";
 import { startHolderDividendCron } from "./holderDividendCron";
 import { startCreatorHoldingCron } from "./creatorHoldingCron";
 import { getAllDividends, getDividend } from "./dividendStore";
-import { startMcapWatcher } from "./mcapWatcher";
+import { startMcapWatcher, checkOneToken as checkOneTokenForGraduation } from "./mcapWatcher";
 import { getSolUsdPrice, lamportsToUsdc, usdcToLamports } from "./pythPrice";
 import { swapSolToUsdc, USDC_MINT } from "./jupiterSwap";
 import { USDC_UNIT, applyWelcomeBonus, recordWagering, getBalance } from "./balanceStore";
 import { recordTrade, getTradesForMint, getGlobalFeed, getVolume24h, getGlobalVolume24h, loadTrades } from "./tradeStore";
 import { getComments, addComment, likeComment } from "./commentStore";
 import { addSSEClient, broadcast } from "./sseEmitter";
+import { isProcessed, markProcessed, requireHeliusSignature } from "./webhookSecurity";
 import { getCreatorRevTier, computeRevTier } from "./creatorHoldingTracker";
 import {
   getOrCreateCode, registerReferral, getReferrerStats, getLeaderboard,
@@ -79,7 +80,16 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   next();
 });
 
-app.use(express.json({ limit: "10mb" }));
+// Capture raw body so we can HMAC-verify webhook payloads (Helius signs the
+// exact bytes we received, so any reserialization breaks the check).
+app.use(
+  express.json({
+    limit: "2mb",
+    verify: (req, _res, buf) => {
+      (req as express.Request & { rawBody?: Buffer }).rawBody = buf;
+    },
+  }),
+);
 
 app.use("/images", express.static(path.join(config.dataDir, "images")));
 app.use("/pfp",    express.static(path.join(config.dataDir, "pfp")));
@@ -745,16 +755,25 @@ app.post("/internal/jackpot-won", requireInternal, async (req: Request, res: Res
 
 // ── Helius webhook ────────────────────────────────────────────────────────────
 
-app.post("/webhooks/helius", async (req: Request, res: Response) => {
+app.post("/webhooks/helius", requireHeliusSignature, async (req: Request, res: Response) => {
   const payloads: HeliusWebhookPayload[] = Array.isArray(req.body) ? req.body : [req.body];
   res.status(200).json({ received: payloads.length });
 
   for (const payload of payloads) {
     if (payload.transactionError) continue;
+
+    // Helius retries failed deliveries; without dedupe we'd record the same
+    // trade twice and double-broadcast. Signatures are unique per tx.
+    if (payload.signature && isProcessed(payload.signature)) {
+      continue;
+    }
+
     const touchesLaunch = payload.instructions.some(
       (ix) => ix.programId === config.tokenLaunchProgramId,
     );
     if (!touchesLaunch) continue;
+
+    if (payload.signature) markProcessed(payload.signature);
 
     try {
       const events = await extractTokenLaunchEvents(payload, connection);
@@ -805,6 +824,9 @@ app.post("/webhooks/helius", async (req: Request, res: Response) => {
               referralOnTrade(
                 tradeEvent.wallet, mint, tradeEvent.solAmount, payload.signature,
               ).catch(() => {});
+              // Instant graduation check — don't wait for the next 5s poll
+              // if this trade just crossed $100k MCap.
+              checkOneTokenForGraduation(connection, mint).catch(() => {});
             }
           }
         } catch {}

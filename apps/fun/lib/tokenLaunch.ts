@@ -152,7 +152,7 @@ export async function buyTokens(
       tokenProgram: TOKEN_PROGRAM_ID,
       systemProgram: SystemProgram.programId,
     })
-    .rpc();
+    .rpc({ commitment: "processed", preflightCommitment: "processed" });
 
   return { signature, tokensOut };
 }
@@ -203,7 +203,7 @@ export async function sellTokens(
       tokenProgram: TOKEN_PROGRAM_ID,
       systemProgram: SystemProgram.programId,
     })
-    .rpc();
+    .rpc({ commitment: "processed", preflightCommitment: "processed" });
 
   return { signature, solOut: netSol };
 }
@@ -234,9 +234,10 @@ export async function launchSlot(
   const mintKeypair = Keypair.generate();
   const mint = mintKeypair.publicKey;
 
-  // Register the token in the API so /metadata/:mint serves valid JSON
+  // Register theme in parallel — don't block the user on this.
+  // /metadata/:mint will 404 briefly until this lands; that's acceptable.
   const metadataUri = `${API}/metadata/${mint.toBase58()}`;
-  await fetch(`${API}/themes/register`, {
+  const themeRegister = fetch(`${API}/themes/register`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -248,7 +249,7 @@ export async function launchSlot(
       model: params.model,
       devBuyPct: params.devBuyPct ?? 0,
     }),
-  });
+  }).catch((err) => console.warn("[launch] theme register failed (non-fatal):", err));
 
   const program = await getTokenLaunchProgram(wallet);
   const connection = getConnection();
@@ -295,8 +296,16 @@ export async function launchSlot(
   signed.partialSign(mintKeypair);
 
   const rawTx = signed.serialize();
-  const signature = await connection.sendRawTransaction(rawTx);
-  await connection.confirmTransaction({ signature, blockhash, lastValidBlockHeight }, "confirmed");
+  const signature = await connection.sendRawTransaction(rawTx, { skipPreflight: false, preflightCommitment: "processed" });
+
+  // Wait for "processed" (~400ms, ~1 slot) instead of "confirmed" (~6-9s, ~32 slots).
+  // pump.fun-style optimistic flow: we get certainty the tx landed without the long
+  // finality wait. The dev-buy step below still needs the mint to exist, and "processed"
+  // is enough for the next instruction to read its accounts.
+  await connection.confirmTransaction({ signature, blockhash, lastValidBlockHeight }, "processed");
+
+  // Make sure the theme register call doesn't throw unhandled in the background.
+  themeRegister.catch(() => {});
 
   return { mint: mint.toBase58(), signature, metadataUri };
 }

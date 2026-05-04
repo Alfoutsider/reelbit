@@ -1,14 +1,11 @@
 /**
  * MCap graduation watcher.
  *
- * Polls every 60 seconds. For each non-graduated token:
- *   1. Reads bonding curve state from on-chain
- *   2. Fetches SOL/USD price from Pyth
- *   3. Computes virtual MCap = (virtualSol / LAMPORTS_PER_SOL) * solPrice * (totalSupply / virtualTokens)
- *   4. If MCap >= $100,000 → triggers handleGraduation
- *
- * This is the primary graduation trigger. The on-chain GRADUATION_LAMPORTS check
- * in buy_tokens acts as a safety net only.
+ * Polls every 5 seconds (was 60s — see audit). The webhook handler also calls
+ * `checkOneToken` synchronously after every confirmed buy so a graduation-
+ * crossing trade triggers within hundreds of ms instead of waiting for the
+ * next poll. The poll remains as a safety net for tokens that graduate via
+ * paths the webhook doesn't observe (e.g. dropped webhook delivery).
  */
 
 import { Connection, PublicKey } from "@solana/web3.js";
@@ -19,13 +16,17 @@ import type { SlotGraduatedEvent } from "./types";
 import { config } from "./config";
 import { fetchBondingCurveState } from "./tradingApi";
 import { tickFakeBots } from "./fakeBots";
+import { getTheme } from "./themeStore";
 
 const MCAP_TARGET_USD    = 100_000;    // $100k
-const POLL_INTERVAL_MS   = 60_000;    // 60 seconds
+const POLL_INTERVAL_MS   = 5_000;     // 5 seconds (down from 60s)
 const INITIAL_DELAY_MS   = 10_000;    // 10 seconds after API start
 const TOTAL_SUPPLY       = 1_000_000_000; // 1 billion tokens
 
 let _running = false;
+// Mints currently being graduated. Prevents the periodic poll from racing the
+// webhook-triggered path on the same token.
+const _inFlight = new Set<string>();
 
 async function checkGraduation(connection: Connection): Promise<void> {
   if (_running) return;
@@ -86,5 +87,53 @@ export function startMcapWatcher(connection: Connection): void {
     setInterval(() => checkGraduation(connection).catch(console.error), POLL_INTERVAL_MS);
   }, INITIAL_DELAY_MS);
 
-  console.log("[mcap-watcher] Started — polling every 60s for $100k MCap graduation");
+  console.log(`[mcap-watcher] Started — polling every ${POLL_INTERVAL_MS / 1000}s for $${MCAP_TARGET_USD.toLocaleString()} MCap graduation`);
+}
+
+/**
+ * Check a single token's MCap right now and graduate it if it's crossed the
+ * threshold. Called from the Helius webhook after every confirmed buy to make
+ * graduation effectively instant (no wait for next poll cycle).
+ *
+ * Safe to call concurrently — uses an in-flight set to dedupe and short-
+ * circuits if the theme is already marked graduated.
+ */
+export async function checkOneToken(
+  connection: Connection,
+  mintStr: string,
+): Promise<void> {
+  const theme = getTheme(mintStr);
+  if (!theme || theme.graduated) return;
+  if (_inFlight.has(mintStr)) return;
+  _inFlight.add(mintStr);
+
+  try {
+    let mint: PublicKey;
+    try { mint = new PublicKey(mintStr); } catch { return; }
+
+    const curve = await fetchBondingCurveState(connection, mint);
+    if (!curve) return;
+
+    const solPrice = await getSolUsdPrice(connection);
+    const virtualSolSol    = Number(curve.virtualSol)    / 1_000_000_000;
+    const virtualTokensRaw = Number(curve.virtualTokens) / 1_000_000;
+    const mcapUsd = (virtualSolSol / virtualTokensRaw) * solPrice * TOTAL_SUPPLY;
+
+    if (mcapUsd >= MCAP_TARGET_USD) {
+      console.log(
+        `[mcap-watcher] ⚡ instant graduation ${theme.tokenSymbol} (${mintStr.slice(0, 8)}…) ` +
+        `MCap $${mcapUsd.toFixed(0)} >= $${MCAP_TARGET_USD}`,
+      );
+      const gradEvent: SlotGraduatedEvent = {
+        mint:    mintStr,
+        creator: "",
+        realSol: curve.realSol,
+      };
+      await handleGraduation(gradEvent, connection);
+    }
+  } catch (err) {
+    console.error(`[mcap-watcher] checkOneToken ${mintStr.slice(0, 8)}…:`, (err as Error).message);
+  } finally {
+    _inFlight.delete(mintStr);
+  }
 }
