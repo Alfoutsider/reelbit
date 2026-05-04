@@ -128,6 +128,44 @@ export default function CasinoLobby() {
       )
       .catch(() => setGraduatedSlots([]))
       .finally(() => setLoading(false));
+
+    // Live updates — when a token graduates or its art finishes generating,
+    // the lobby now updates within ~100ms instead of waiting for a refresh
+    // or the 30s revalidate cache.
+    const es = new EventSource(`${API_URL}/feed/stream`);
+    es.addEventListener("theme:graduated", (ev) => {
+      try {
+        const d = JSON.parse((ev as MessageEvent).data) as {
+          mint: string; tokenName?: string; tokenSymbol?: string; slotModel: string;
+        };
+        setGraduatedSlots((prev) => {
+          if (prev.some((s) => s.mint === d.mint)) return prev;
+          return [{
+            mint:         d.mint,
+            tokenName:    d.tokenName    ?? d.mint.slice(0, 8),
+            tokenSymbol:  d.tokenSymbol  ?? "TOKEN",
+            slotModel:    d.slotModel as SlotEntry["slotModel"],
+            heroImageUrl: null,
+            primaryColor: "#7C3AED",
+            accentColor:  "#10B981",
+            isDemo:       false,
+            isGraduated:  true,
+          }, ...prev];
+        });
+      } catch {}
+    });
+    es.addEventListener("theme:ready", (ev) => {
+      try {
+        const d = JSON.parse((ev as MessageEvent).data) as {
+          mint: string; heroImageUrl: string;
+        };
+        setGraduatedSlots((prev) =>
+          prev.map((s) => s.mint === d.mint ? { ...s, heroImageUrl: d.heroImageUrl } : s),
+        );
+      } catch {}
+    });
+    es.onerror = () => { /* Browser auto-reconnects; nothing to do. */ };
+    return () => es.close();
   }, []);
 
   useEffect(() => {

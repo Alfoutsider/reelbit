@@ -20,9 +20,15 @@ function StatCard({ label, value, sub }: { label: string; value: string; sub?: s
   );
 }
 
+// Mirror of on-chain split (programs/token-launch/src/lib.rs:64-68 +
+// apps/api/src/distributionCron.ts:48). Keep in sync if the on-chain math
+// changes — frontend display must match what actually moves on chain.
 const FEE_SPLIT = {
-  platform: 0.20, creator: 0.25, jackpot: 0.25,
-  legal: 0.10, dividend: 0.10, license: 0.10,
+  creator:   0.25,
+  platform:  0.25,
+  jackpot:   0.45,
+  legal:     0.025,
+  licensing: 0.025,
 };
 
 export default function RevenuePage() {

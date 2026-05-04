@@ -11,7 +11,7 @@ import { analyzeImage } from "./aiStudio";
 import { apply as demoApply, approve as demoApprove, deny as demoDeny, getApplication, getAllApplications, isDemoUser, DEMO_CREDIT_USDC } from "./demoStore";
 import { getFakeActivity, tickFakeBots } from "./fakeBots";
 import { appendPricePoint, getPriceHistory } from "./priceHistoryStore";
-import { triggerThemeGeneration } from "./slotTheme";
+import { triggerThemeGeneration, regenerateTheme } from "./slotTheme";
 import { getPlayable, credit, debit, transfer, isSeenDeposit, markDepositSeen, forfeitBonus, getBonusStatus } from "./balanceStore";
 import { getHouseKeypair, getHouseWalletAddress, sendSol, verifyDepositTx } from "./houseWallet";
 import { getProfile, createProfile, updateProfile, getProfileByUserId, savePfpFile } from "./profileStore";
@@ -73,7 +73,7 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   if (ALLOWED_ORIGINS.includes(origin)) {
     res.setHeader("Access-Control-Allow-Origin", origin);
     res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type,Authorization,x-admin-code");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type,Authorization,x-admin-key,x-admin-code");
     res.setHeader("Access-Control-Allow-Credentials", "true");
   }
   if (req.method === "OPTIONS") { res.sendStatus(204); return; }
@@ -839,6 +839,19 @@ app.post("/webhooks/helius", requireHeliusSignature, async (req: Request, res: R
         markGraduated(events.graduated.mint, model);
         assignRtp(events.graduated.mint, model);
 
+        // Push the event to the casino lobby immediately. The slot's art is
+        // still generating in the background (see triggerThemeGeneration); the
+        // lobby renders a placeholder until a follow-up theme:ready event fires
+        // from setTheme() inside slotTheme.ts.
+        const broadcastTheme = getTheme(events.graduated.mint) ?? existingTheme;
+        broadcast("theme:graduated", {
+          mint:        events.graduated.mint,
+          tokenName:   broadcastTheme?.tokenName,
+          tokenSymbol: broadcastTheme?.tokenSymbol,
+          slotModel:   model,
+          ts:          Date.now(),
+        });
+
         await handleGraduation(events.graduated, connection);
         analyticsLogGraduation(events.graduated.mint).catch(() => {});
         // Referral: graduation bonus for the creator's referrer
@@ -1327,11 +1340,31 @@ app.get("/demo/status/:wallet", async (req: Request, res: Response) => {
   });
 });
 
+// Single admin auth path. Accepts either header (x-admin-key or x-admin-code)
+// and checks against ADMIN_API_KEY. Falls back to the legacy ADMIN_ACCESS_CODE
+// and config.adminKey envs for the migration window — once all callers send
+// x-admin-key against ADMIN_API_KEY, drop the fallbacks.
 function requireAdmin(req: Request, res: Response, next: NextFunction) {
-  const key = req.headers["x-admin-key"];
-  if (!key || key !== config.adminKey) return res.status(403).json({ error: "Forbidden" });
+  const provided =
+    (req.headers["x-admin-key"] as string | undefined) ??
+    (req.headers["x-admin-code"] as string | undefined);
+
+  const expected =
+    process.env.ADMIN_API_KEY ??
+    process.env.ADMIN_ACCESS_CODE ??
+    config.adminKey;
+
+  if (!provided || !expected || expected === "admin-dev-key" || expected === "change-me") {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+  if (provided !== expected) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
   next();
 }
+
+// Alias kept so the existing /admin/* routes don't have to be retouched.
+const requireAdminCode = requireAdmin;
 
 /** GET /demo/applications  (admin) */
 app.get("/demo/applications", requireAdmin, async (_req: Request, res: Response) => {
@@ -1440,16 +1473,9 @@ app.get("/referral/meta", (_req: Request, res: Response) => {
 });
 
 // ── Admin analytics API ───────────────────────────────────────────────────────
-// Requires ADMIN_ACCESS_CODE header (set via ADMIN_ACCESS_CODE env var).
-
-function requireAdminCode(req: Request, res: Response, next: NextFunction) {
-  const code = req.headers["x-admin-code"] as string | undefined;
-  const expected = process.env.ADMIN_ACCESS_CODE ?? "change-me";
-  if (!code || code !== expected) {
-    return res.status(401).json({ error: "Invalid access code" });
-  }
-  next();
-}
+// Auth: x-admin-key (or legacy x-admin-code) header against ADMIN_API_KEY env.
+// Both header names + legacy env names accepted by requireAdminCode (alias of
+// requireAdmin defined above) during the migration window.
 
 /** GET /admin/kpis?days=30 */
 app.get("/admin/kpis", requireAdminCode, async (req: Request, res: Response) => {
@@ -1490,6 +1516,24 @@ app.get("/admin/jackpots", requireAdminCode, async (req: Request, res: Response)
   } catch (err) {
     res.status(500).json({ error: (err as Error).message });
   }
+});
+
+/**
+ * POST /admin/themes/:mint/regenerate
+ * Force-regenerates the slot art for a token whose theme got stuck on
+ * "failed" or rendered incorrectly. Triggers the same retry-wrapped image
+ * generation flow used at graduation, so transient Replicate failures
+ * are re-attempted automatically.
+ */
+app.post("/admin/themes/:mint/regenerate", requireAdminCode, async (req: Request, res: Response) => {
+  const { mint } = req.params;
+  if (!mint) return res.status(400).json({ error: "mint required" });
+  // Fire-and-forget: art-gen can take 10-30s and we don't want to hold
+  // the admin tab open while it runs. Status flips visibly via /themes.
+  regenerateTheme(mint)
+    .then((r) => console.log(`[admin] regenerate ${mint.slice(0, 8)}…:`, r))
+    .catch((err) => console.error(`[admin] regenerate ${mint.slice(0, 8)}…:`, err));
+  res.json({ accepted: true, mint });
 });
 
 // ── Error handler ─────────────────────────────────────────────────────────────
