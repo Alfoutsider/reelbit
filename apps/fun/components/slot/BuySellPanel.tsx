@@ -8,6 +8,7 @@ import { PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
 import type { AnchorWallet } from "@solana/wallet-adapter-react";
 import { cn, formatSol } from "@/lib/utils";
 import { MAX_WALLET_PCT } from "@/lib/constants";
+import { friendlyError } from "@/lib/errorMessages";
 import {
   buyTokens,
   sellTokens,
@@ -68,6 +69,11 @@ export function BuySellPanel({ slot, onTradeComplete }: Props) {
   })();
 
   async function handleTrade() {
+    // Belt-and-braces double-submit guard. The button's disabled prop covers
+    // the visual case, but a fast double-click between click and the next
+    // render can still slip through with framer-motion buttons.
+    if (loading) return;
+
     setError(null);
     setTxSig(null);
 
@@ -96,10 +102,7 @@ export function BuySellPanel({ slot, onTradeComplete }: Props) {
 
       setAmount("");
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      // Extract clean anchor error message if present
-      const match = msg.match(/Error Message: (.+)/);
-      setError(match ? match[1] : msg.slice(0, 120));
+      setError(friendlyError(err));
     } finally {
       setLoading(false);
     }

@@ -79,7 +79,8 @@ export interface BondingCurveState {
 }
 
 type AnchorAccountRecord = Record<string, { fetch: (key: PublicKey) => Promise<Record<string, unknown>> }>;
-type AnchorMethodRecord = Record<string, (...args: unknown[]) => { accounts: (a: unknown) => { rpc: () => Promise<string> } }>;
+type RpcOpts = { commitment?: "processed" | "confirmed" | "finalized"; preflightCommitment?: "processed" | "confirmed" | "finalized"; skipPreflight?: boolean };
+type AnchorMethodRecord = Record<string, (...args: unknown[]) => { accounts: (a: unknown) => { rpc: (opts?: RpcOpts) => Promise<string> } }>;
 
 export async function fetchBondingCurve(
   wallet: AnchorWallet,

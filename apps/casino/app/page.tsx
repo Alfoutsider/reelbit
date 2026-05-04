@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Search, Flame, Star, Trophy, Loader2, Zap, TrendingUp, User, Rocket, Gift, ChevronRight } from "lucide-react";
+import { SlotCardSkeletonGrid } from "@/components/slot/SlotCardSkeleton";
 import Link from "next/link";
 import { usePrivy, useWallets } from "@/lib/privy";
 import { cn } from "@/lib/utils";
@@ -396,9 +397,7 @@ export default function CasinoLobby() {
                 )}
               </>
             ) : myLoading ? (
-              <div className="flex items-center justify-center py-28 text-white/25">
-                <Loader2 size={20} className="animate-spin mr-2" /> Loading your slots…
-              </div>
+              <SlotCardSkeletonGrid count={4} />
             ) : mySlots.length === 0 ? (
               <div className="text-center py-28 space-y-3">
                 <p className="font-orbitron text-sm text-white/15 tracking-widest">NO SLOTS YET</p>
@@ -486,9 +485,7 @@ export default function CasinoLobby() {
 
         {/* Slot grid — lobby only */}
         {tab === "lobby" && (loading ? (
-          <div className="flex items-center justify-center py-28 text-white/25">
-            <Loader2 size={20} className="animate-spin mr-2" /> Loading slots…
-          </div>
+          <SlotCardSkeletonGrid count={8} />
         ) : filtered.length === 0 ? (
           <div className="text-center py-28">
             <p className="font-orbitron text-sm text-white/15 tracking-widest">NO SLOTS FOUND</p>

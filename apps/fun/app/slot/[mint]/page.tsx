@@ -674,24 +674,47 @@ export default function SlotPage({ params }: { params: { mint: string } }) {
                 <div className="px-5 py-6 text-center">
                   <p className="font-rajdhani text-white/20 text-xs">Holder data loads from Helius DAS</p>
                 </div>
-              ) : (
-                <div className="divide-y divide-white/[0.04] max-h-[280px] overflow-y-auto">
-                  {holders.slice(0, 20).map((h, i) => (
-                    <div key={h.wallet} className="px-4 py-2.5 flex items-center gap-3">
-                      <span className="text-[10px] font-orbitron text-white/20 w-5 text-right flex-shrink-0">{i + 1}</span>
-                      <span className="flex-1 font-mono text-[11px] text-white/50 truncate">{shortenAddress(h.wallet)}</span>
-                      <div className="text-right flex-shrink-0">
-                        <span className="font-orbitron text-[10px] text-white/60">{h.pct.toFixed(2)}%</span>
+              ) : (() => {
+                // Concentration: % of supply held by the top 10 wallets. >50% =
+                // rug-pull risk worth flagging; >75% = severe (one or two
+                // wallets can move price in either direction at will).
+                const topTenPct = holders.slice(0, 10).reduce((s, h) => s + h.pct, 0);
+                const concentration =
+                  topTenPct > 75 ? { label: "VERY HIGH", color: "text-red-400",    bg: "bg-red-500/10",    border: "border-red-500/20" } :
+                  topTenPct > 50 ? { label: "HIGH",      color: "text-orange-300", bg: "bg-orange-500/10", border: "border-orange-500/20" } :
+                  topTenPct > 30 ? { label: "MEDIUM",    color: "text-yellow-300", bg: "bg-yellow-500/10", border: "border-yellow-500/20" } :
+                                   { label: "LOW",       color: "text-emerald-300",bg: "bg-emerald-500/10",border: "border-emerald-500/20" };
+                return (
+                  <>
+                    <div className={cn("mx-4 mt-3 mb-2 rounded-lg border p-2.5 flex items-center justify-between", concentration.bg, concentration.border)}>
+                      <div>
+                        <p className="text-[9px] font-orbitron tracking-widest text-white/40">TOP 10 HOLD</p>
+                        <p className={cn("font-orbitron text-sm font-bold", concentration.color)}>{topTenPct.toFixed(1)}%</p>
                       </div>
-                      {/* Mini bar */}
-                      <div className="w-16 h-1.5 rounded-full bg-white/5 flex-shrink-0">
-                        <div className="h-full rounded-full bg-purple-500/50"
-                          style={{ width: `${Math.min(100, h.pct / (holders[0]?.pct || 1) * 100)}%` }} />
+                      <div className="text-right">
+                        <p className="text-[9px] font-orbitron tracking-widest text-white/30">CONCENTRATION</p>
+                        <p className={cn("font-orbitron text-[10px] font-bold tracking-wide", concentration.color)}>{concentration.label}</p>
                       </div>
                     </div>
-                  ))}
-                </div>
-              )}
+                    <div className="divide-y divide-white/[0.04] max-h-[280px] overflow-y-auto">
+                      {holders.slice(0, 20).map((h, i) => (
+                        <div key={h.wallet} className="px-4 py-2.5 flex items-center gap-3">
+                          <span className="text-[10px] font-orbitron text-white/20 w-5 text-right flex-shrink-0">{i + 1}</span>
+                          <span className="flex-1 font-mono text-[11px] text-white/50 truncate">{shortenAddress(h.wallet)}</span>
+                          <div className="text-right flex-shrink-0">
+                            <span className="font-orbitron text-[10px] text-white/60">{h.pct.toFixed(2)}%</span>
+                          </div>
+                          {/* Mini bar */}
+                          <div className="w-16 h-1.5 rounded-full bg-white/5 flex-shrink-0">
+                            <div className="h-full rounded-full bg-purple-500/50"
+                              style={{ width: `${Math.min(100, h.pct / (holders[0]?.pct || 1) * 100)}%` }} />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                );
+              })()}
             </motion.div>
           </div>
         </div>

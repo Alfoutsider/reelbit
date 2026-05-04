@@ -12,6 +12,7 @@ import { BondingCurveChart } from "@/components/chart/BondingCurveChart";
 import { cn } from "@/lib/utils";
 import { SLOT_MODELS, STARTING_MCAP_USD, RTP_RANGES } from "@/lib/constants";
 import type { SlotModel } from "@/types/slot";
+import { friendlyError } from "@/lib/errorMessages";
 
 type Step = "form" | "preview" | "launching" | "success";
 
@@ -60,6 +61,10 @@ export default function LaunchPage() {
   const [errors, setErrors] = useState<Partial<FormData>>({});
   const [mintAddress, setMintAddress] = useState("");
   const [launchError, setLaunchError] = useState<string | null>(null);
+  // Separate from `step` because the buttons live inside the "preview" JSX
+  // block where TS narrows step to "preview" only — making `submitting`
+  // a type error. This boolean stays meaningful across the whole component.
+  const [submitting, setSubmitting] = useState(false);
 
   function validate(): boolean {
     const e: Partial<FormData> = {};
@@ -79,7 +84,12 @@ export default function LaunchPage() {
   }
 
   async function confirmLaunch() {
+    // Belt-and-braces double-submit guard. The button's disabled prop covers
+    // the visual case but a fast double-click between click and re-render can
+    // still slip through with framer-motion buttons.
+    if (submitting) return;
     if (!wallets[0]) { setStep("form"); return; }
+    setSubmitting(true);
     setStep("launching");
     setLaunchError(null);
     try {
@@ -101,8 +111,10 @@ export default function LaunchPage() {
       setMintAddress(result.mint);
       setStep("success");
     } catch (e) {
-      setLaunchError((e as Error).message);
+      setLaunchError(friendlyError(e));
       setStep("preview");
+    } finally {
+      setSubmitting(false);
     }
   }
 
@@ -313,9 +325,20 @@ export default function LaunchPage() {
                   </p>
                 </div>
                 <div className="flex gap-3">
-                  <button onClick={() => setStep("form")} className="flex-1 btn-ghost py-3 text-[12px] font-orbitron">BACK</button>
-                  <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} onClick={confirmLaunch}
-                    className="flex-1 btn-launch flex items-center justify-center gap-2 py-3">
+                  <button
+                    onClick={() => setStep("form")}
+                    disabled={submitting}
+                    className="flex-1 btn-ghost py-3 text-[12px] font-orbitron disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    BACK
+                  </button>
+                  <motion.button
+                    whileHover={submitting ? undefined : { scale: 1.02 }}
+                    whileTap={submitting ? undefined : { scale: 0.97 }}
+                    onClick={confirmLaunch}
+                    disabled={submitting}
+                    className="flex-1 btn-launch flex items-center justify-center gap-2 py-3 disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
                     <Rocket size={14} /> LAUNCH
                   </motion.button>
                 </div>
@@ -323,7 +346,7 @@ export default function LaunchPage() {
             </motion.div>
           )}
 
-          {step === "launching" && (
+          {submitting && (
             <motion.div key="launching" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               className="flex flex-col items-center justify-center py-40 gap-6">
               <div className="relative">

@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Search, Flame, Clock, TrendingUp, Rocket, Shield, Zap, Trophy, Lock, Loader2, Crown, ChevronDown, BarChart2 } from "lucide-react";
 import Link from "next/link";
 import { SlotCard } from "@/components/slot/SlotCard";
+import { SlotCardSkeletonGrid } from "@/components/slot/SlotCardSkeleton";
 import { cn } from "@/lib/utils";
 import type { SlotToken } from "@/types/slot";
 
@@ -427,9 +428,7 @@ export default function HomePage() {
 
         {/* Grid */}
         {loading ? (
-          <div className="flex items-center justify-center py-24 text-white/25">
-            <Loader2 size={20} className="animate-spin mr-2" /> Loading tokens…
-          </div>
+          <SlotCardSkeletonGrid count={8} />
         ) : slots.length === 0 ? (
           <div className="col-span-full text-center py-24 space-y-4">
             <p className="font-orbitron text-sm text-white/20 tracking-widest">
