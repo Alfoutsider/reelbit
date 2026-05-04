@@ -227,6 +227,10 @@ pub enum TokenLaunchError {
     AlreadyMigrated,
     #[msg("creator_token_account must be the creator's ATA for this mint")]
     InvalidCreatorTokenAccount,
+    #[msg("Jackpot winner cannot be a platform-controlled wallet")]
+    InvalidJackpotWinner,
+    #[msg("Vault has insufficient lamports for the requested transfer")]
+    VaultInsolvent,
 }
 
 // ── Events ────────────────────────────────────────────────────────────────────
@@ -994,7 +998,22 @@ pub mod token_launch {
         )?;
 
         // vault → seller: SOL (lamport manipulation — PDA has data so system_program::transfer
-        // cannot be used as `from`)
+        // cannot be used as `from`).
+        //
+        // Defensive check: even though we already verified gross_sol <= real_sol above,
+        // the vault's actual lamport balance MUST also cover gross_sol AND remain rent-
+        // exempt afterwards. Without this, a vault that lost lamports via some other
+        // path (claim_fees races, manual adjustments) would silently underflow on
+        // saturating subtraction below — leaving the vault insolvent and the seller
+        // short-paid. The "+ 1" reserves the rent-exempt sentinel that try_borrow_mut
+        // does NOT enforce.
+        let vault_lamports_before = ctx.accounts.bonding_curve_vault.to_account_info().lamports();
+        let rent_exempt_floor = Rent::get()?.minimum_balance(BondingCurveVault::LEN);
+        require!(
+            vault_lamports_before >= gross_sol.saturating_add(rent_exempt_floor),
+            TokenLaunchError::VaultInsolvent,
+        );
+
         **ctx.accounts.bonding_curve_vault.to_account_info().try_borrow_mut_lamports()? -= gross_sol;
         **ctx.accounts.seller.to_account_info().try_borrow_mut_lamports()? += net_sol;
         // fee portion → fee_vault (also via lamport manipulation since source is data-bearing PDA)
@@ -1232,7 +1251,23 @@ pub mod token_launch {
 
         require!(payout > 0, TokenLaunchError::ZeroAmount);
 
-        let mint_key        = ctx.accounts.mint.key();
+        let mint_key  = ctx.accounts.mint.key();
+        let winner    = ctx.accounts.winner.key();
+        let cfg       = &ctx.accounts.platform_config;
+
+        // Anti-self-dealing guard. The platform authority is the only signer here,
+        // so without these checks they could route any jackpot to themselves or
+        // to a platform-controlled fee wallet. None of these addresses are valid
+        // jackpot recipients — a real winner is always an external player wallet.
+        require!(
+            winner != cfg.authority
+                && winner != cfg.platform_wallet
+                && winner != cfg.legal_wallet
+                && winner != cfg.license_wallet
+                && winner != ctx.accounts.jackpot_vault.key(),
+            TokenLaunchError::InvalidJackpotWinner,
+        );
+
         let jackpot_bump    = ctx.bumps.jackpot_vault;
         let seeds: &[&[u8]] = &[b"jackpot_vault", mint_key.as_ref(), &[jackpot_bump]];
 
@@ -1250,7 +1285,7 @@ pub mod token_launch {
 
         emit!(JackpotPaid {
             mint:   mint_key,
-            winner: ctx.accounts.winner.key(),
+            winner,
             amount: payout,
         });
 
