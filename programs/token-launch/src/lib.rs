@@ -432,11 +432,27 @@ pub struct LaunchSlot<'info> {
     )]
     pub holder_dividend_vault: SystemAccount<'info>,
 
-    /// CHECK: PDA verified by Metaplex program CPI
-    #[account(mut)]
+    /// Metaplex token-metadata account. Constrained at the Anchor layer to the
+    /// canonical PDA (`[b"metadata", metaplex_program_id, mint]` derived
+    /// against the Metaplex program itself). Without this an attacker could
+    /// pass a pre-funded account at an arbitrary address; Metaplex's own CPI
+    /// path validates the PDA too, but defense-in-depth here means we fail
+    /// fast at deserialization before any state writes happen.
+    /// CHECK: seeds verified below; Metaplex CPI writes the data.
+    #[account(
+        mut,
+        seeds = [b"metadata", token_metadata_program.key().as_ref(), mint.key().as_ref()],
+        bump,
+        seeds::program = token_metadata_program.key(),
+    )]
     pub metadata: UncheckedAccount<'info>,
 
-    /// CHECK: address verified at runtime
+    /// Pinned to the canonical Metaplex Token Metadata program at the Anchor
+    /// layer (was previously runtime-only via `require_keys_eq!`). Combined
+    /// with the seeds::program above, an attacker can't substitute a forked
+    /// program-id and a matching forged PDA.
+    /// CHECK: address constraint below.
+    #[account(address = pubkey!("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"))]
     pub token_metadata_program: UncheckedAccount<'info>,
 
     pub associated_token_program: Program<'info, AssociatedToken>,
@@ -813,11 +829,9 @@ pub mod token_launch {
         require!(params.ticker.len()       <= SlotMetadata::MAX_TICKER, TokenLaunchError::TickerTooLong);
         require!(params.image_uri.len()    <= SlotMetadata::MAX_URI,    TokenLaunchError::ImageUriTooLong);
         require!(params.metadata_uri.len() <= SlotMetadata::MAX_URI,    TokenLaunchError::MetadataUriTooLong);
-        require_keys_eq!(
-            ctx.accounts.token_metadata_program.key(),
-            metaplex::program_id(),
-            TokenLaunchError::InvalidMetadataProgram,
-        );
+        // (Metaplex program-id + metadata-PDA verification now happens at the
+        // Anchor account-constraint layer in #[derive(Accounts)] above —
+        // attempted spoof fails before this fn runs.)
 
         let mint_key    = ctx.accounts.mint.key();
         let vault_bump  = ctx.bumps.bonding_curve_vault;
