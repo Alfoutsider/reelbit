@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { usePrivy, useWallets } from "@/lib/privy";
-import { ArrowDownUp, Wallet, AlertTriangle, ExternalLink } from "lucide-react";
+import { ArrowDownUp, Wallet, AlertTriangle, ExternalLink, AlertCircle } from "lucide-react";
 import { PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
 import type { AnchorWallet } from "@solana/wallet-adapter-react";
 import { cn, formatSol } from "@/lib/utils";
@@ -18,6 +18,17 @@ import {
   type BondingCurveState,
 } from "@/lib/tokenLaunch";
 import type { SlotToken } from "@/types/slot";
+
+// Threshold for showing the confirmation modal. Below this we let trades go
+// through with one click (rapid trading is a feature, not a bug). Above it
+// we want a deliberate confirm so a slip of the finger doesn't cost $150+.
+const CONFIRM_BUY_SOL_THRESHOLD = 1.0;
+// Sell side: 5% of supply by token amount. Token amount is decimal-6, so
+// 5% of 1B supply = 50M whole tokens = 50_000_000.
+const CONFIRM_SELL_TOKEN_THRESHOLD = 50_000_000;
+// Hold the confirm button for this many ms. Long enough to cancel a fat-
+// finger, short enough that intentional users don't feel held up.
+const CONFIRM_HOLD_MS = 2000;
 
 interface Props {
   slot: SlotToken;
@@ -38,6 +49,12 @@ export function BuySellPanel({ slot, onTradeComplete }: Props) {
   const [txSig, setTxSig] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [curve, setCurve] = useState<BondingCurveState | null>(null);
+  // Confirmation modal state. confirmHoldElapsed flips to true after
+  // CONFIRM_HOLD_MS so the "CONFIRM" button enables; the user can still
+  // cancel with the Back/Esc.
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmHoldElapsed, setConfirmHoldElapsed] = useState(false);
+  const [confirmRemainingMs, setConfirmRemainingMs] = useState(CONFIRM_HOLD_MS);
 
   // Fetch live bonding curve state when component mounts
   useEffect(() => {
@@ -68,12 +85,48 @@ export function BuySellPanel({ slot, onTradeComplete }: Props) {
     return gross - (gross * 100n / 10_000n); // minus 1% fee
   })();
 
-  async function handleTrade() {
-    // Belt-and-braces double-submit guard. The button's disabled prop covers
-    // the visual case, but a fast double-click between click and the next
-    // render can still slip through with framer-motion buttons.
-    if (loading) return;
+  // Should this trade size go through the 2-second confirm gate?
+  function needsConfirmation(): boolean {
+    if (!numAmount) return false;
+    if (mode === "buy")  return numAmount >= CONFIRM_BUY_SOL_THRESHOLD;
+    if (mode === "sell") return numAmount >= CONFIRM_SELL_TOKEN_THRESHOLD;
+    return false;
+  }
 
+  // Click handler for the main CTA. Opens the modal for high-value trades,
+  // otherwise goes straight to execution.
+  function onClickTrade() {
+    if (loading) return;
+    if (!authenticated) { login(); return; }
+    if (!numAmount || !wallets[0]) return;
+    if (needsConfirmation()) {
+      setConfirmOpen(true);
+      setConfirmHoldElapsed(false);
+      setConfirmRemainingMs(CONFIRM_HOLD_MS);
+      return;
+    }
+    void executeTrade();
+  }
+
+  // Hold-to-confirm timer. Tick every 100ms so the countdown looks alive.
+  useEffect(() => {
+    if (!confirmOpen) return;
+    const start = Date.now();
+    const id = setInterval(() => {
+      const remaining = CONFIRM_HOLD_MS - (Date.now() - start);
+      if (remaining <= 0) {
+        setConfirmRemainingMs(0);
+        setConfirmHoldElapsed(true);
+        clearInterval(id);
+      } else {
+        setConfirmRemainingMs(remaining);
+      }
+    }, 100);
+    return () => clearInterval(id);
+  }, [confirmOpen]);
+
+  async function executeTrade() {
+    setConfirmOpen(false);
     setError(null);
     setTxSig(null);
 
@@ -225,7 +278,7 @@ export function BuySellPanel({ slot, onTradeComplete }: Props) {
       <motion.button
         whileHover={{ scale: 1.02 }}
         whileTap={{ scale: 0.97 }}
-        onClick={handleTrade}
+        onClick={onClickTrade}
         disabled={loading || (authenticated && !numAmount)}
         className={cn(
           "w-full flex items-center justify-center gap-2 rounded-xl py-3 font-semibold text-white transition-all",
@@ -251,6 +304,78 @@ export function BuySellPanel({ slot, onTradeComplete }: Props) {
           </>
         )}
       </motion.button>
+
+      {/* High-value-trade confirmation modal */}
+      <AnimatePresence>
+        {confirmOpen && (
+          <motion.div
+            key="confirm-overlay"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+            onClick={() => setConfirmOpen(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              transition={{ duration: 0.18 }}
+              className="w-full max-w-sm rounded-2xl border border-white/10 bg-zinc-950 p-6 space-y-5"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-start gap-3">
+                <div className="rounded-full bg-yellow-500/10 border border-yellow-500/30 p-2 shrink-0">
+                  <AlertCircle size={18} className="text-yellow-400" />
+                </div>
+                <div>
+                  <p className="font-orbitron text-[11px] font-bold text-white/40 tracking-widest mb-1">CONFIRM TRADE</p>
+                  <p className="font-rajdhani font-bold text-white text-lg leading-tight">
+                    {mode === "buy"
+                      ? `Buy ${numAmount.toFixed(2)} SOL of ${slot.ticker}`
+                      : `Sell ${numAmount.toLocaleString(undefined, { maximumFractionDigits: 0 })} ${slot.ticker}`}
+                  </p>
+                  <p className="text-xs font-rajdhani text-white/40 mt-1">
+                    {mode === "buy"
+                      ? `≈ ${(Number(tokenOutEstimate) / 1e6).toLocaleString(undefined, { maximumFractionDigits: 0 })} ${slot.ticker}`
+                      : `≈ ${formatSol(Number(solOutEstimate))}`}
+                  </p>
+                </div>
+              </div>
+
+              <div className="rounded-xl bg-white/[0.03] border border-white/5 p-3 text-[11px] text-white/50 font-rajdhani leading-relaxed">
+                Trades on the bonding curve are <strong className="text-white/80">final</strong> once
+                signed. Slippage is bounded to 1% but price can still move
+                between submit and confirmation.
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setConfirmOpen(false)}
+                  className="flex-1 btn-ghost py-3 text-[12px] font-orbitron"
+                >
+                  CANCEL
+                </button>
+                <motion.button
+                  whileTap={confirmHoldElapsed ? { scale: 0.97 } : undefined}
+                  onClick={() => confirmHoldElapsed && executeTrade()}
+                  disabled={!confirmHoldElapsed}
+                  className={cn(
+                    "flex-1 rounded-xl py-3 font-semibold text-white transition-all flex items-center justify-center gap-2 font-orbitron text-[12px]",
+                    confirmHoldElapsed
+                      ? mode === "buy" ? "bg-green-600 hover:bg-green-500" : "bg-red-600 hover:bg-red-500"
+                      : "bg-white/10 cursor-not-allowed",
+                  )}
+                >
+                  {confirmHoldElapsed
+                    ? "CONFIRM"
+                    : `WAIT ${Math.ceil(confirmRemainingMs / 1000)}s`}
+                </motion.button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

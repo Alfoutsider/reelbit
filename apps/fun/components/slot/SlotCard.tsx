@@ -3,10 +3,12 @@
 import Link from "next/link";
 import Image from "next/image";
 import { motion } from "framer-motion";
-import { TrendingUp, Zap, Clock, AlertTriangle } from "lucide-react";
+import { TrendingUp, Zap, Clock, AlertTriangle, Heart } from "lucide-react";
+import { useEffect, useState } from "react";
 import { cn, formatUsd, shortenAddress, graduationProgress } from "@/lib/utils";
 import type { SlotToken } from "@/types/slot";
 import { SLOT_MODELS } from "@/lib/constants";
+import { isWatched, toggleWatch, subscribeWatchlist } from "@/lib/watchlist";
 
 interface Props {
   slot: SlotToken;
@@ -25,6 +27,23 @@ export function SlotCard({ slot, solPrice = 150, index = 0 }: Props) {
   const progress = graduationProgress(slot.mcapUsd);
   const model = SLOT_MODELS.find((m) => m.id === slot.model);
   const nearGrad = progress > 75 && !slot.graduated;
+  // Watchlist state. Initialised from the localStorage check on mount; the
+  // subscribe hook keeps multiple cards (and the watchlist tab) in sync if
+  // the user toggles from elsewhere.
+  const [watched, setWatched] = useState(false);
+  useEffect(() => {
+    setWatched(isWatched(slot.mint));
+    return subscribeWatchlist(() => setWatched(isWatched(slot.mint)));
+  }, [slot.mint]);
+
+  function onToggleWatch(e: React.MouseEvent) {
+    // The card's whole surface is a Link, so a click on the heart would
+    // navigate to /slot/[mint] before our handler runs. Both stop the
+    // propagation AND prevent the default link nav.
+    e.preventDefault();
+    e.stopPropagation();
+    setWatched(toggleWatch(slot.mint));
+  }
 
   return (
     <motion.div
@@ -53,9 +72,26 @@ export function SlotCard({ slot, solPrice = 150, index = 0 }: Props) {
             ) : (
               <span className="badge badge-model">{model?.label}</span>
             )}
-            <span className="flex items-center gap-1 bg-black/50 backdrop-blur-sm rounded-full px-2 py-0.5 text-[10px] text-white/50 font-orbitron">
-              <Clock size={8} />{timeAgo(slot.createdAt)}
-            </span>
+            <div className="flex items-center gap-1.5">
+              <span className="flex items-center gap-1 bg-black/50 backdrop-blur-sm rounded-full px-2 py-0.5 text-[10px] text-white/50 font-orbitron">
+                <Clock size={8} />{timeAgo(slot.createdAt)}
+              </span>
+              <button
+                onClick={onToggleWatch}
+                aria-label={watched ? "Remove from watchlist" : "Add to watchlist"}
+                aria-pressed={watched}
+                className={cn(
+                  "rounded-full p-1.5 backdrop-blur-sm transition-colors",
+                  watched ? "bg-red-500/80 hover:bg-red-500" : "bg-black/50 hover:bg-black/70",
+                )}
+              >
+                <Heart
+                  size={11}
+                  className={watched ? "text-white" : "text-white/60"}
+                  fill={watched ? "currentColor" : "none"}
+                />
+              </button>
+            </div>
           </div>
         </div>
 

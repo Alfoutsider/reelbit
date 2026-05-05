@@ -6,11 +6,24 @@ import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { ThemeProvider } from "@/components/layout/ThemeProvider";
 import { LanguagePrompt } from "@/components/layout/LanguagePrompt";
+import { Toaster } from "sonner";
 
 export const metadata: Metadata = {
   title: "ReelBit — Launch Slot Tokens on Solana",
   description: "Launch your slot machine token for free. Graduate to the casino at $100k mcap.",
   openGraph: { title: "ReelBit.fun", description: "Pump.fun meets Vegas. On Solana." },
+  manifest: "/manifest.json",
+  themeColor: "#c41e1e",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "ReelBit",
+  },
+  icons: {
+    icon:    "/logo-icon.png",
+    apple:   "/logo-icon.png",
+    shortcut: "/logo-icon.png",
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -38,6 +51,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <main className="relative z-10 flex-1">{children}</main>
             <Footer />
             <LanguagePrompt />
+            {/* Dark theme matches the rest of the app; bottom-right keeps */}
+            {/* notifications out of the navbar / hero. */}
+            <Toaster
+              position="bottom-right"
+              theme="dark"
+              richColors
+              toastOptions={{ className: "font-rajdhani" }}
+            />
           </ThemeProvider>
         </Providers>
 

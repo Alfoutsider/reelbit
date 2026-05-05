@@ -2,11 +2,13 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, Flame, Clock, TrendingUp, Rocket, Shield, Zap, Trophy, Lock, Loader2, Crown, ChevronDown, BarChart2 } from "lucide-react";
+import { Search, Flame, Clock, TrendingUp, Rocket, Shield, Zap, Trophy, Lock, Loader2, Crown, ChevronDown, BarChart2, Heart } from "lucide-react";
 import Link from "next/link";
+import { toast } from "sonner";
 import { SlotCard } from "@/components/slot/SlotCard";
 import { SlotCardSkeletonGrid } from "@/components/slot/SlotCardSkeleton";
 import { cn } from "@/lib/utils";
+import { getWatchlist, subscribeWatchlist } from "@/lib/watchlist";
 import type { SlotToken } from "@/types/slot";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
@@ -192,6 +194,57 @@ export default function HomePage() {
   const [search,      setSearch]      = useState("");
   const [sort,        setSort]        = useState<SortMode>("trending");
   const [offset,      setOffset]      = useState(0);
+  // Watchlist mode is a pure client-side filter on the already-fetched slot
+  // set. We don't ask the API to filter because (a) the watchlist lives in
+  // localStorage, not on the server, and (b) the lists are small enough that
+  // it's fine to filter what's already rendered.
+  const [showWatchlistOnly, setShowWatchlistOnly] = useState(false);
+  const [watchlist, setWatchlist] = useState<string[]>([]);
+  useEffect(() => {
+    setWatchlist(getWatchlist());
+    return subscribeWatchlist(() => setWatchlist(getWatchlist()));
+  }, []);
+
+  // Live notifications via SSE. Two events that matter to a casual visitor:
+  //   theme:graduated — "X just graduated and is live in the casino!"
+  //   trade           — only flag big trades on watched tokens (signal:noise).
+  useEffect(() => {
+    const watched = new Set(getWatchlist());
+    const updateWatched = () => { watched.clear(); for (const m of getWatchlist()) watched.add(m); };
+    const unsub = subscribeWatchlist(updateWatched);
+
+    const es = new EventSource(`${API_URL}/feed/stream`);
+    es.addEventListener("theme:graduated", (ev) => {
+      try {
+        const d = JSON.parse((ev as MessageEvent).data) as {
+          mint: string; tokenName?: string; tokenSymbol?: string;
+        };
+        const label = d.tokenSymbol ? `$${d.tokenSymbol}` : d.tokenName ?? d.mint.slice(0, 8);
+        toast.success(`${label} just graduated! 🎰`, {
+          description: "Now live in the casino — go play.",
+          action: { label: "Play", onClick: () => { window.location.href = `https://reelbit-casino.vercel.app/slot/${d.mint}`; } },
+          duration: 8000,
+        });
+      } catch {}
+    });
+    es.addEventListener("trade", (ev) => {
+      try {
+        const t = JSON.parse((ev as MessageEvent).data) as {
+          mint: string; type: "buy" | "sell"; usdValue: number;
+        };
+        // Only ping for watched tokens AND trades >= $500. Everything else
+        // becomes noise on a busy day.
+        if (!watched.has(t.mint) || t.usdValue < 500) return;
+        const direction = t.type === "buy" ? "Buy" : "Sell";
+        toast(`${direction} on watched token`, {
+          description: `$${t.usdValue.toFixed(0)} ${t.type} just hit ${t.mint.slice(0, 8)}…`,
+          duration: 4000,
+        });
+      } catch {}
+    });
+    es.onerror = () => { /* browser auto-reconnects */ };
+    return () => { es.close(); unsub(); };
+  }, []);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchRef   = useRef(search);
@@ -250,7 +303,10 @@ export default function HomePage() {
     fetchTokens(searchRef.current, sortRef.current, newOffset, true);
   }
 
-  const hasMore     = slots.length < total;
+  const visibleSlots = showWatchlistOnly
+    ? slots.filter((s) => watchlist.includes(s.mint))
+    : slots;
+  const hasMore     = !showWatchlistOnly && slots.length < total;
   const totalVol    = slots.reduce((s, t) => s + (t.volume24h ?? 0), 0);
   const graduated   = slots.filter((t) => t.graduated).length;
 
@@ -411,30 +467,53 @@ export default function HomePage() {
               <motion.button
                 key={id}
                 whileTap={{ scale: 0.96 }}
-                onClick={() => setSort(id)}
+                onClick={() => { setSort(id); setShowWatchlistOnly(false); }}
                 className={cn(
                   "flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-[12px] font-bold font-rajdhani transition-all",
-                  sort === id
+                  !showWatchlistOnly && sort === id
                     ? "text-white"
                     : "bg-white/[0.04] text-white/40 hover:text-white hover:bg-white/[0.07] border border-white/5",
                 )}
-                style={sort === id ? { background: "var(--brand-red)" } : {}}
+                style={!showWatchlistOnly && sort === id ? { background: "var(--brand-red)" } : {}}
               >
                 <Icon size={12} /> {label}
               </motion.button>
             ))}
+            {/* Watchlist toggle. Disabled when empty so the user gets feedback */}
+            {/* the localStorage hasn't been populated yet. */}
+            <motion.button
+              whileTap={{ scale: 0.96 }}
+              onClick={() => setShowWatchlistOnly((v) => !v)}
+              disabled={watchlist.length === 0 && !showWatchlistOnly}
+              className={cn(
+                "flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-[12px] font-bold font-rajdhani transition-all",
+                showWatchlistOnly
+                  ? "text-white bg-red-500"
+                  : "bg-white/[0.04] text-white/40 hover:text-white hover:bg-white/[0.07] border border-white/5",
+                watchlist.length === 0 && !showWatchlistOnly && "opacity-40 cursor-not-allowed",
+              )}
+            >
+              <Heart size={12} fill={showWatchlistOnly ? "currentColor" : "none"} />
+              Watchlist {watchlist.length > 0 && <span className="opacity-60">{watchlist.length}</span>}
+            </motion.button>
           </div>
         </div>
 
         {/* Grid */}
         {loading ? (
           <SlotCardSkeletonGrid count={8} />
-        ) : slots.length === 0 ? (
+        ) : visibleSlots.length === 0 ? (
           <div className="col-span-full text-center py-24 space-y-4">
             <p className="font-orbitron text-sm text-white/20 tracking-widest">
-              {total === 0 ? "NO TOKENS YET" : "NO RESULTS"}
+              {showWatchlistOnly
+                ? "NO WATCHED TOKENS IN VIEW"
+                : total === 0 ? "NO TOKENS YET" : "NO RESULTS"}
             </p>
-            {total === 0 && (
+            {showWatchlistOnly ? (
+              <p className="text-white/30 text-xs font-rajdhani">
+                Tap the heart on a card to add it. Watched tokens are stored locally on this device.
+              </p>
+            ) : total === 0 && (
               <Link href="/launch">
                 <motion.button
                   whileHover={{ scale: 1.04 }}
@@ -448,7 +527,7 @@ export default function HomePage() {
         ) : (
           <>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {slots.map((slot, i) => (
+              {visibleSlots.map((slot, i) => (
                 <SlotCard key={slot.mint} slot={slot} index={i} />
               ))}
             </div>
