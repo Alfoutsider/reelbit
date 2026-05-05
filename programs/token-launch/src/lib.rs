@@ -909,8 +909,14 @@ pub mod token_launch {
         require!(tokens_out <= ctx.accounts.bonding_curve_vault.real_tokens, TokenLaunchError::InsufficientTokens);
 
         let max_tokens = ctx.accounts.slot_metadata.total_supply * MAX_WALLET_BPS / 10_000;
+        // Use the maximum of (cap-tracked balance, on-chain ATA balance). Without
+        // this, a wallet that received tokens via SPL transfer (no buy_tokens
+        // call) has cap.tokens_held=0 and could buy ANOTHER 5% on top — busting
+        // the per-wallet limit. ATA balance is the authoritative ground truth.
+        let on_chain_balance = ctx.accounts.buyer_token_account.amount;
+        let effective_held = std::cmp::max(ctx.accounts.wallet_cap.tokens_held, on_chain_balance);
         require!(
-            ctx.accounts.wallet_cap.tokens_held + tokens_out <= max_tokens,
+            effective_held.checked_add(tokens_out).map(|n| n <= max_tokens).unwrap_or(false),
             TokenLaunchError::WalletCapExceeded,
         );
 
@@ -980,7 +986,9 @@ pub mod token_launch {
         let cap = &mut ctx.accounts.wallet_cap;
         cap.mint        = mint_key;
         cap.wallet      = buyer_key;
-        cap.tokens_held += tokens_out;
+        // Track from the effective held amount we computed above, not just
+        // cap.tokens_held — keeps the cap aligned with reality after transfers.
+        cap.tokens_held = effective_held.saturating_add(tokens_out);
         cap.bump        = ctx.bumps.wallet_cap;
 
         emit!(TokensBought {
@@ -1062,14 +1070,20 @@ pub mod token_launch {
         vault.real_tokens            += token_amount;
         vault.total_fees_accumulated += fee_amount;
 
-        // Initialize cap fields on first use (wallets that received tokens via transfer, not buy)
+        // Initialize cap fields on first use (wallets that received tokens via
+        // transfer, not buy). On-chain ATA balance is the source of truth — the
+        // amount above the seller's pre-sell balance is the new ceiling.
+        // (sellerATA.amount has already been decremented by the token::transfer
+        // CPI above, so add back token_amount to recover the pre-sell value.)
+        let pre_sell_balance = ctx.accounts.seller_token_account.amount.saturating_add(token_amount);
         let cap = &mut ctx.accounts.wallet_cap;
         if cap.mint == Pubkey::default() {
             cap.mint   = ctx.accounts.mint.key();
             cap.wallet = ctx.accounts.seller.key();
             cap.bump   = ctx.bumps.wallet_cap;
         }
-        cap.tokens_held = cap.tokens_held.saturating_sub(token_amount);
+        let effective_held = std::cmp::max(cap.tokens_held, pre_sell_balance);
+        cap.tokens_held = effective_held.saturating_sub(token_amount);
 
         let new_real_sol    = vault.real_sol;
         let new_real_tokens = vault.real_tokens;
@@ -1504,12 +1518,22 @@ fn compute_creator_tier(
         return (CREATOR_NO_SKIN_BPS, CREATOR_SHARE_BPS - CREATOR_NO_SKIN_BPS, 10_000);
     }
 
-    // Has skin: check current hold ratio vs original allocation
+    // Has skin: check current hold ratio vs original allocation.
+    //
+    // Round-up math: integer division floors, which previously meant a creator
+    // holding 4_999/5_000 tokens would be tagged 9_998 bps (just under the
+    // 5_000 "full" threshold), losing 10% of revenue at scale. The round-up
+    // form below gives the creator the benefit of any sub-token rounding —
+    // matters most when dev_buy_amount is large.
     let balance  = read_token_balance(creator_token_account);
     let hold_bps = if dev_buy_amount == 0 {
         0u64
     } else {
-        ((balance as u128 * 10_000) / dev_buy_amount as u128).min(10_000) as u64
+        // (balance * 10_000 + denom - 1) / denom — equivalent to ceil(x/d).
+        let numerator = (balance as u128).saturating_mul(10_000);
+        let denom     = dev_buy_amount as u128;
+        let rounded   = numerator.saturating_add(denom - 1) / denom;
+        rounded.min(10_000) as u64
     };
 
     if hold_bps >= CREATOR_HOLD_FULL_BPS {

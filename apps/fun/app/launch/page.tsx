@@ -6,7 +6,7 @@ import { usePrivy, useWallets } from "@/lib/privy";
 import type { AnchorWallet } from "@solana/wallet-adapter-react";
 import { launchSlot, buyTokens, VIRTUAL_SOL, VIRTUAL_TOKENS, LAMPORTS_PER_SOL_BIGINT } from "@/lib/tokenLaunch";
 import { PublicKey } from "@solana/web3.js";
-import { Rocket, CheckCircle, ChevronRight, Sparkles, TrendingUp } from "lucide-react";
+import { Rocket, CheckCircle, ChevronRight, Sparkles, TrendingUp, Share2 } from "lucide-react";
 import { ImageUploader } from "@/components/slot/ImageUploader";
 import { BondingCurveChart } from "@/components/chart/BondingCurveChart";
 import { cn } from "@/lib/utils";
@@ -377,10 +377,25 @@ export default function LaunchPage() {
                 <p className="section-label mb-2">MINT ADDRESS</p>
                 <p className="font-mono text-xs text-white/50 break-all">{mintAddress}</p>
               </div>
-              <div className="flex gap-3 justify-center">
+              <div className="flex gap-3 justify-center flex-wrap">
                 <a href={`/slot/${mintAddress}`}>
                   <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
                     className="btn-launch flex items-center gap-2 px-6 py-3">VIEW SLOT</motion.button>
+                </a>
+                {/* Pre-filled X tweet — biggest organic-growth lever for a launchpad. */}
+                {/* The mint address goes in the URL slot so X auto-renders the slot */}
+                {/* page's OG metadata as a card. */}
+                <a
+                  href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(
+                    `🎰 Just launched $${form.ticker.toUpperCase()} on @reelbit_fun!\n\nDrive it to $100k mcap and it goes live as a casino slot. Creator earns 25% of GGR forever.`,
+                  )}&url=${encodeURIComponent(`https://reelbit.fun/slot/${mintAddress}`)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
+                    className="flex items-center gap-2 px-6 py-3 rounded-xl bg-black border border-white/10 hover:border-white/20 text-white font-orbitron text-[11px] tracking-wide">
+                    <Share2 size={14} /> SHARE ON X
+                  </motion.button>
                 </a>
                 <button onClick={() => { setStep("form"); setForm(EMPTY); }}
                   className="btn-ghost px-6 py-3 font-orbitron text-[11px] tracking-wide">LAUNCH ANOTHER</button>
