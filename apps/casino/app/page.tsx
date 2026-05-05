@@ -487,8 +487,15 @@ export default function CasinoLobby() {
         {tab === "lobby" && (loading ? (
           <SlotCardSkeletonGrid count={8} />
         ) : filtered.length === 0 ? (
-          <div className="text-center py-28">
-            <p className="font-orbitron text-sm text-white/15 tracking-widest">NO SLOTS FOUND</p>
+          <div className="text-center py-28 max-w-md mx-auto space-y-3 px-4">
+            <p className="font-orbitron text-sm text-white/15 tracking-widest">NO SLOTS YET</p>
+            <p className="text-sm text-white/35 font-rajdhani leading-relaxed">
+              Slots appear here the moment a token graduates on{" "}
+              <a href="https://reelbit.fun" target="_blank" rel="noopener noreferrer" style={{ color: "#d4a017" }} className="hover:underline">
+                reelbit.fun
+              </a>{" "}
+              — that means a creator hit $100k mcap on the launchpad. Each slot has its own RTP (90–98%) and shared jackpot pool.
+            </p>
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">

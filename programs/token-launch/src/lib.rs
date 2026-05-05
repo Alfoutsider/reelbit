@@ -296,9 +296,16 @@ pub struct FeesDistributed {
 
 #[event]
 pub struct SlotGraduated {
-    pub mint:     Pubkey,
-    pub creator:  Pubkey,
-    pub real_sol: u64,
+    pub mint:        Pubkey,
+    pub creator:     Pubkey,
+    pub real_sol:    u64,
+    /// True if the 30-day jackpot expiry window passed before graduation —
+    /// signals to off-chain systems that the jackpot pool wasn't seeded by
+    /// the bonding curve's normal fee flow and may need a platform top-up.
+    pub jackpot_expired: bool,
+    /// Unix seconds at graduation. Lets indexers compute time-to-graduation
+    /// without joining against the launch timestamp from a separate event.
+    pub graduated_at: i64,
 }
 
 #[event]
@@ -1004,10 +1011,14 @@ pub mod token_launch {
 
         if new_real_sol >= GRADUATION_LAMPORTS {
             ctx.accounts.slot_metadata.graduated = true;
+            let now = Clock::get()?.unix_timestamp;
+            let jackpot_expired = (now - ctx.accounts.bonding_curve_vault.launched_at) > JACKPOT_EXPIRY_SECS;
             emit!(SlotGraduated {
-                mint:     mint_key,
-                creator:  ctx.accounts.bonding_curve_vault.creator,
-                real_sol: new_real_sol,
+                mint:            mint_key,
+                creator:         ctx.accounts.bonding_curve_vault.creator,
+                real_sol:        new_real_sol,
+                jackpot_expired,
+                graduated_at:    now,
             });
         }
 

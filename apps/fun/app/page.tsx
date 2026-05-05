@@ -615,25 +615,38 @@ export default function HomePage() {
         {loading ? (
           <SlotCardSkeletonGrid count={8} />
         ) : visibleSlots.length === 0 ? (
-          <div className="col-span-full text-center py-24 space-y-4">
+          <div className="col-span-full text-center py-24 space-y-4 max-w-md mx-auto">
             <p className="font-orbitron text-sm text-white/20 tracking-widest">
               {showWatchlistOnly
                 ? "NO WATCHED TOKENS IN VIEW"
                 : total === 0 ? "NO TOKENS YET" : "NO RESULTS"}
             </p>
             {showWatchlistOnly ? (
-              <p className="text-white/30 text-xs font-rajdhani">
-                Tap the heart on a card to add it. Watched tokens are stored locally on this device.
+              <p className="text-white/40 text-sm font-rajdhani leading-relaxed">
+                Tap the <span className="text-red-400">♡</span> on a card to add it. Watched
+                tokens stay on this device — clearing browser data wipes them.
               </p>
-            ) : total === 0 && (
-              <Link href="/launch">
-                <motion.button
-                  whileHover={{ scale: 1.04 }}
-                  className="btn-launch inline-flex items-center gap-2 px-6 py-3 text-[12px] mt-2"
-                >
-                  <Rocket size={14} /> Be the first to launch
-                </motion.button>
-              </Link>
+            ) : total === 0 ? (
+              <>
+                <p className="text-white/40 text-sm font-rajdhani leading-relaxed">
+                  Every slot starts free at <strong className="text-white/70">$5k mcap</strong> on a bonding curve.
+                  Hit <strong className="text-white/70">$100k</strong> and your token graduates — the slot goes live
+                  in the casino and you earn <strong className="text-gold">25% of all GGR forever</strong>.
+                </p>
+                <Link href="/launch">
+                  <motion.button
+                    whileHover={{ scale: 1.04 }}
+                    className="btn-launch inline-flex items-center gap-2 px-6 py-3 text-[12px] mt-2"
+                  >
+                    <Rocket size={14} /> Be the first to launch
+                  </motion.button>
+                </Link>
+              </>
+            ) : (
+              <p className="text-white/40 text-sm font-rajdhani leading-relaxed">
+                No tokens match your filters. Try widening the MCAP range or clearing the
+                age filter.
+              </p>
             )}
           </div>
         ) : (
