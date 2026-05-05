@@ -954,6 +954,16 @@ app.get("/tokens", (req: Request, res: Response) => {
   const sort   = (req.query.sort as string) ?? "trending";
   const limit  = Math.min(200, Math.max(1, parseInt(req.query.limit  as string) || 50));
   const offset = Math.max(0, parseInt(req.query.offset as string) || 0);
+  // Optional filters. age=1h|24h|7d caps how recent the token must be.
+  // minMcap / maxMcap are USD bounds. NaN/negative values pass through (no filter).
+  const ageWindow = (req.query.age as string) ?? "";
+  const minMcap   = parseFloat((req.query.minMcap as string) ?? "");
+  const maxMcap   = parseFloat((req.query.maxMcap as string) ?? "");
+  const ageCutoff =
+    ageWindow === "1h"  ? Date.now() - 3_600_000 :
+    ageWindow === "24h" ? Date.now() - 86_400_000 :
+    ageWindow === "7d"  ? Date.now() - 7 * 86_400_000 :
+    0;
 
   const themes = getAllThemes().filter((t) => !t.graduated);
 
@@ -997,14 +1007,24 @@ app.get("/tokens", (req: Request, res: Response) => {
     };
   });
 
-  // Filter
-  const filtered = q
+  // Filter — text + numeric filters compose so the user can stack them.
+  let filtered = q
     ? enriched.filter((t) =>
         t.name.toLowerCase().includes(q) ||
         t.symbol.toLowerCase().includes(q) ||
         t.creator.toLowerCase().includes(q),
       )
     : enriched;
+
+  if (ageCutoff > 0) {
+    filtered = filtered.filter((t) => (t.createdAt ?? 0) >= ageCutoff);
+  }
+  if (Number.isFinite(minMcap) && minMcap > 0) {
+    filtered = filtered.filter((t) => t.mcapUsd >= minMcap);
+  }
+  if (Number.isFinite(maxMcap) && maxMcap > 0) {
+    filtered = filtered.filter((t) => t.mcapUsd <= maxMcap);
+  }
 
   // Sort
   if (sort === "new")        filtered.sort((a, b) => b.createdAt - a.createdAt);

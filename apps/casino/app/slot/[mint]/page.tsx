@@ -9,7 +9,7 @@ import Link from "next/link";
 import { SlotMachine } from "@/components/slot/SlotMachine";
 import { BetControls } from "@/components/slot/BetControls";
 import { WalletModal } from "@/components/wallet/WalletModal";
-import { createSession, spin, generateClientSeed, type Session } from "@/lib/gameClient";
+import { createSession, spin, generateClientSeed, revealSession, type Session } from "@/lib/gameClient";
 import { fetchBalance, formatUsdc, USDC_UNIT, type BalanceEntry } from "@/lib/balanceClient";
 import { getDemoSession, demoSpin, type DemoSession } from "@/lib/demoSession";
 import { shortenAddress } from "@/lib/utils";
@@ -60,6 +60,12 @@ export default function CasinoSlotPage({ params }: { params: { mint: string } })
   const [theme, setTheme] = useState<SlotTheme | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [clientSeed, setClientSeed] = useState(generateClientSeed);
+  // Verifier modal state. Filled when the user taps "Reveal & verify" — calls
+  // /session/reveal which returns the unhashed server seed so the player can
+  // recompute every spin's outcome offline.
+  const [revealed, setRevealed] = useState<{ serverSeed: string; serverSeedHash: string; nonce: number } | null>(null);
+  const [revealLoading, setRevealLoading] = useState(false);
+  const [verifyOpen, setVerifyOpen] = useState(false);
   const [betUsdc, setBetUsdc] = useState(DEFAULT_BET_USDC);
   const [balance, setBalance] = useState<BalanceEntry | null>(null);
   const [spinResult, setSpinResult] = useState<SpinResult | null>(null);
@@ -440,12 +446,21 @@ export default function CasinoSlotPage({ params }: { params: { mint: string } })
               <p>Spins are simulated client-side. Balance resets when you exit. No real money involved.</p>
             </div>
           ) : session && (
-            <div className="card-panel p-5 space-y-2 text-xs text-white/30">
-              <div className="text-white/50 font-orbitron text-[11px] font-bold flex items-center gap-1.5 tracking-wider">
-                <Shield size={12} /> PROVABLY FAIR
+            <div className="card-panel p-5 space-y-3 text-xs text-white/30">
+              <div className="flex items-center justify-between">
+                <div className="text-white/50 font-orbitron text-[11px] font-bold flex items-center gap-1.5 tracking-wider">
+                  <Shield size={12} /> PROVABLY FAIR
+                </div>
+                <button
+                  onClick={() => setVerifyOpen(true)}
+                  className="text-[10px] font-orbitron text-purple-300 hover:text-purple-200 tracking-widest"
+                >
+                  VERIFY
+                </button>
               </div>
               <div className="break-all">Server seed hash: <span className="text-white/50 font-mono">{session.serverSeedHash}</span></div>
-              <div>Client seed: <span className="text-white/50 font-mono">{clientSeed.slice(0, 16)}…</span></div>
+              <div className="break-all">Client seed: <span className="text-white/50 font-mono">{clientSeed}</span></div>
+              <div>Spins this session: <span className="text-white/50 font-mono">{recentSpins.length}</span></div>
             </div>
           )}
         </div>
@@ -457,7 +472,106 @@ export default function CasinoSlotPage({ params }: { params: { mint: string } })
         walletAddress={walletAddress}
         onBalanceChange={(playable) => setBalance((prev) => prev ? { ...prev, playable } : null)}
       />
+
+      {/* Provably-fair verify modal. Reveal ends the session — subsequent spins */}
+      {/* will need a fresh session and a new server seed (which is the point: */}
+      {/* the server CAN'T retroactively pick a seed once it's revealed). */}
+      <AnimatePresence>
+        {verifyOpen && session && (
+          <motion.div
+            key="verify-overlay"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+            onClick={() => setVerifyOpen(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              transition={{ duration: 0.18 }}
+              className="w-full max-w-lg rounded-2xl border border-white/10 bg-zinc-950 p-6 space-y-4 max-h-[90vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center gap-2">
+                <Shield size={14} className="text-purple-400" />
+                <p className="font-orbitron text-[11px] font-bold text-white/60 tracking-widest">VERIFY THIS SESSION</p>
+              </div>
+
+              <p className="text-[12px] text-white/50 font-rajdhani leading-relaxed">
+                Each spin's outcome is HMAC-SHA256(server_seed, client_seed:nonce:reel).
+                The server seed was committed before any spins via its hash. Reveal
+                it below to recompute every outcome offline and confirm we didn't
+                cheat.
+              </p>
+
+              {!revealed ? (
+                <div className="space-y-3">
+                  <KV label="Server seed hash (committed before spins)" value={session.serverSeedHash} />
+                  <KV label="Client seed (yours)" value={clientSeed} />
+                  <KV label="Spins consumed" value={String(recentSpins.length)} />
+                  <button
+                    onClick={async () => {
+                      if (revealLoading) return;
+                      setRevealLoading(true);
+                      try {
+                        const r = await revealSession(session.sessionId);
+                        setRevealed(r);
+                      } catch (err) {
+                        console.error("[verify] reveal failed:", err);
+                      } finally {
+                        setRevealLoading(false);
+                      }
+                    }}
+                    disabled={revealLoading}
+                    className="w-full rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-50 py-3 text-white font-orbitron text-[12px] tracking-wider"
+                  >
+                    {revealLoading ? "REVEALING…" : "REVEAL SERVER SEED & END SESSION"}
+                  </button>
+                  <p className="text-[10px] text-white/30 font-rajdhani text-center">
+                    Reveal ends the session. The next spin starts a fresh seed.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <KV label="Revealed server seed" value={revealed.serverSeed} highlight />
+                  <KV label="Server seed hash (verify SHA-256 matches)" value={revealed.serverSeedHash} />
+                  <KV label="Client seed" value={clientSeed} />
+                  <KV label="Final nonce" value={String(revealed.nonce)} />
+                  <div className="rounded-lg bg-purple-500/10 border border-purple-500/20 p-3 text-[11px] text-purple-200/80 font-rajdhani leading-relaxed">
+                    Verify: <code className="font-mono text-purple-100">sha256(serverSeed) === serverSeedHash</code>.
+                    Outcome for spin <code className="font-mono">N</code> uses
+                    {" "}<code className="font-mono">HMAC-SHA256(serverSeed, "{clientSeed.slice(0, 8)}…:N:reel")</code>.
+                  </div>
+                  <button
+                    onClick={() => { setVerifyOpen(false); setRevealed(null); }}
+                    className="w-full rounded-xl bg-white/10 hover:bg-white/15 py-3 text-white/80 font-orbitron text-[12px] tracking-wider"
+                  >
+                    CLOSE
+                  </button>
+                </div>
+              )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </>
+  );
+}
+
+function KV({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
+  return (
+    <div className="space-y-1">
+      <p className="text-[10px] font-orbitron tracking-widest text-white/40">{label}</p>
+      <div className={`rounded-lg border px-3 py-2 font-mono text-[11px] break-all ${
+        highlight
+          ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-200"
+          : "bg-black/40 border-white/8 text-white/70"
+      }`}>
+        {value}
+      </div>
+    </div>
   );
 }
 

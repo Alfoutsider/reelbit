@@ -200,6 +200,12 @@ export default function HomePage() {
   // it's fine to filter what's already rendered.
   const [showWatchlistOnly, setShowWatchlistOnly] = useState(false);
   const [watchlist, setWatchlist] = useState<string[]>([]);
+  // Server-side filters. age cap + MCAP range. "" = no filter.
+  type AgeFilter = "" | "1h" | "24h" | "7d";
+  const [ageFilter, setAgeFilter] = useState<AgeFilter>("");
+  const [minMcap, setMinMcap] = useState("");
+  const [maxMcap, setMaxMcap] = useState("");
+  const [filtersOpen, setFiltersOpen] = useState(false);
   useEffect(() => {
     setWatchlist(getWatchlist());
     return subscribeWatchlist(() => setWatchlist(getWatchlist()));
@@ -247,17 +253,27 @@ export default function HomePage() {
   }, []);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const searchRef   = useRef(search);
-  const sortRef     = useRef(sort);
-  searchRef.current = search;
-  sortRef.current   = sort;
+  const searchRef    = useRef(search);
+  const sortRef      = useRef(sort);
+  const ageRef       = useRef(ageFilter);
+  const minMcapRef   = useRef(minMcap);
+  const maxMcapRef   = useRef(maxMcap);
+  searchRef.current  = search;
+  sortRef.current    = sort;
+  ageRef.current     = ageFilter;
+  minMcapRef.current = minMcap;
+  maxMcapRef.current = maxMcap;
 
-  const fetchTokens = useCallback((q: string, s: SortMode, off: number, append: boolean) => {
+  interface FetchOpts { age: AgeFilter; minMcap: string; maxMcap: string }
+  const fetchTokens = useCallback((q: string, s: SortMode, off: number, append: boolean, opts: FetchOpts) => {
     if (append) setLoadingMore(true);
     else        setLoading(true);
 
     const params = new URLSearchParams({ sort: s, limit: String(PAGE_SIZE), offset: String(off) });
     if (q) params.set("q", q);
+    if (opts.age) params.set("age", opts.age);
+    if (opts.minMcap && parseFloat(opts.minMcap) > 0) params.set("minMcap", opts.minMcap);
+    if (opts.maxMcap && parseFloat(opts.maxMcap) > 0) params.set("maxMcap", opts.maxMcap);
 
     fetch(`${API_URL}/tokens?${params}`)
       .then((r) => { if (!r.ok) throw new Error(); return r.json() as Promise<TokensResponse>; })
@@ -270,21 +286,24 @@ export default function HomePage() {
       .finally(() => { if (append) setLoadingMore(false); else setLoading(false); });
   }, []);
 
-  // On sort change: reset and refetch
+  // On sort or filter change: reset and refetch (no debounce — these are
+  // chip toggles, the user expects instant response).
   useEffect(() => {
     setOffset(0);
-    fetchTokens(searchRef.current, sort, 0, false);
-  }, [sort, fetchTokens]);
+    fetchTokens(searchRef.current, sort, 0, false, { age: ageFilter, minMcap, maxMcap });
+  }, [sort, ageFilter, fetchTokens]);
 
-  // Debounced search
+  // Debounce text and numeric MCAP fields together (any keystroke restarts
+  // the timer). 350ms is a comfortable middle ground between responsiveness
+  // and avoiding a request per keystroke.
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
       setOffset(0);
-      fetchTokens(search, sortRef.current, 0, false);
+      fetchTokens(search, sortRef.current, 0, false, { age: ageRef.current, minMcap, maxMcap });
     }, 350);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-  }, [search, fetchTokens]);
+  }, [search, minMcap, maxMcap, fetchTokens]);
 
   // TopBit Reel: always the leader by graduation progress
   useEffect(() => {
@@ -300,7 +319,11 @@ export default function HomePage() {
   function handleLoadMore() {
     const newOffset = offset + PAGE_SIZE;
     setOffset(newOffset);
-    fetchTokens(searchRef.current, sortRef.current, newOffset, true);
+    fetchTokens(searchRef.current, sortRef.current, newOffset, true, {
+      age: ageRef.current,
+      minMcap: minMcapRef.current,
+      maxMcap: maxMcapRef.current,
+    });
   }
 
   const visibleSlots = showWatchlistOnly
@@ -496,8 +519,97 @@ export default function HomePage() {
               <Heart size={12} fill={showWatchlistOnly ? "currentColor" : "none"} />
               Watchlist {watchlist.length > 0 && <span className="opacity-60">{watchlist.length}</span>}
             </motion.button>
+            {/* Filter sheet toggle. Activates the badge when any filter is set. */}
+            <motion.button
+              whileTap={{ scale: 0.96 }}
+              onClick={() => setFiltersOpen((v) => !v)}
+              className={cn(
+                "flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-[12px] font-bold font-rajdhani transition-all relative",
+                filtersOpen || ageFilter || minMcap || maxMcap
+                  ? "text-white bg-white/[0.07] border border-white/15"
+                  : "bg-white/[0.04] text-white/40 hover:text-white hover:bg-white/[0.07] border border-white/5",
+              )}
+            >
+              <BarChart2 size={12} /> Filters
+              {(ageFilter || minMcap || maxMcap) && (
+                <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-red-500" />
+              )}
+            </motion.button>
           </div>
         </div>
+
+        {/* Filter sheet — shown when toggled, persists across sort changes. */}
+        <AnimatePresence>
+          {filtersOpen && (
+            <motion.div
+              key="filter-sheet"
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.2 }}
+              className="overflow-hidden"
+            >
+              <div className="rounded-xl border border-white/8 bg-white/[0.02] p-4 space-y-4">
+                <div className="flex items-center justify-between">
+                  <p className="font-orbitron text-[10px] font-bold text-white/50 tracking-widest">FILTERS</p>
+                  {(ageFilter || minMcap || maxMcap) && (
+                    <button
+                      onClick={() => { setAgeFilter(""); setMinMcap(""); setMaxMcap(""); }}
+                      className="text-[10px] font-orbitron text-white/40 hover:text-white tracking-widest"
+                    >
+                      CLEAR ALL
+                    </button>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <p className="section-label text-[10px]">Age</p>
+                  <div className="flex gap-2 flex-wrap">
+                    {(["", "1h", "24h", "7d"] as AgeFilter[]).map((id) => (
+                      <button
+                        key={id || "any"}
+                        onClick={() => setAgeFilter(id)}
+                        className={cn(
+                          "rounded-lg px-3 py-1.5 text-[11px] font-rajdhani font-bold transition-all",
+                          ageFilter === id
+                            ? "bg-white/15 text-white"
+                            : "bg-white/[0.03] text-white/40 hover:text-white hover:bg-white/[0.06] border border-white/5",
+                        )}
+                      >
+                        {id || "Any age"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="section-label text-[10px]">Min MCAP (USD)</label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={minMcap}
+                      onChange={(e) => setMinMcap(e.target.value)}
+                      placeholder="e.g. 5000"
+                      className="input-casino text-[12px]"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="section-label text-[10px]">Max MCAP (USD)</label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={maxMcap}
+                      onChange={(e) => setMaxMcap(e.target.value)}
+                      placeholder="e.g. 50000"
+                      className="input-casino text-[12px]"
+                    />
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Grid */}
         {loading ? (
