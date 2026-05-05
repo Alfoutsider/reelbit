@@ -99,8 +99,49 @@ const connection = new Connection(config.rpcUrl, "confirmed");
 
 // ── Health ────────────────────────────────────────────────────────────────────
 
+// Tracked elsewhere so /health/ready can surface webhook freshness.
+let _lastWebhookAt = 0;
+function markWebhookReceived() { _lastWebhookAt = Date.now(); }
+
+// Cheap liveness probe — Render hits this every few seconds, must stay <50ms.
 app.get("/health", (_req: Request, res: Response) => {
   res.json({ status: "ok", ts: Date.now() });
+});
+
+// Deeper readiness probe. Pings Supabase + RPC, reports last-webhook-at.
+// Return 503 if anything critical is broken so a load balancer can route
+// around a degraded instance during a partial outage.
+app.get("/health/ready", async (_req: Request, res: Response) => {
+  const checks: Record<string, { ok: boolean; ms?: number; error?: string }> = {};
+  const probe = async (name: string, fn: () => Promise<unknown>) => {
+    const t0 = Date.now();
+    try {
+      await fn();
+      checks[name] = { ok: true, ms: Date.now() - t0 };
+    } catch (err) {
+      checks[name] = { ok: false, ms: Date.now() - t0, error: (err as Error).message.slice(0, 200) };
+    }
+  };
+
+  await Promise.all([
+    probe("rpc",      () => connection.getSlot()),
+    probe("supabase", async () => {
+      // tiny no-op query — fastest healthcheck Postgres has.
+      const { error } = await (await import("./supabase")).supabase.from("tokens").select("mint").limit(1);
+      if (error) throw new Error(error.message);
+    }),
+  ]);
+
+  const allOk = Object.values(checks).every((c) => c.ok);
+  const webhookAgeSec = _lastWebhookAt ? Math.floor((Date.now() - _lastWebhookAt) / 1000) : null;
+
+  res.status(allOk ? 200 : 503).json({
+    status:   allOk ? "ready" : "degraded",
+    ts:       Date.now(),
+    uptime_s: Math.floor(process.uptime()),
+    checks,
+    webhook:  { lastAt: _lastWebhookAt || null, ageSec: webhookAgeSec },
+  });
 });
 
 // ── Server-Sent Events (real-time feed) ───────────────────────────────────────
@@ -761,6 +802,7 @@ app.post("/internal/jackpot-won", requireInternal, async (req: Request, res: Res
 // ── Helius webhook ────────────────────────────────────────────────────────────
 
 app.post("/webhooks/helius", requireHeliusSignature, async (req: Request, res: Response) => {
+  markWebhookReceived();
   const payloads: HeliusWebhookPayload[] = Array.isArray(req.body) ? req.body : [req.body];
   res.status(200).json({ received: payloads.length });
 

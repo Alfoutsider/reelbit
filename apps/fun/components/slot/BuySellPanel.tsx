@@ -240,13 +240,28 @@ export function BuySellPanel({ slot, onTradeComplete }: Props) {
         </motion.div>
       )}
 
-      {/* Wallet cap warning */}
-      {mode === "buy" && numAmount > 2 && (
-        <div className="flex items-start gap-2 rounded-xl bg-yellow-500/10 border border-yellow-500/20 p-3 text-xs text-yellow-300">
-          <AlertTriangle size={13} className="mt-0.5 shrink-0" />
-          <span>Max {MAX_WALLET_PCT}% of supply per wallet. Large buys may be rejected.</span>
-        </div>
-      )}
+      {/* Wallet cap warning. Shows the projected % the user would hold after */}
+      {/* this buy, derived from the bonding-curve quote we already compute. */}
+      {/* If we don't have the curve loaded yet (pre-mount), fall back to the */}
+      {/* simple flat warning. */}
+      {mode === "buy" && numAmount > 0 && (() => {
+        const TOTAL_SUPPLY_RAW = 1_000_000_000n * 1_000_000n; // 1B with 6 decimals
+        const projectedPct = Number((tokenOutEstimate * 10_000n) / TOTAL_SUPPLY_RAW) / 100;
+        const tooClose = projectedPct >= MAX_WALLET_PCT * 0.8;
+        if (!tooClose) return null;
+        return (
+          <div className="flex items-start gap-2 rounded-xl bg-yellow-500/10 border border-yellow-500/20 p-3 text-xs text-yellow-300">
+            <AlertTriangle size={13} className="mt-0.5 shrink-0" />
+            <div>
+              <p>This buy is ~{projectedPct.toFixed(2)}% of supply.
+                {projectedPct > MAX_WALLET_PCT
+                  ? <strong> Will be rejected — max {MAX_WALLET_PCT}% per wallet.</strong>
+                  : ` Limit is ${MAX_WALLET_PCT}% per wallet.`}
+              </p>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Error */}
       {error && (
