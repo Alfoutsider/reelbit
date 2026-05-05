@@ -1245,7 +1245,10 @@ pub mod token_launch {
     /// Transfers the entire vault balance minus the rent-exempt floor so the PDA
     /// remains funded and can accept future jackpot deposits for the same mint.
     pub fn pay_jackpot(ctx: Context<PayJackpot>) -> Result<()> {
-        let rent_exempt_min: u64 = 890_880; // standard floor for 0-byte system account
+        // Dynamic rent floor — 890_880 was the 2024 hardcoded value, but Solana
+        // adjusts the rent schedule periodically. Using Rent::get() means the
+        // vault stays correctly funded after future rent changes.
+        let rent_exempt_min: u64 = Rent::get()?.minimum_balance(0);
         let vault_lamports = ctx.accounts.jackpot_vault.lamports();
         let payout = vault_lamports.saturating_sub(rent_exempt_min);
 

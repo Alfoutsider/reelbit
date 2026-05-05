@@ -5,6 +5,7 @@ import { Providers } from "@/components/layout/Providers";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { ThemeProvider } from "@/components/layout/ThemeProvider";
+import { GraduationPill } from "@/components/layout/GraduationPill";
 
 export const metadata: Metadata = {
   title: "ReelBit Casino — Provably Fair Slots on Solana",
@@ -29,6 +30,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <Providers>
           <ThemeProvider>
             <Navbar />
+            <GraduationPill />
             <main className="pt-14 flex-1">{children}</main>
             <Footer />
           </ThemeProvider>

@@ -35,10 +35,11 @@ import { startMcapWatcher, checkOneToken as checkOneTokenForGraduation } from ".
 import { getSolUsdPrice, lamportsToUsdc, usdcToLamports } from "./pythPrice";
 import { swapSolToUsdc, USDC_MINT } from "./jupiterSwap";
 import { USDC_UNIT, applyWelcomeBonus, recordWagering, getBalance } from "./balanceStore";
-import { recordTrade, getTradesForMint, getGlobalFeed, getVolume24h, getGlobalVolume24h, loadTrades } from "./tradeStore";
+import { recordTrade, getTradesForMint, getGlobalFeed, getVolume24h, getGlobalVolume24h, loadTrades, flushTrades } from "./tradeStore";
 import { getComments, addComment, likeComment } from "./commentStore";
 import { addSSEClient, broadcast } from "./sseEmitter";
 import { isProcessed, markProcessed, requireHeliusSignature } from "./webhookSecurity";
+import { loggedFnf } from "./loggedFireAndForget";
 import { getCreatorRevTier, computeRevTier } from "./creatorHoldingTracker";
 import {
   getOrCreateCode, registerReferral, getReferrerStats, getLeaderboard,
@@ -819,14 +820,16 @@ app.post("/webhooks/helius", requireHeliusSignature, async (req: Request, res: R
               recordTrade(tradeEvent);
               broadcast("trade", tradeEvent, mint);
               broadcast("trade", tradeEvent, null);
-              analyticsLogTrade(tradeEvent).catch(() => {});
+              loggedFnf(analyticsLogTrade(tradeEvent), "analytics:trade", { mint, sig: payload.signature });
               // Referral: award points to referrer of this buyer (fire-and-forget)
-              referralOnTrade(
-                tradeEvent.wallet, mint, tradeEvent.solAmount, payload.signature,
-              ).catch(() => {});
+              loggedFnf(
+                referralOnTrade(tradeEvent.wallet, mint, tradeEvent.solAmount, payload.signature),
+                "referral:trade",
+                { mint, wallet: tradeEvent.wallet },
+              );
               // Instant graduation check — don't wait for the next 5s poll
               // if this trade just crossed $100k MCap.
-              checkOneTokenForGraduation(connection, mint).catch(() => {});
+              loggedFnf(checkOneTokenForGraduation(connection, mint), "graduation:check", { mint });
             }
           }
         } catch {}
@@ -853,11 +856,13 @@ app.post("/webhooks/helius", requireHeliusSignature, async (req: Request, res: R
         });
 
         await handleGraduation(events.graduated, connection);
-        analyticsLogGraduation(events.graduated.mint).catch(() => {});
+        loggedFnf(analyticsLogGraduation(events.graduated.mint), "analytics:graduation", { mint: events.graduated.mint });
         // Referral: graduation bonus for the creator's referrer
-        referralOnGraduation(
-          events.graduated.creator, events.graduated.mint,
-        ).catch(() => {});
+        loggedFnf(
+          referralOnGraduation(events.graduated.creator, events.graduated.mint),
+          "referral:graduation",
+          { mint: events.graduated.mint, creator: events.graduated.creator },
+        );
         triggerThemeGeneration(
           events.graduated.mint,
           events.graduated.mint.slice(0, 8),
@@ -1580,3 +1585,15 @@ app.listen(config.port, () => {
     }, 20_000);
   }
 });
+
+// Flush the debounced trade snapshot on graceful shutdown so we don't lose the
+// last ~10s of trades on a clean Render redeploy. Supabase still has every
+// trade either way (analyticsLogTrade is the source of truth) — this just
+// keeps the local cache warm across restarts so /tokens looks live faster.
+function gracefulShutdown(signal: string) {
+  console.log(`[api] received ${signal} — flushing trade snapshot`);
+  try { flushTrades(); } catch (err) { console.error(err); }
+  process.exit(0);
+}
+process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+process.on("SIGINT",  () => gracefulShutdown("SIGINT"));
