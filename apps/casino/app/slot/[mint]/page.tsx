@@ -10,6 +10,8 @@ import { SlotMachine } from "@/components/slot/SlotMachine";
 import { BetControls } from "@/components/slot/BetControls";
 import { WalletModal } from "@/components/wallet/WalletModal";
 import { createSession, spin, generateClientSeed, revealSession, type Session } from "@/lib/gameClient";
+import { appendSpin } from "@/lib/spinHistory";
+import { checkSpin, recordSpin } from "@/lib/responsibleGambling";
 import { fetchBalance, formatUsdc, USDC_UNIT, type BalanceEntry } from "@/lib/balanceClient";
 import { getDemoSession, demoSpin, type DemoSession } from "@/lib/demoSession";
 import { shortenAddress } from "@/lib/utils";
@@ -153,6 +155,14 @@ export default function CasinoSlotPage({ params }: { params: { mint: string } })
   const handleSpin = useCallback(async () => {
     if (isSpinning) return;
     if (!isDemo && !session) return;
+
+    // Responsible-gambling pre-check. Self-exclusion or daily-loss-limit blocks
+    // even before we hit the network so the user gets immediate feedback.
+    if (!isDemo) {
+      const block = checkSpin();
+      if (block) { setError(block); return; }
+    }
+
     setError(null);
     setIsSpinning(true);
 
@@ -182,6 +192,27 @@ export default function CasinoSlotPage({ params }: { params: { mint: string } })
       setTotalWagered((p) => p + (isFree ? 0 : betUsdc));
       setTotalWon((p) => p + result.totalPayout);
       setRecentSpins((prev) => [{ result, ts: Date.now() }, ...prev].slice(0, 20));
+      // Persist to cross-slot history so the /history page can render lifetime
+      // stats. Demo spins skip this — they aren't real bets.
+      if (!isDemo && theme) {
+        appendSpin({
+          ts:               Date.now(),
+          mint:             theme.mint,
+          tokenSymbol:      theme.tokenSymbol,
+          betUsdc:          isFree ? 0 : betUsdc,
+          payoutUsdc:       result.totalPayout,
+          isJackpot:        result.isJackpot,
+          isWin:            result.totalPayout > 0,
+          freeSpinsAwarded: result.freeSpinsAwarded,
+          serverSeedHash:   result.serverSeedHash,
+          clientSeed:       result.clientSeed,
+          nonce:            result.nonce,
+        });
+        // Track net loss against the daily loss limit. Wins above bet count
+        // as zero loss (not negative — we don't refund the loss bucket).
+        const netLoss = (isFree ? 0 : betUsdc) - result.totalPayout;
+        recordSpin(netLoss);
+      }
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Spin failed";
       setError(msg);

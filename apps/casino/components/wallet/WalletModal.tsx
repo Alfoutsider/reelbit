@@ -7,6 +7,7 @@ import { SwipeToConfirm } from "@/components/wallet/SwipeToConfirm";
 import { Connection, PublicKey, SystemProgram, Transaction, LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { useWallets } from "@/lib/privy";
 import { cn } from "@/lib/utils";
+import { checkDeposit, recordDeposit } from "@/lib/responsibleGambling";
 import {
   fetchBalance,
   confirmDeposit,
@@ -111,6 +112,9 @@ export function WalletModal({ open, onClose, walletAddress, onBalanceChange }: P
 
   async function handleDeposit() {
     if (!effectiveDepositUsd || effectiveDepositUsd <= 0) throw new Error("Enter a deposit amount");
+    // Responsible-gambling pre-check: self-exclusion or daily-deposit-limit.
+    const block = checkDeposit(effectiveDepositUsd);
+    if (block) throw new Error(block);
     const lamports = usdToLamports(effectiveDepositUsd);
     const wallet   = wallets[0];
     if (!wallet) throw new Error("No wallet connected");
@@ -136,6 +140,9 @@ export function WalletModal({ open, onClose, walletAddress, onBalanceChange }: P
     const result = await confirmDeposit(signature, walletAddress);
     await refreshBalance();
     await refreshSolBalance();
+
+    // Track against the local daily-deposit limit (enforced again next time).
+    recordDeposit(effectiveDepositUsd);
 
     const bonusMsg = result.bonusClaimed
       ? ` 🎁 Welcome bonus: +${formatUsdc(result.bonus)}!`

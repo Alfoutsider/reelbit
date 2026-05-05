@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { LimitsPanel } from "./LimitsPanel";
+
 export const metadata = { title: "Responsible Gambling — ReelBit Casino" };
 export default function ResponsibleGamblingPage() {
   return (
@@ -9,6 +11,9 @@ export default function ResponsibleGamblingPage() {
           <h1 className="font-orbitron text-3xl font-black text-white mb-3">Responsible Gambling</h1>
           <p className="text-white/40 text-sm font-rajdhani">ReelBit Casino is committed to promoting safe and responsible gambling.</p>
         </div>
+
+        {/* Interactive limits panel — local-first deposit / loss caps and self-exclusion */}
+        <LimitsPanel />
 
         {/* Crisis banner */}
         <div className="mb-8 rounded-2xl border border-red-500/20 p-5" style={{ background: "rgba(239,68,68,0.06)" }}>

@@ -38,7 +38,7 @@ import { USDC_UNIT, applyWelcomeBonus, recordWagering, getBalance } from "./bala
 import { recordTrade, getTradesForMint, getGlobalFeed, getVolume24h, getGlobalVolume24h, loadTrades, flushTrades } from "./tradeStore";
 import { getComments, addComment, likeComment } from "./commentStore";
 import { addSSEClient, broadcast } from "./sseEmitter";
-import { isProcessed, markProcessed, requireHeliusSignature } from "./webhookSecurity";
+import { isProcessed, markProcessed, requireHeliusSignature, validateWallet, validateMint } from "./webhookSecurity";
 import { loggedFnf } from "./loggedFireAndForget";
 import { getCreatorRevTier, computeRevTier } from "./creatorHoldingTracker";
 import {
@@ -194,7 +194,7 @@ app.get("/themes/graduated", (_req: Request, res: Response) => {
   res.json(getGraduatedThemes());
 });
 
-app.get("/themes/:mint", (req: Request, res: Response) => {
+app.get("/themes/:mint", validateMint, (req: Request, res: Response) => {
   const theme = getTheme(req.params.mint);
   if (!theme) return res.status(404).json({ error: "Theme not found" });
   res.json(theme);
@@ -298,7 +298,7 @@ app.get("/profile/by-id/:userId", async (req: Request, res: Response) => {
   res.json(profile);
 });
 
-app.get("/profile/:wallet", async (req: Request, res: Response) => {
+app.get("/profile/:wallet", validateWallet, async (req: Request, res: Response) => {
   const profile = await getProfile(req.params.wallet);
   if (!profile) return res.status(404).json({ error: "Profile not found" });
   res.json(profile);
@@ -313,7 +313,7 @@ app.post("/profile", async (req: Request, res: Response) => {
   res.status(201).json(profile);
 });
 
-app.patch("/profile/:wallet", async (req: Request, res: Response) => {
+app.patch("/profile/:wallet", validateWallet, async (req: Request, res: Response) => {
   const { wallet } = req.params;
   const { username } = req.body as { username: string };
   if (!username) return res.status(400).json({ error: "username required" });
@@ -340,7 +340,7 @@ app.post("/upload/slot-image", (req: Request, res: Response) => {
   } catch (err) { res.status(500).json({ error: (err as Error).message }); }
 });
 
-app.post("/profile/:wallet/pfp/upload", async (req: Request, res: Response) => {
+app.post("/profile/:wallet/pfp/upload", validateWallet, async (req: Request, res: Response) => {
   const { wallet } = req.params;
   const { base64, ext } = req.body as { base64: string; ext: string };
   if (!base64 || !ext) return res.status(400).json({ error: "base64 and ext required" });
@@ -353,7 +353,7 @@ app.post("/profile/:wallet/pfp/upload", async (req: Request, res: Response) => {
   } catch (err) { res.status(500).json({ error: (err as Error).message }); }
 });
 
-app.post("/profile/:wallet/pfp/nft", async (req: Request, res: Response) => {
+app.post("/profile/:wallet/pfp/nft", validateWallet, async (req: Request, res: Response) => {
   const { wallet } = req.params;
   const { mint } = req.body as { mint: string };
   if (!mint) return res.status(400).json({ error: "mint required" });
@@ -449,7 +449,7 @@ app.post("/themes/register", (req: Request, res: Response) => {
   res.status(201).json(theme);
 });
 
-app.get("/themes/by-creator/:wallet", (req: Request, res: Response) => {
+app.get("/themes/by-creator/:wallet", validateWallet, (req: Request, res: Response) => {
   res.json(getThemesByCreator(req.params.wallet));
 });
 
@@ -465,7 +465,7 @@ const PLATFORM_REVENUE_KEY = "PLATFORM_REVENUE"; // internal balance store key f
 // ── Balance endpoints ─────────────────────────────────────────────────────────
 // All internal balances are in USDC micro-units (1 USDC = 1_000_000).
 
-app.get("/balance/:wallet", async (req: Request, res: Response) => {
+app.get("/balance/:wallet", validateWallet, async (req: Request, res: Response) => {
   const entry = await getBalance(req.params.wallet);
   res.json({ wallet: req.params.wallet, ...entry });
 });
@@ -474,7 +474,7 @@ app.get("/balance/:wallet", async (req: Request, res: Response) => {
  * GET /bonus/status/:wallet
  * Returns the current welcome bonus state, wagering progress, and expiry.
  */
-app.get("/bonus/status/:wallet", async (req: Request, res: Response) => {
+app.get("/bonus/status/:wallet", validateWallet, async (req: Request, res: Response) => {
   try {
     const status = await getBonusStatus(req.params.wallet);
     res.json({ wallet: req.params.wallet, ...status });
@@ -1437,7 +1437,7 @@ app.get("/dividends/:mint", async (req: Request, res: Response) => {
 // ── Referral program ──────────────────────────────────────────────────────────
 
 /** GET /referral/code/:wallet — get or create referral code for a wallet */
-app.get("/referral/code/:wallet", async (req: Request, res: Response) => {
+app.get("/referral/code/:wallet", validateWallet, async (req: Request, res: Response) => {
   const { wallet } = req.params;
   if (!wallet || wallet.length < 32) return res.status(400).json({ error: "invalid wallet" });
   try {
@@ -1471,7 +1471,7 @@ app.post("/referral/register", async (req: Request, res: Response) => {
 });
 
 /** GET /referral/stats/:wallet — personal stats for a wallet */
-app.get("/referral/stats/:wallet", async (req: Request, res: Response) => {
+app.get("/referral/stats/:wallet", validateWallet, async (req: Request, res: Response) => {
   const { wallet } = req.params;
   if (!wallet || wallet.length < 32) return res.status(400).json({ error: "invalid wallet" });
   try {

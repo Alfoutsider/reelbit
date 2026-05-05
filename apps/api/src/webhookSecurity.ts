@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import type { Request, Response, NextFunction } from "express";
+import { PublicKey } from "@solana/web3.js";
 import { config } from "./config";
 
 // Rolling LRU of recently-processed tx signatures so we can short-circuit
@@ -79,3 +80,30 @@ export function requireHeliusSignature(req: Request, res: Response, next: NextFu
   }
   next();
 }
+
+// ── Param validation ─────────────────────────────────────────────────────────
+
+/**
+ * Reject route hits with a malformed Solana address in `:wallet` or `:mint`.
+ * Without this, downstream code would either silently produce garbage results
+ * (e.g. /profile/<random>) or pass the bad string to Supabase queries.
+ *
+ * Builds one middleware per param name; mount it on every route that accepts
+ * a wallet or mint in the path.
+ */
+export function validatePubkeyParam(name: "wallet" | "mint") {
+  return (req: Request, res: Response, next: NextFunction) => {
+    const v = req.params[name];
+    if (!v) return res.status(400).json({ error: `${name} required` });
+    try {
+      // PublicKey constructor throws on invalid base58 / wrong length.
+      new PublicKey(v);
+      next();
+    } catch {
+      return res.status(400).json({ error: `invalid ${name}` });
+    }
+  };
+}
+
+export const validateWallet = validatePubkeyParam("wallet");
+export const validateMint   = validatePubkeyParam("mint");

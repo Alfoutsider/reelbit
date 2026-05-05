@@ -93,6 +93,9 @@ export function Navbar() {
 
           {/* Right */}
           <div className="flex items-center gap-1.5">
+            <Link href="/history" className="hidden sm:flex items-center gap-1 text-white/35 hover:text-white/70 text-[10px] font-orbitron tracking-wider transition-colors">
+              <Gamepad2 size={10} /> HISTORY
+            </Link>
             <Link href="/calculator" className="hidden sm:flex items-center gap-1 text-[#d4a017]/40 hover:text-[#d4a017]/70 text-[10px] font-orbitron tracking-wider transition-colors">
               <TrendingUp size={10} /> CALCULATOR
             </Link>
