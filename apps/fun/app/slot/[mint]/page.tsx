@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { toast } from "sonner";
 import { ArrowLeft, ExternalLink, Copy, Zap, TrendingUp, BarChart2, RefreshCw, MessageSquare, Users, Heart, Send } from "lucide-react";
 
 function XLogo({ size = 10 }: { size?: number }) {
@@ -349,7 +350,8 @@ export default function SlotPage({ params }: { params: { mint: string } }) {
                   </div>
                   <div className="flex items-center gap-4 mt-2 text-[12px] text-white/35 font-rajdhani font-semibold flex-wrap">
                     {slot.creator && <span>by {shortenAddress(slot.creator)}</span>}
-                    <button onClick={() => navigator.clipboard.writeText(mint)}
+                    <button
+                      onClick={() => navigator.clipboard.writeText(mint).then(() => toast.success("Mint address copied"))}
                       className="flex items-center gap-1 hover:text-white transition-colors">
                       <Copy size={10} /> {shortenAddress(mint)}
                     </button>

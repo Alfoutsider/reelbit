@@ -445,7 +445,7 @@ app.post("/themes/register", (req: Request, res: Response) => {
   };
   setTheme(theme);
   // Referral: token_launch points for the creator's referrer (fire-and-forget)
-  if (creator) referralOnLaunch(creator, mint).catch(() => {});
+  if (creator) loggedFnf(referralOnLaunch(creator, mint), "referral:launch", { mint, creator });
   res.status(201).json(theme);
 });
 
@@ -654,7 +654,7 @@ app.post("/internal/debit", requireInternal, async (req: Request, res: Response)
     const entry = await debit(wallet, usdcUnits);
     await recordWagering(wallet, usdcUnits); // track toward bonus wagering requirement
     // Referral: casino first-spin + wagering points (fire-and-forget)
-    referralOnCasinoBet(wallet, usdcUnits).catch(() => {});
+    loggedFnf(referralOnCasinoBet(wallet, usdcUnits), "referral:casinoBet", { wallet, usdcUnits });
     res.json({ balance: entry.playable, bonus: entry.bonus });
   } catch (err) {
     res.status(402).json({ error: (err as Error).message });
@@ -708,7 +708,7 @@ app.post("/internal/jackpot-fund", requireInternal, async (req: Request, res: Re
   const { usdcUnits } = req.body as { usdcUnits: number };
   if (!usdcUnits || usdcUnits <= 0) return res.status(400).json({ error: "usdcUnits required" });
   await credit(JACKPOT_KEY, usdcUnits);
-  analyticsLogCasinoSpin(usdcUnits).catch(() => {});
+  loggedFnf(analyticsLogCasinoSpin(usdcUnits), "analytics:casinoSpin", { usdcUnits });
   const entry = await getBalance(JACKPOT_KEY);
   res.json({ poolBalance: entry.playable });
 });
@@ -741,12 +741,16 @@ app.post("/internal/jackpot-won", requireInternal, async (req: Request, res: Res
     const txSignature = await sendAndConfirmTransaction(connection, tx, [keypair]);
     console.log(`[jackpot] Paid jackpot to ${wallet} for mint ${mintStr} — ${txSignature}`);
     const poolEntry = await getBalance(JACKPOT_KEY);
-    analyticsLogJackpotPayout({
-      txSig:        txSignature,
-      mint:         mintStr,
-      winnerWallet: wallet,
-      usdcUnits:    poolEntry.playable,
-    }).catch(() => {});
+    loggedFnf(
+      analyticsLogJackpotPayout({
+        txSig:        txSignature,
+        mint:         mintStr,
+        winnerWallet: wallet,
+        usdcUnits:    poolEntry.playable,
+      }),
+      "analytics:jackpotPayout",
+      { mint: mintStr, sig: txSignature },
+    );
     res.json({ txSignature });
   } catch (err) {
     console.error("[jackpot] pay_jackpot failed:", err);
@@ -1060,9 +1064,12 @@ app.get("/tokens/:mint", async (req: Request, res: Response) => {
   let creatorTier       = computeRevTier(theme.creatorHoldRatio ?? 1, hasMinDevBuy);
   const cacheAge        = Date.now() - (theme.creatorHoldCheckedAt ?? 0);
   if (theme.creator && theme.devBuyPct && cacheAge > HOLD_CACHE_TTL) {
-    getCreatorRevTier(theme.creator, mintStr, theme.devBuyPct, hasMinDevBuy, connection).then((t) => {
-      setCreatorHoldRatio(mintStr, t.holdRatio);
-    }).catch(() => {});
+    loggedFnf(
+      getCreatorRevTier(theme.creator, mintStr, theme.devBuyPct, hasMinDevBuy, connection)
+        .then((t) => setCreatorHoldRatio(mintStr, t.holdRatio)),
+      "creatorHoldRatio:refresh",
+      { mint: mintStr },
+    );
   }
 
   res.json({

@@ -231,6 +231,10 @@ pub enum TokenLaunchError {
     InvalidJackpotWinner,
     #[msg("Vault has insufficient lamports for the requested transfer")]
     VaultInsolvent,
+    #[msg("Only the original creator can update slot metadata")]
+    NotCreator,
+    #[msg("Cannot update metadata after graduation")]
+    MetadataLocked,
 }
 
 // ── Events ────────────────────────────────────────────────────────────────────
@@ -242,6 +246,15 @@ pub struct SlotLaunched {
     pub name:         String,
     pub ticker:       String,
     pub metadata_uri: String,
+}
+
+#[event]
+pub struct MetadataUpdated {
+    pub mint:      Pubkey,
+    pub creator:   Pubkey,
+    pub new_name:  String,
+    pub new_ticker:String,
+    pub new_image: String,
 }
 
 #[event]
@@ -743,6 +756,27 @@ pub struct PayJackpot<'info> {
     pub system_program: Program<'info, System>,
 }
 
+/// Pre-graduation metadata update. Only the original creator can call this,
+/// and only while the token is still on the bonding curve. Post-graduation
+/// the slot moves to the AMM + casino lobby and metadata becomes immutable —
+/// otherwise a creator could rug a graduated slot's branding mid-stream.
+#[derive(Accounts)]
+pub struct UpdateSlotMetadata<'info> {
+    /// Original creator. Validated by the seeds-bound metadata account below.
+    pub creator: Signer<'info>,
+
+    pub mint: Account<'info, Mint>,
+
+    #[account(
+        mut,
+        seeds = [b"slot_metadata", mint.key().as_ref()],
+        bump = slot_metadata.bump,
+        constraint = slot_metadata.creator == creator.key() @ TokenLaunchError::NotCreator,
+        constraint = !slot_metadata.graduated @ TokenLaunchError::MetadataLocked,
+    )]
+    pub slot_metadata: Account<'info, SlotMetadata>,
+}
+
 // ── Program ───────────────────────────────────────────────────────────────────
 
 #[program]
@@ -1230,6 +1264,41 @@ pub mod token_launch {
             holder_dividend_share,
             creator_hold_bps,
             jackpot_expired,
+        });
+
+        Ok(())
+    }
+
+    /// Update slot metadata (name / ticker / image) before graduation.
+    ///
+    /// Only the original creator can call this, and only while the token is
+    /// still on the bonding curve. Once a slot graduates and goes live in the
+    /// casino lobby its branding becomes immutable — otherwise a creator
+    /// could swap art / ticker on a slot that already has shareholders.
+    ///
+    /// Empty strings (or strings unchanged from current) are no-ops; pass the
+    /// existing value if a field shouldn't be touched.
+    pub fn update_slot_metadata(
+        ctx: Context<UpdateSlotMetadata>,
+        new_name:   String,
+        new_ticker: String,
+        new_image:  String,
+    ) -> Result<()> {
+        require!(new_name.len()   <= SlotMetadata::MAX_NAME,   TokenLaunchError::NameTooLong);
+        require!(new_ticker.len() <= SlotMetadata::MAX_TICKER, TokenLaunchError::TickerTooLong);
+        require!(new_image.len()  <= SlotMetadata::MAX_URI,    TokenLaunchError::ImageUriTooLong);
+
+        let md = &mut ctx.accounts.slot_metadata;
+        if !new_name.is_empty()   { md.name      = new_name.clone(); }
+        if !new_ticker.is_empty() { md.ticker    = new_ticker.clone(); }
+        if !new_image.is_empty()  { md.image_uri = new_image.clone(); }
+
+        emit!(MetadataUpdated {
+            mint:       md.mint,
+            creator:    md.creator,
+            new_name:   md.name.clone(),
+            new_ticker: md.ticker.clone(),
+            new_image:  md.image_uri.clone(),
         });
 
         Ok(())
