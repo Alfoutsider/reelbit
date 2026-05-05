@@ -204,7 +204,11 @@ async function harvestPool(
 
   if (distTx.instructions.length > 0) {
     await sendAndConfirmTransaction(connection, distTx, [authority], { commitment: "confirmed" });
-    totalSolHarvested = distributable;
+    // Sum what was actually transferred. The previous version logged
+    // `distributable` as totalSolHarvested, but the holder-dividend share
+    // stays in the authority wallet (earmarked off-chain via addDividend),
+    // so it isn't part of THIS tx's transfers.
+    totalSolHarvested = creatorShare + platformShare + jackpotShare + legalShare + licenseShare;
   }
 
   // Earmark holder dividend in store — holderDividendCron will distribute it

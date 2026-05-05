@@ -1,3 +1,22 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// DEPRECATED — DO NOT DEPLOY.
+//
+// The original plan was to claim Meteora DLMM fees on-chain via CPI. In
+// practice that requires implementing a Meteora-DLMM-aware CPI surface (their
+// SDK ships TS-only and their on-chain CPI bindings are non-trivial), which
+// outweighs the benefit of a permissionless on-chain crank for the v1 launch.
+//
+// **The protocol DOES harvest LP fees** — the work happens off-chain in
+// apps/api/src/lpHarvestCron.ts via DLMM.claimAllSwapFee() on a 24-hour
+// schedule, with distribution via SystemProgram::transfer to the configured
+// wallets. See that file for the live flow.
+//
+// This program is left in the workspace because its program ID is committed
+// in Anchor.toml + Cargo.toml; removing it would require a coordinated
+// keypair rotation. If you ever DO ship it, the Sprint 3 TODOs below mark
+// the missing CPIs.
+// ─────────────────────────────────────────────────────────────────────────────
+
 use anchor_lang::prelude::*;
 use anchor_spl::token::{Token, TokenAccount};
 
