@@ -315,6 +315,10 @@ pub struct SlotMigrated {
     pub pool_address:  Pubkey, // Meteora DLMM LB pair address
     pub sol_seeded:    u64,    // lamports transferred to migration authority
     pub tokens_seeded: u64,    // raw token units (curve remainder + LP reserve)
+    /// Unix seconds when migration completed. Lets indexers compute the
+    /// graduation→migration latency window without joining against
+    /// SlotGraduated.graduated_at.
+    pub migrated_at:   i64,
 }
 
 #[event]
@@ -1483,6 +1487,7 @@ pub mod token_launch {
             pool_address,
             sol_seeded:    sol_to_transfer,
             tokens_seeded: total_tokens,
+            migrated_at:   Clock::get()?.unix_timestamp,
         });
 
         Ok(())
