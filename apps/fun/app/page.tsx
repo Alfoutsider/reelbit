@@ -200,6 +200,25 @@ export default function HomePage() {
   // it's fine to filter what's already rendered.
   const [showWatchlistOnly, setShowWatchlistOnly] = useState(false);
   const [watchlist, setWatchlist] = useState<string[]>([]);
+  // "/" focuses the search input — matches Github / Twitter / Linear / Stripe.
+  // Also handle Cmd+K / Ctrl+K for the same.
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      // Don't fire if the user is already typing somewhere
+      const target = e.target as HTMLElement | null;
+      const isTyping = target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable);
+      if (isTyping) return;
+      const isSlash = e.key === "/";
+      const isCmdK  = (e.key === "k" || e.key === "K") && (e.metaKey || e.ctrlKey);
+      if (isSlash || isCmdK) {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
   // Server-side filters. age cap + MCAP range. "" = no filter.
   type AgeFilter = "" | "1h" | "24h" | "7d";
   const [ageFilter, setAgeFilter] = useState<AgeFilter>("");
@@ -475,11 +494,15 @@ export default function HomePage() {
           <div className="relative flex-1">
             <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/25" />
             <input
+              ref={searchInputRef}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search by name or ticker…"
-              className="input-casino pl-10 text-[13px]"
+              className="input-casino pl-10 pr-12 text-[13px]"
             />
+            <kbd className="hidden sm:flex absolute right-3 top-1/2 -translate-y-1/2 items-center justify-center rounded border border-white/10 bg-white/[0.04] px-1.5 py-0.5 text-[10px] font-mono text-white/30">
+              /
+            </kbd>
           </div>
           <div className="flex gap-2">
             {([

@@ -1140,9 +1140,9 @@ pub mod token_launch {
         );
 
         // Calculate distributable balance (keep rent-exempt minimum in fee_vault).
-        // fee_vault is a system account so rent exemption is ~0.00089 SOL (2MB).
-        // We approximate: leave 890_880 lamports (standard rent-exempt floor for 0 bytes).
-        let rent_exempt_min: u64 = 890_880;
+        // Use Rent::get() so we pick up future Solana rent-schedule changes
+        // automatically instead of hardcoding the 2024 value.
+        let rent_exempt_min: u64 = Rent::get()?.minimum_balance(0);
         let fee_vault_balance = ctx.accounts.fee_vault.lamports();
         let distributable = fee_vault_balance.saturating_sub(rent_exempt_min);
 
@@ -1393,7 +1393,9 @@ pub mod token_launch {
     /// Only the platform authority can call this. The platform then distributes the SOL
     /// to top-100 holders proportionally via the holderDividendCron.
     pub fn drain_holder_dividend(ctx: Context<DrainHolderDividend>) -> Result<()> {
-        let rent_exempt_min: u64 = 890_880;
+        // Dynamic rent floor (matches the same upgrade applied to pay_jackpot
+        // and claim_fees). System accounts use minimum_balance(0).
+        let rent_exempt_min: u64 = Rent::get()?.minimum_balance(0);
         let vault_lamports = ctx.accounts.holder_dividend_vault.lamports();
         let drainable = vault_lamports.saturating_sub(rent_exempt_min);
         require!(drainable > 0, TokenLaunchError::ZeroAmount);

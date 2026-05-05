@@ -135,11 +135,23 @@ export default function PortfolioPage() {
         {/* Referral widget — only renders if the API has a code for this wallet. */}
         <ReferralWidget wallet={walletAddress} />
 
-        {/* Loading */}
+        {/* Loading — skeleton rows match the position-row layout below so the */}
+        {/* page doesn't jump when data lands. */}
         {loading && (
-          <div className="flex items-center justify-center py-20">
-            <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1.2, ease: "linear" }}
-              className="w-8 h-8 rounded-full border-2 border-purple-500/30 border-t-purple-500" />
+          <div className="space-y-3">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="card-panel p-4 flex items-center gap-4 animate-pulse">
+                <div className="w-12 h-12 rounded-lg bg-white/[0.05]" />
+                <div className="flex-1 space-y-2">
+                  <div className="h-3 w-32 rounded bg-white/[0.06]" />
+                  <div className="h-2.5 w-20 rounded bg-white/[0.04]" />
+                </div>
+                <div className="space-y-2 text-right">
+                  <div className="h-3 w-20 rounded bg-white/[0.06] ml-auto" />
+                  <div className="h-2.5 w-16 rounded bg-white/[0.04] ml-auto" />
+                </div>
+              </div>
+            ))}
           </div>
         )}
 
