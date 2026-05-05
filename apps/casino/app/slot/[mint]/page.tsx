@@ -433,21 +433,35 @@ export default function CasinoSlotPage({ params }: { params: { mint: string } })
             <p className="text-white/15 text-xs">Press Space to spin</p>
           </div>
 
-          {/* Session stats */}
-          {isLoggedIn && recentSpins.length > 0 && (
-            <div className="grid grid-cols-3 gap-4">
-              {[
-                { label: "Session RTP", value: `${sessionRtp}%` },
-                { label: "Total Won",   value: formatUsdc(totalWon) },
-                { label: "Spins",       value: String(recentSpins.length) },
-              ].map(({ label, value }) => (
-                <div key={label} className="stat-box text-center">
-                  <div className="label">{label}</div>
-                  <div className="value text-base">{value}</div>
+          {/* Session stats. Net P&L is the headline figure — it's what the */}
+          {/* player actually wants to know. Color-coded so a glance tells you */}
+          {/* whether you're up or down. */}
+          {isLoggedIn && recentSpins.length > 0 && (() => {
+            const net = totalWon - totalWagered;
+            const netColor = net > 0 ? "text-emerald-400" : net < 0 ? "text-red-400" : "";
+            return (
+              <div className="grid grid-cols-4 gap-3">
+                <div className="stat-box text-center">
+                  <div className="label">Net P&L</div>
+                  <div className={`value text-base ${netColor}`}>
+                    {net >= 0 ? "+" : "−"}{formatUsdc(Math.abs(net))}
+                  </div>
                 </div>
-              ))}
-            </div>
-          )}
+                <div className="stat-box text-center">
+                  <div className="label">Wagered</div>
+                  <div className="value text-base">{formatUsdc(totalWagered)}</div>
+                </div>
+                <div className="stat-box text-center">
+                  <div className="label">Session RTP</div>
+                  <div className="value text-base">{sessionRtp}%</div>
+                </div>
+                <div className="stat-box text-center">
+                  <div className="label">Spins</div>
+                  <div className="value text-base">{recentSpins.length}</div>
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Recent spins */}
           {recentSpins.length > 0 && (

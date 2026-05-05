@@ -122,17 +122,29 @@ export async function logTrade(trade: {
     usd_value:    trade.usdValue,
     traded_at:    new Date(trade.timestamp).toISOString(),
   });
-  if (error && error.code !== "23505") {
-    // 23505 = duplicate tx_sig — idempotent, ignore
+
+  if (error) {
+    if (error.code === "23505") {
+      // 23505 = duplicate tx_sig — Helius retry of an already-recorded trade.
+      // Return WITHOUT incrementing the hourly bucket below; doing so would
+      // double-count volume on every webhook retry.
+      return;
+    }
     console.error("[analytics] logTrade:", error.message);
+    // Don't increment if the insert failed for any other reason either —
+    // a failed insert means we don't have authoritative data, so polluting
+    // the hourly aggregate would skew dashboards without a recoverable trail.
+    return;
   }
 
-  // Increment hourly bucket (fire-and-forget)
+  // Insert succeeded — safe to bump the aggregate.
   incrementHourly("launchpad", {
     trade_count:   1,
     trade_vol_sol: trade.solAmount,
     trade_vol_usd: trade.usdValue,
-  }, new Date(trade.timestamp)).catch(() => {});
+  }, new Date(trade.timestamp)).catch((err) =>
+    console.warn("[analytics] hourly bucket bump failed:", err.message),
+  );
 }
 
 export async function logGraduation(mint: string): Promise<void> {
