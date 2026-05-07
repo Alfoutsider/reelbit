@@ -1049,6 +1049,20 @@ pub mod token_launch {
         });
 
         if new_real_sol >= GRADUATION_LAMPORTS {
+            // Invariant assertion: real_sol is logical accounting; the vault's
+            // actual lamport balance must always cover real_sol + rent-exempt
+            // floor, otherwise migrate_to_amm later won't have the SOL to
+            // seed the AMM pool. The audit flagged a theoretical divergence
+            // where real_sol could outpace lamports — this require! turns
+            // any such bug into an immediate, visible failure at the
+            // graduation moment instead of a silent stuck-vault later.
+            let vault_lamports = ctx.accounts.bonding_curve_vault.to_account_info().lamports();
+            let rent_floor = Rent::get()?.minimum_balance(BondingCurveVault::LEN);
+            require!(
+                vault_lamports >= new_real_sol.saturating_add(rent_floor),
+                TokenLaunchError::VaultInsolvent,
+            );
+
             ctx.accounts.slot_metadata.graduated = true;
             let now = Clock::get()?.unix_timestamp;
             let jackpot_expired = (now - ctx.accounts.bonding_curve_vault.launched_at) > JACKPOT_EXPIRY_SECS;
