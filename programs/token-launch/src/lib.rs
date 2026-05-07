@@ -123,6 +123,9 @@ pub struct SlotMetadata {
     pub migrated:     bool, // true once bonding curve assets transferred to AMM
     pub total_supply: u64,
     pub created_at:   i64,
+    /// Monotonic counter — incremented every drain_holder_dividend call.
+    /// Off-chain cron uses (mint, round) as a dedup key when distributing.
+    pub dividend_rounds_drained: u64,
     pub bump:         u8,
 }
 
@@ -134,7 +137,7 @@ impl SlotMetadata {
         + (4 + Self::MAX_NAME)
         + (4 + Self::MAX_TICKER)
         + (4 + Self::MAX_URI)
-        + 1 + 1 + 1 + 8 + 8 + 1;
+        + 1 + 1 + 1 + 8 + 8 + 8 + 1; // last 8 = dividend_rounds_drained
 }
 
 /// Bonding curve vault — holds trading SOL, tracks reserves + fee distribution state.
@@ -262,6 +265,24 @@ pub struct MetadataUpdated {
     pub new_name:  String,
     pub new_ticker:String,
     pub new_image: String,
+}
+
+/// Emitted whenever the platform authority drains the per-mint
+/// holder_dividend_vault. This is the on-chain audit trail for the off-chain
+/// distribution cron — the platform must transfer EXACTLY `amount` lamports
+/// to top-100 holders within a reasonable window, and indexers can flag
+/// drains where the off-chain follow-up doesn't materialise.
+///
+/// Full on-chain snapshot + per-holder claim PDA is a future redesign; this
+/// event is the stop-gap that makes the current cron-based flow auditable
+/// instead of opaque.
+#[event]
+pub struct HolderDividendDrained {
+    pub mint:           Pubkey,
+    pub amount:         u64,
+    pub round:          u64,    // monotonic round counter, off-chain dedupe key
+    pub drained_at:     i64,
+    pub destination:    Pubkey, // platform_wallet that off-chain cron pulls from
 }
 
 #[event]
@@ -678,6 +699,14 @@ pub struct DrainHolderDividend<'info> {
     )]
     pub platform_config: Account<'info, PlatformConfig>,
 
+    /// Per-mint slot metadata — mutated to bump dividend_rounds_drained.
+    #[account(
+        mut,
+        seeds = [b"slot_metadata", mint.key().as_ref()],
+        bump = slot_metadata.bump,
+    )]
+    pub slot_metadata: Account<'info, SlotMetadata>,
+
     /// CHECK: PDA validated by seeds; source of accumulated holder dividend lamports
     #[account(
         mut,
@@ -857,6 +886,7 @@ pub mod token_launch {
         m.migrated     = false;
         m.total_supply = TOTAL_SUPPLY;
         m.created_at   = now;
+        m.dividend_rounds_drained = 0;
         m.bump         = ctx.bumps.slot_metadata;
 
         let v = &mut ctx.accounts.bonding_curve_vault;
@@ -1468,6 +1498,21 @@ pub mod token_launch {
             ),
             drainable,
         )?;
+
+        // Audit-trail event. Bump the per-mint round counter so off-chain
+        // distributors can use (mint, round) as a dedup key and indexers can
+        // detect drains where the off-chain follow-up never materialised
+        // (drain event without a matching distribution within N hours).
+        let md = &mut ctx.accounts.slot_metadata;
+        md.dividend_rounds_drained = md.dividend_rounds_drained.saturating_add(1);
+
+        emit!(HolderDividendDrained {
+            mint:        mint_key,
+            amount:      drainable,
+            round:       md.dividend_rounds_drained,
+            drained_at:  Clock::get()?.unix_timestamp,
+            destination: ctx.accounts.platform_wallet.key(),
+        });
 
         Ok(())
     }
