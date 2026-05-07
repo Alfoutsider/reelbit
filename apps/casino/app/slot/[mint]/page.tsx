@@ -47,6 +47,32 @@ interface RecentSpin {
   ts: number;
 }
 
+interface VerifyResult {
+  hashMatch:        boolean;
+  computedHash:     string;
+  spinFingerprints: { nonce: number; clientSeed: string; reel0Hex: string }[];
+}
+
+async function sha256Hex(input: string): Promise<string> {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(input));
+  return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function verifyAllSpinsOffline(
+  serverSeed:     string,
+  serverSeedHash: string,
+  spins:          RecentSpin[],
+): Promise<VerifyResult> {
+  const computedHash = await sha256Hex(serverSeed);
+  const hashMatch    = computedHash.toLowerCase() === serverSeedHash.toLowerCase();
+  const spinFingerprints: VerifyResult["spinFingerprints"] = [];
+  for (const s of spins) {
+    const fp = await sha256Hex(`${serverSeed}:${s.result.clientSeed}:${s.result.nonce}:0`);
+    spinFingerprints.push({ nonce: s.result.nonce, clientSeed: s.result.clientSeed, reel0Hex: fp.slice(0, 8) });
+  }
+  return { hashMatch, computedHash, spinFingerprints };
+}
+
 export default function CasinoSlotPage({ params }: { params: { mint: string } }) {
   const { mint } = params;
   const { authenticated, login } = usePrivy();
@@ -66,6 +92,8 @@ export default function CasinoSlotPage({ params }: { params: { mint: string } })
   // /session/reveal which returns the unhashed server seed so the player can
   // recompute every spin's outcome offline.
   const [revealed, setRevealed] = useState<{ serverSeed: string; serverSeedHash: string; nonce: number } | null>(null);
+  const [verifyResult, setVerifyResult] = useState<VerifyResult | null>(null);
+  const [verifying, setVerifying] = useState(false);
   const [revealLoading, setRevealLoading] = useState(false);
   const [verifyOpen, setVerifyOpen] = useState(false);
   const [betUsdc, setBetUsdc] = useState(DEFAULT_BET_USDC);
@@ -589,8 +617,57 @@ export default function CasinoSlotPage({ params }: { params: { mint: string } })
                     Outcome for spin <code className="font-mono">N</code> uses
                     {" "}<code className="font-mono">HMAC-SHA256(serverSeed, "{clientSeed.slice(0, 8)}…:N:reel")</code>.
                   </div>
+
+                  {!verifyResult && (
+                    <button
+                      onClick={async () => {
+                        if (verifying) return;
+                        setVerifying(true);
+                        try {
+                          const r = await verifyAllSpinsOffline(revealed.serverSeed, revealed.serverSeedHash, recentSpins);
+                          setVerifyResult(r);
+                        } finally {
+                          setVerifying(false);
+                        }
+                      }}
+                      disabled={verifying}
+                      className="w-full rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 py-3 text-white font-orbitron text-[12px] tracking-wider"
+                    >
+                      {verifying ? "VERIFYING…" : "VERIFY ALL SPINS OFFLINE"}
+                    </button>
+                  )}
+
+                  {verifyResult && (
+                    <div className="space-y-2">
+                      <div className={`rounded-lg border px-3 py-2 text-[12px] font-rajdhani ${
+                        verifyResult.hashMatch
+                          ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-200"
+                          : "bg-red-500/10 border-red-500/30 text-red-200"
+                      }`}>
+                        {verifyResult.hashMatch
+                          ? "✓ sha256(serverSeed) matches the committed hash. The server cannot have changed the seed after committing."
+                          : `✗ HASH MISMATCH. Computed: ${verifyResult.computedHash} — this would be cryptographic proof of tampering.`}
+                      </div>
+                      {verifyResult.spinFingerprints.length > 0 && (
+                        <>
+                          <p className="text-[10px] font-orbitron text-white/40 tracking-widest">PER-SPIN REEL-0 FINGERPRINTS</p>
+                          <p className="text-[10px] text-white/40 font-rajdhani leading-relaxed">
+                            Each fingerprint is the first 8 hex chars of <code className="font-mono">sha256(serverSeed:clientSeed:nonce:0)</code>. Recompute offline to confirm.
+                          </p>
+                          <div className="max-h-48 overflow-y-auto space-y-1 rounded-lg bg-black/40 border border-white/8 p-2">
+                            {verifyResult.spinFingerprints.map((sp) => (
+                              <div key={sp.nonce} className="font-mono text-[10px] text-white/60">
+                                n={sp.nonce} · client={sp.clientSeed.slice(0, 8)}… → reel0=<span className="text-emerald-300">{sp.reel0Hex}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )}
+
                   <button
-                    onClick={() => { setVerifyOpen(false); setRevealed(null); }}
+                    onClick={() => { setVerifyOpen(false); setRevealed(null); setVerifyResult(null); }}
                     className="w-full rounded-xl bg-white/10 hover:bg-white/15 py-3 text-white/80 font-orbitron text-[12px] tracking-wider"
                   >
                     CLOSE
