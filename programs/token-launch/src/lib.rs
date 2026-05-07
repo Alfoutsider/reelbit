@@ -151,11 +151,16 @@ pub struct BondingCurveVault {
     pub total_fees_accumulated: u64, // lifetime total fees sent to fee_vault
     pub dev_buy_amount:        u64, // total tokens ever bought by creator (hold ratio baseline)
     pub dev_buy_sol:           u64, // total SOL (lamports) spent by creator buying own token
+    /// Solana slot of launch. Used for sniper / anti-bundle protection: a
+    /// non-creator buy in the same slot as launch is rejected, killing the
+    /// "atomic launch+buy bundle" sandwich pattern. The creator is exempt so
+    /// dev-buys (already capped at 5% by MAX_WALLET_BPS) still go through.
+    pub launched_at_slot:      u64,
     pub bump:                  u8,
 }
 
 impl BondingCurveVault {
-    const LEN: usize = 8 + 32 + 32 + 8 + 8 + 8 + 8 + 8 + 8 + 8 + 8 + 8 + 1;
+    const LEN: usize = 8 + 32 + 32 + 8 + 8 + 8 + 8 + 8 + 8 + 8 + 8 + 8 + 8 + 1;
 
     pub fn tokens_for_sol(&self, sol_in: u64) -> u64 {
         let num = (self.virtual_tokens as u128) * (sol_in as u128);
@@ -235,6 +240,8 @@ pub enum TokenLaunchError {
     NotCreator,
     #[msg("Cannot update metadata after graduation")]
     MetadataLocked,
+    #[msg("Buys not allowed in the same slot as launch — anti-bundle protection")]
+    SnipeBlocked,
 }
 
 // ── Events ────────────────────────────────────────────────────────────────────
@@ -860,6 +867,7 @@ pub mod token_launch {
         v.real_sol              = 0;
         v.real_tokens           = CURVE_TOKEN_SUPPLY;
         v.launched_at           = now;
+        v.launched_at_slot      = Clock::get()?.slot;
         v.last_fee_distribution = now;
         v.total_fees_accumulated = 0;
         v.dev_buy_amount        = 0;
@@ -923,6 +931,19 @@ pub mod token_launch {
 
     pub fn buy_tokens(ctx: Context<BuyTokens>, sol_amount: u64, min_tokens_out: u64) -> Result<()> {
         require!(sol_amount > 0, TokenLaunchError::ZeroAmount);
+
+        // Anti-snipe / anti-bundle guard. A non-creator buyer in the same
+        // Solana slot as launch is rejected — this kills the atomic
+        // "launch_slot + buy_tokens" bundle pattern that bots use to corner
+        // a token's first allocation. The creator is exempt because dev-buys
+        // are intentional (and capped at 5% by MAX_WALLET_BPS already).
+        let buyer_key = ctx.accounts.buyer.key();
+        if buyer_key != ctx.accounts.bonding_curve_vault.creator {
+            require!(
+                Clock::get()?.slot > ctx.accounts.bonding_curve_vault.launched_at_slot,
+                TokenLaunchError::SnipeBlocked,
+            );
+        }
 
         let current_fee_bps = fee_bps(ctx.accounts.bonding_curve_vault.real_sol);
         let fee_amount       = (sol_amount as u128 * current_fee_bps as u128 / 10_000) as u64;

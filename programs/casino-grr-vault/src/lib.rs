@@ -51,6 +51,8 @@ pub enum GrrError {
     ZeroAmount,
     #[msg("Nothing pending to flush")]
     NothingPending,
+    #[msg("game_server must be a non-default pubkey")]
+    InvalidGameServer,
 }
 
 // ── Events ────────────────────────────────────────────────────────────────────
@@ -136,6 +138,19 @@ pub struct DepositGrr<'info> {
 }
 
 #[derive(Accounts)]
+pub struct UpdateGameServer<'info> {
+    pub authority: Signer<'info>,
+
+    #[account(
+        mut,
+        seeds = [b"grr_config"],
+        bump = config.bump,
+        constraint = authority.key() == config.authority @ GrrError::Unauthorized,
+    )]
+    pub config: Account<'info, GrrConfig>,
+}
+
+#[derive(Accounts)]
 pub struct FlushGrr<'info> {
     /// Permissionless crank
     pub crank: Signer<'info>,
@@ -182,6 +197,18 @@ pub mod casino_grr_vault {
         distribution_program: Pubkey,
         game_server: Pubkey,
     ) -> Result<()> {
+        // Block initialisation with a default-zero game_server. Without this
+        // guard a typo at deploy time leaves the vault permanently unable to
+        // accept deposits (the constraint in DepositGrr requires
+        // signer.key() == config.game_server, which no signer can match if
+        // game_server is Pubkey::default()). The audit flagged this as a
+        // footgun. Combined with the new update_game_server instruction
+        // below, an admin can rotate keys without redeploying.
+        require!(
+            game_server != Pubkey::default(),
+            GrrError::InvalidGameServer,
+        );
+
         let cfg = &mut ctx.accounts.config;
         cfg.authority = ctx.accounts.authority.key();
         cfg.distribution_program = distribution_program;
@@ -189,6 +216,21 @@ pub mod casino_grr_vault {
         cfg.total_received = 0;
         cfg.total_distributed = 0;
         cfg.bump = ctx.bumps.config;
+        Ok(())
+    }
+
+    /// Authority-only key rotation. Lets the admin swap the game_server
+    /// signer (compromised key, infra migration) without redeploying.
+    /// Same non-default guard as initialize.
+    pub fn update_game_server(
+        ctx: Context<UpdateGameServer>,
+        new_game_server: Pubkey,
+    ) -> Result<()> {
+        require!(
+            new_game_server != Pubkey::default(),
+            GrrError::InvalidGameServer,
+        );
+        ctx.accounts.config.game_server = new_game_server;
         Ok(())
     }
 

@@ -45,6 +45,12 @@ pub enum DistributionError {
     Overflow,
     #[msg("Unauthorized")]
     Unauthorized,
+    #[msg("Destination token account doesn't match the configured wallet")]
+    DestinationMismatch,
+    #[msg("vault_authority_seeds is empty")]
+    EmptySeeds,
+    #[msg("vault_authority_seeds derived a different key than vault_authority")]
+    SeedDerivationMismatch,
 }
 
 // ── Events ────────────────────────────────────────────────────────────────────
@@ -89,7 +95,18 @@ pub struct Initialize<'info> {
 
 #[derive(Accounts)]
 pub struct Distribute<'info> {
-    #[account(mut)]
+    /// Only the registered authority can trigger distribution. Without this
+    /// gate the original instruction was permissionless — any signer who
+    /// happened to know the source_vault could call distribute() with their
+    /// own destination ATAs and (because `vault_authority_seeds` was caller-
+    /// supplied) potentially route the entire vault wherever they liked.
+    /// In practice the on-chain seed-signing only works if the supplied
+    /// seeds actually derive to a PDA that owns source_vault, but treating
+    /// that as the only line of defence is fragile — pin the caller too.
+    #[account(
+        mut,
+        constraint = payer.key() == config.authority @ DistributionError::Unauthorized,
+    )]
     pub payer: Signer<'info>,
 
     #[account(
@@ -105,23 +122,47 @@ pub struct Distribute<'info> {
     #[account(mut)]
     pub source_vault: Account<'info, TokenAccount>,
 
-    /// PDA that owns source_vault — seeds supplied by caller via instruction data
-    /// CHECK: authority verified by token CPI
+    /// PDA that owns source_vault. Validated below against the seeds the
+    /// caller provides (see `verify_seeds_match`).
+    /// CHECK: seed derivation cross-checked in handler.
     pub vault_authority: AccountInfo<'info>,
 
-    #[account(mut, token::mint = source_vault.mint)]
+    /// All five destination ATAs are pinned to the authorities recorded in
+    /// DistributionConfig. Without these constraints the caller could pass
+    /// their own ATAs and steal the split. token::authority verifies the
+    /// owner of the ATA, which is what we actually care about.
+    #[account(
+        mut,
+        token::mint = source_vault.mint,
+        token::authority = config.platform_treasury,
+    )]
     pub platform_ta: Account<'info, TokenAccount>,
 
+    /// Creator ATA owner is supplied as an instruction arg (different per
+    /// distribution round) and cross-checked in the handler — config doesn't
+    /// store the per-mint creator, only the platform-wide buckets do.
     #[account(mut, token::mint = source_vault.mint)]
     pub creator_ta: Account<'info, TokenAccount>,
 
-    #[account(mut, token::mint = source_vault.mint)]
+    #[account(
+        mut,
+        token::mint = source_vault.mint,
+        token::authority = config.holder_dividend_pool,
+    )]
     pub holder_dividend_ta: Account<'info, TokenAccount>,
 
-    #[account(mut, token::mint = source_vault.mint)]
+    #[account(
+        mut,
+        token::mint = source_vault.mint,
+        token::authority = config.jackpot_pool,
+    )]
     pub jackpot_ta: Account<'info, TokenAccount>,
 
-    #[account(mut, token::mint = source_vault.mint)]
+    #[account(
+        mut,
+        token::mint = source_vault.mint,
+        token::authority = config.legal_reserve,
+    )]
     pub legal_ta: Account<'info, TokenAccount>,
 
     pub token_program: Program<'info, Token>,
@@ -152,7 +193,10 @@ pub mod distribution {
     }
 
     /// Splits `amount` tokens from source_vault across all 5 revenue buckets.
-    /// vault_authority_seeds allows the caller's PDA to sign the token CPI.
+    /// vault_authority_seeds allows the caller's PDA to sign the token CPI;
+    /// we re-derive against this program's id and require the result match
+    /// the supplied vault_authority key, so a caller can't smuggle in seeds
+    /// that resolve to a PDA they control.
     pub fn distribute(
         ctx: Context<Distribute>,
         amount: u64,
@@ -161,6 +205,35 @@ pub mod distribution {
         vault_authority_seeds: Vec<Vec<u8>>,
     ) -> Result<()> {
         require!(amount > 0, DistributionError::ZeroAmount);
+        require!(!vault_authority_seeds.is_empty(), DistributionError::EmptySeeds);
+
+        // Cross-check that the supplied seeds actually derive to the
+        // vault_authority account passed in. This program id is the
+        // signing program, so the PDA must derive against `crate::ID`.
+        // Strip the trailing bump byte (caller supplies it) and re-derive.
+        let seed_slices: Vec<&[u8]> = vault_authority_seeds
+            .iter()
+            .map(|v| v.as_slice())
+            .collect();
+        let (derived, _bump) = Pubkey::find_program_address(
+            // exclude the bump suffix the caller provides for signing
+            &seed_slices[..seed_slices.len().saturating_sub(1)],
+            &crate::ID,
+        );
+        require_keys_eq!(
+            derived,
+            ctx.accounts.vault_authority.key(),
+            DistributionError::SeedDerivationMismatch,
+        );
+
+        // creator_ta owner must match the creator pubkey passed by the caller —
+        // anchor's token::authority constraint can't take a runtime arg, so
+        // we check it manually here.
+        require_keys_eq!(
+            ctx.accounts.creator_ta.owner,
+            creator,
+            DistributionError::DestinationMismatch,
+        );
 
         let platform         = bps(amount, BPS_PLATFORM);
         let creator_sh       = bps(amount, BPS_CREATOR);
