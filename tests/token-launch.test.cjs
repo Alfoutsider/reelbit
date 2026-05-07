@@ -52,6 +52,7 @@ const jackpotVaultPda = (mint)    => pda([Buffer.from("jackpot_vault"),  mint.to
 const walletCapPda    = (mint, w) => pda([Buffer.from("wallet_cap"),  mint.toBuffer(), w.toBuffer()], TOKEN_LAUNCH_ID);
 const metadataPda     = (mint)    => pda([Buffer.from("metadata"), METADATA_PROGRAM.toBuffer(), mint.toBuffer()], METADATA_PROGRAM);
 const platformCfgPda  = ()        => pda([Buffer.from("platform_config")], TOKEN_LAUNCH_ID);
+const holderDivPda    = (mint)    => pda([Buffer.from("holder_dividend"), mint.toBuffer()], TOKEN_LAUNCH_ID);
 
 function log(label, value) {
   if (value !== undefined) console.log(`  ${(label + " ").padEnd(32, ".")} ${value}`);
@@ -230,6 +231,9 @@ async function testClaimFees(mint, feeVault) {
   // Note: claim_fees enforces 30-min cooldown — may fail if called too soon after launch.
   // On a fresh launch this will fail with DistributionTooSoon. That's expected.
   try {
+    const creatorTokenAccount = getAssociatedTokenAddressSync(mint, payer.publicKey);
+    const holderDividendVault = holderDivPda(mint);
+
     const sig = await program.methods
       .claimFees()
       .accounts({
@@ -243,6 +247,8 @@ async function testClaimFees(mint, feeVault) {
         legalWallet,
         licenseWallet,
         creator:        payer.publicKey, // test: payer launched so payer is creator
+        creatorTokenAccount,
+        holderDividendVault,
         systemProgram:  SystemProgram.programId,
       })
       .rpc();

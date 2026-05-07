@@ -13,7 +13,7 @@ jackpot_pool = "CnsFM3xfkWZdv79kERxGfJmty9NRS9jiFEV6tMTnR9gH"
 legal_reserve = "CBtsCTSz8Ug43aPfbVCG2XJsjPzr3p6wTGu5qyVnyVc1"
 lp_vault = "5Vobh8rxWv4eMKUme9Y15C3ta3vh6y1G7MW6N87SejwL"
 shareholder_pool = "2aWNKw6Y3yTyxf1A64BvJBd3K3UJSqwymg8ncTbsirNm"
-token_launch = "HkGiTLpuij4w7ZM87ooYYn3JPy9neEaxZPwpJKU2imzu"
+token_launch = "5vy9vYy9A6wAy59nRvvpGd5drVwQU1JYqRuSg7xQZDD8"
 
 [provider]
 cluster = "devnet"
