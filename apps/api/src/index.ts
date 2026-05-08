@@ -29,6 +29,8 @@ import {
 import { startDistributionCron, FEE_SPLIT } from "./distributionCron";
 import { startLpHarvestCron } from "./lpHarvestCron";
 import { startHolderDividendCron } from "./holderDividendCron";
+import { startMerkleDividendCron } from "./merkleDividendCron";
+import { getUnclaimedForHolder } from "./dividendRoundStore";
 import { startCreatorHoldingCron } from "./creatorHoldingCron";
 import { getAllDividends, getDividend } from "./dividendStore";
 import { startMcapWatcher, checkOneToken as checkOneTokenForGraduation } from "./mcapWatcher";
@@ -1483,6 +1485,24 @@ app.get("/dividends/:mint", async (req: Request, res: Response) => {
   res.json({ mint: req.params.mint, ...entry });
 });
 
+/**
+ * GET /dividends/wallet/:wallet — every unclaimed (mint, round, amount, proof)
+ * tuple for this wallet. Used by apps/fun portfolio to render the claim list +
+ * total claimable, and to assemble claim_dividend instructions client-side.
+ *
+ * Note: route is /dividends/wallet/:wallet (not /dividends/:wallet) to avoid
+ * collision with /dividends/:mint above.
+ */
+app.get("/dividends/wallet/:wallet", validateWallet, async (req: Request, res: Response) => {
+  try {
+    const rows = await getUnclaimedForHolder(req.params.wallet);
+    const total = rows.reduce((sum, r) => sum + r.amount, 0);
+    res.json({ wallet: req.params.wallet, totalUnclaimedLamports: total, count: rows.length, claims: rows });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
 // ── Referral program ──────────────────────────────────────────────────────────
 
 /** GET /referral/code/:wallet — get or create referral code for a wallet */
@@ -1623,7 +1643,12 @@ app.listen(config.port, () => {
   startDistributionCron(connection);
   startCreatorHoldingCron(connection);
   startLpHarvestCron(connection);
-  startHolderDividendCron(connection);
+  // Merkle pull model — replaces the old push-style holderDividendCron.
+  // The old cron stays imported but is not started; safe to remove once
+  // every existing graduated mint has had at least one publish_dividend_root
+  // call against the new on-chain ix.
+  startMerkleDividendCron(connection);
+  void startHolderDividendCron;  // explicitly retain import to avoid unused-import error during cutover
   startMcapWatcher(connection);
 
   // Tick fake bots every 20s for all known tokens when demo mode is enabled
