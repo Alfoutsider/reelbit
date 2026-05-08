@@ -190,6 +190,38 @@ impl WalletCap {
     const LEN: usize = 8 + 32 + 32 + 8 + 1;
 }
 
+/// Per-mint, per-round dividend snapshot. Stored on-chain as a 32-byte
+/// Merkle root; off-chain server keeps the (holder, amount) leaves and
+/// each holder's proof in Supabase. Holders permissionlessly claim their
+/// share by submitting their leaf + proof; the program verifies against
+/// the on-chain root, marks the leaf claimed in the bitmap, and transfers
+/// lamports directly from this PDA to the claimer.
+///
+/// At publish time the platform authority debits `total_amount` lamports
+/// from `holder_dividend_vault` into this account; it sits here until
+/// either claimed or `expires_at` lapses, at which point any caller can
+/// invoke `expire_dividend_round` to sweep the unclaimed remainder
+/// (plus rent) to the per-mint jackpot vault.
+#[account]
+pub struct DividendRound {
+    pub mint:           Pubkey,    // 32
+    pub round:          u64,       // 8 — monotonic per-mint
+    pub merkle_root:    [u8; 32],  // 32 — sha256 root over (round, leaf_index, holder, amount) leaves
+    pub total_amount:   u64,       // 8 — lamports allocated to holders this round
+    pub claimed_amount: u64,       // 8 — running total claimed so far
+    pub claimed_count:  u8,        // 1 — # of distinct holders that claimed
+    pub claimed_bitmap: [u8; 13],  // 13 — 100 bits, one per leaf_index
+    pub published_at:   i64,       // 8
+    pub expires_at:     i64,       // 8
+    pub bump:           u8,        // 1
+}
+
+impl DividendRound {
+    const LEN: usize = 8 + 32 + 8 + 32 + 8 + 8 + 1 + 13 + 8 + 8 + 1;
+    const MAX_HOLDERS: u8 = 100;
+    const EXPIRY_SECONDS: i64 = 30 * 24 * 60 * 60; // 30 days
+}
+
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq, Eq)]
 pub enum SlotModel {
     Classic3Reel,
@@ -245,6 +277,18 @@ pub enum TokenLaunchError {
     MetadataLocked,
     #[msg("Buys not allowed in the same slot as launch — anti-bundle protection")]
     SnipeBlocked,
+    #[msg("Merkle proof verification failed")]
+    InvalidProof,
+    #[msg("This holder already claimed for this round")]
+    AlreadyClaimed,
+    #[msg("Leaf index out of range (max 99)")]
+    LeafIndexOutOfRange,
+    #[msg("Dividend round has expired — cannot claim")]
+    RoundExpired,
+    #[msg("Dividend round has not yet expired — cannot sweep")]
+    RoundNotExpired,
+    #[msg("holder_dividend_vault has insufficient lamports for this publish")]
+    InsufficientDividendVault,
 }
 
 // ── Events ────────────────────────────────────────────────────────────────────
@@ -347,6 +391,34 @@ pub struct SlotMigrated {
     /// graduation→migration latency window without joining against
     /// SlotGraduated.graduated_at.
     pub migrated_at:   i64,
+}
+
+#[event]
+pub struct DividendRoundPublished {
+    pub mint:         Pubkey,
+    pub round:        u64,
+    pub merkle_root:  [u8; 32],
+    pub total_amount: u64,
+    pub published_at: i64,
+    pub expires_at:   i64,
+}
+
+#[event]
+pub struct DividendClaimed {
+    pub mint:       Pubkey,
+    pub round:      u64,
+    pub holder:     Pubkey,
+    pub amount:     u64,
+    pub leaf_index: u8,
+}
+
+#[event]
+pub struct DividendRoundExpired {
+    pub mint:                  Pubkey,
+    pub round:                 u64,
+    pub unclaimed_amount:      u64,
+    pub claimed_count:         u8,
+    pub redirected_to_jackpot: bool,
 }
 
 #[event]
@@ -838,6 +910,93 @@ pub struct UpdateSlotMetadata<'info> {
         constraint = !slot_metadata.graduated @ TokenLaunchError::MetadataLocked,
     )]
     pub slot_metadata: Account<'info, SlotMetadata>,
+}
+
+#[derive(Accounts)]
+#[instruction(round: u64, _total_amount: u64, _merkle_root: [u8; 32])]
+pub struct PublishDividendRound<'info> {
+    /// Platform authority — debits holder_dividend_vault and pays for round account rent.
+    #[account(
+        mut,
+        constraint = authority.key() == platform_config.authority @ TokenLaunchError::Unauthorized,
+    )]
+    pub authority: Signer<'info>,
+
+    pub mint: Account<'info, Mint>,
+
+    #[account(
+        seeds = [b"platform_config"],
+        bump = platform_config.bump,
+    )]
+    pub platform_config: Account<'info, PlatformConfig>,
+
+    /// CHECK: PDA validated by seeds; source of accumulated holder dividend lamports.
+    #[account(
+        mut,
+        seeds = [b"holder_dividend", mint.key().as_ref()],
+        bump,
+    )]
+    pub holder_dividend_vault: SystemAccount<'info>,
+
+    /// New round PDA — funded with rent + total_amount lamports.
+    #[account(
+        init,
+        payer = authority,
+        space = DividendRound::LEN,
+        seeds = [b"dividend_round", mint.key().as_ref(), &round.to_le_bytes()],
+        bump,
+    )]
+    pub dividend_round: Account<'info, DividendRound>,
+
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+#[instruction(_round: u64, _leaf_index: u8, _amount: u64)]
+pub struct ClaimDividend<'info> {
+    /// Holder claiming their share. Pays the tx fee from their own wallet.
+    #[account(mut)]
+    pub claimer: Signer<'info>,
+
+    pub mint: Account<'info, Mint>,
+
+    /// Round account — bitmap mutated to mark leaf claimed; lamports debited.
+    /// Seeds bound to mint + round so a forged round account can't pass.
+    #[account(
+        mut,
+        seeds = [b"dividend_round", mint.key().as_ref(), &dividend_round.round.to_le_bytes()],
+        bump = dividend_round.bump,
+        constraint = dividend_round.mint == mint.key() @ TokenLaunchError::InvalidProof,
+    )]
+    pub dividend_round: Account<'info, DividendRound>,
+}
+
+#[derive(Accounts)]
+pub struct ExpireDividendRound<'info> {
+    /// Permissionless caller — anyone can sweep an expired round.
+    #[account(mut)]
+    pub caller: Signer<'info>,
+
+    pub mint: Account<'info, Mint>,
+
+    /// Closing the round account moves all remaining lamports (rent + unclaimed)
+    /// to the per-mint jackpot vault, then dealloctes the account.
+    #[account(
+        mut,
+        close = jackpot_vault,
+        seeds = [b"dividend_round", mint.key().as_ref(), &dividend_round.round.to_le_bytes()],
+        bump = dividend_round.bump,
+        constraint = dividend_round.mint == mint.key() @ TokenLaunchError::InvalidProof,
+    )]
+    pub dividend_round: Account<'info, DividendRound>,
+
+    /// CHECK: PDA validated by seeds — destination for unclaimed dividends.
+    #[account(
+        mut,
+        seeds = [b"jackpot_vault", mint.key().as_ref()],
+        bump,
+    )]
+    pub jackpot_vault: SystemAccount<'info>,
 }
 
 // ── Program ───────────────────────────────────────────────────────────────────
@@ -1586,6 +1745,166 @@ pub mod token_launch {
 
         Ok(())
     }
+
+    /// Publish a new dividend round. Admin-only (platform authority).
+    ///
+    /// Debits `total_amount` lamports from the per-mint `holder_dividend_vault`
+    /// PDA into a freshly-init'd `DividendRound` PDA. Stores the Merkle root
+    /// over the off-chain (round, leaf_index, holder, amount) leaves so that
+    /// individual holders can later submit their leaf + proof to claim
+    /// permissionlessly.
+    pub fn publish_dividend_root(
+        ctx:          Context<PublishDividendRound>,
+        round:        u64,
+        total_amount: u64,
+        merkle_root:  [u8; 32],
+    ) -> Result<()> {
+        require!(total_amount > 0, TokenLaunchError::ZeroAmount);
+
+        // Solvency: the vault must hold at least `total_amount` plus its
+        // own rent floor (we never empty a SystemAccount PDA below rent).
+        let rent_floor    = Rent::get()?.minimum_balance(0);
+        let vault_balance = ctx.accounts.holder_dividend_vault.lamports();
+        require!(
+            vault_balance >= total_amount.saturating_add(rent_floor),
+            TokenLaunchError::InsufficientDividendVault
+        );
+
+        // PDA-signed transfer: holder_dividend_vault → dividend_round.
+        let mint_key = ctx.accounts.mint.key();
+        let bump     = ctx.bumps.holder_dividend_vault;
+        let seeds: &[&[&[u8]]] = &[&[b"holder_dividend", mint_key.as_ref(), &[bump]]];
+
+        system_program::transfer(
+            CpiContext::new_with_signer(
+                ctx.accounts.system_program.key(),
+                system_program::Transfer {
+                    from: ctx.accounts.holder_dividend_vault.to_account_info(),
+                    to:   ctx.accounts.dividend_round.to_account_info(),
+                },
+                seeds,
+            ),
+            total_amount,
+        )?;
+
+        let now           = Clock::get()?.unix_timestamp;
+        let round_account = &mut ctx.accounts.dividend_round;
+        round_account.mint           = ctx.accounts.mint.key();
+        round_account.round          = round;
+        round_account.merkle_root    = merkle_root;
+        round_account.total_amount   = total_amount;
+        round_account.claimed_amount = 0;
+        round_account.claimed_count  = 0;
+        round_account.claimed_bitmap = [0u8; 13];
+        round_account.published_at   = now;
+        round_account.expires_at     = now + DividendRound::EXPIRY_SECONDS;
+        round_account.bump           = ctx.bumps.dividend_round;
+
+        emit!(DividendRoundPublished {
+            mint:         round_account.mint,
+            round,
+            merkle_root,
+            total_amount,
+            published_at: now,
+            expires_at:   round_account.expires_at,
+        });
+
+        Ok(())
+    }
+
+    /// Claim a holder's pro-rata share for a published round.
+    ///
+    /// Permissionless: anyone with a valid (leaf_index, amount, proof)
+    /// matching the on-chain Merkle root and an unset bitmap bit can pull
+    /// their lamports. The leaf is hashed as
+    /// `sha256(round || leaf_index || holder_pubkey || amount)`; the
+    /// proof is OpenZeppelin-style sorted-siblings.
+    pub fn claim_dividend(
+        ctx:        Context<ClaimDividend>,
+        round:      u64,
+        leaf_index: u8,
+        amount:     u64,
+        proof:      Vec<[u8; 32]>,
+    ) -> Result<()> {
+        require!(amount > 0,                                   TokenLaunchError::ZeroAmount);
+        require!(leaf_index < DividendRound::MAX_HOLDERS,      TokenLaunchError::LeafIndexOutOfRange);
+
+        let now       = Clock::get()?.unix_timestamp;
+        let round_acc = &mut ctx.accounts.dividend_round;
+
+        require!(round_acc.round == round,                     TokenLaunchError::InvalidProof);
+        require!(now <= round_acc.expires_at,                  TokenLaunchError::RoundExpired);
+
+        // Bitmap: prevent double-claim for the same leaf_index.
+        let byte_idx       = (leaf_index / 8) as usize;
+        let bit_mask: u8   = 1 << (leaf_index % 8);
+        require!(
+            round_acc.claimed_bitmap[byte_idx] & bit_mask == 0,
+            TokenLaunchError::AlreadyClaimed
+        );
+
+        // Merkle proof must verify against the committed root.
+        let leaf = build_dividend_leaf(round, leaf_index, &ctx.accounts.claimer.key(), amount);
+        require!(
+            verify_merkle_proof(leaf, &proof, round_acc.merkle_root),
+            TokenLaunchError::InvalidProof
+        );
+
+        // Solvency: never claim more than allocated.
+        require!(
+            round_acc.claimed_amount.saturating_add(amount) <= round_acc.total_amount,
+            TokenLaunchError::InsufficientDividendVault
+        );
+
+        // Move lamports from the round PDA → claimer wallet. Direct lamport
+        // manipulation is allowed because dividend_round is owned by this
+        // program (system_program::transfer would reject a from-account that
+        // carries data).
+        **round_acc.to_account_info().try_borrow_mut_lamports()?       -= amount;
+        **ctx.accounts.claimer.to_account_info().try_borrow_mut_lamports()? += amount;
+
+        round_acc.claimed_bitmap[byte_idx] |= bit_mask;
+        round_acc.claimed_count            = round_acc.claimed_count.saturating_add(1);
+        round_acc.claimed_amount           = round_acc.claimed_amount.saturating_add(amount);
+
+        emit!(DividendClaimed {
+            mint:       round_acc.mint,
+            round,
+            holder:     ctx.accounts.claimer.key(),
+            amount,
+            leaf_index,
+        });
+
+        Ok(())
+    }
+
+    /// Sweep an expired round to the per-mint jackpot vault.
+    ///
+    /// Permissionless: anyone can call after `expires_at`. Anchor's
+    /// `close = jackpot_vault` constraint moves all remaining lamports
+    /// (rent + unclaimed) to the jackpot and deallocates the account so
+    /// rent is fully recycled into the next jackpot rather than stuck.
+    pub fn expire_dividend_round(
+        ctx:    Context<ExpireDividendRound>,
+        _round: u64,
+    ) -> Result<()> {
+        let now           = Clock::get()?.unix_timestamp;
+        let round_acc     = &ctx.accounts.dividend_round;
+        let unclaimed     = round_acc.total_amount.saturating_sub(round_acc.claimed_amount);
+        let claimed_count = round_acc.claimed_count;
+
+        require!(now > round_acc.expires_at, TokenLaunchError::RoundNotExpired);
+
+        emit!(DividendRoundExpired {
+            mint:                  round_acc.mint,
+            round:                 round_acc.round,
+            unclaimed_amount:      unclaimed,
+            claimed_count,
+            redirected_to_jackpot: true,
+        });
+
+        Ok(())
+    }
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -1658,4 +1977,34 @@ fn compute_creator_tier(
         // Fully dumped → 0.5%
         (CREATOR_DUMPED_BPS, CREATOR_SHARE_BPS - CREATOR_DUMPED_BPS, 0)
     }
+}
+
+/// Build the canonical dividend Merkle leaf hash. The off-chain Merkle
+/// tree builder must use the identical SHA-256 encoding for proofs to
+/// verify on-chain.
+///
+/// Layout (little-endian where applicable):
+///   round (u64) || leaf_index (u8) || holder (32 bytes) || amount (u64)
+fn build_dividend_leaf(round: u64, leaf_index: u8, holder: &Pubkey, amount: u64) -> [u8; 32] {
+    let mut buf: Vec<u8> = Vec::with_capacity(8 + 1 + 32 + 8);
+    buf.extend_from_slice(&round.to_le_bytes());
+    buf.push(leaf_index);
+    buf.extend_from_slice(holder.as_ref());
+    buf.extend_from_slice(&amount.to_le_bytes());
+    solana_sha256_hasher::hash(&buf).to_bytes()
+}
+
+/// OpenZeppelin-style sorted-siblings Merkle proof verification.
+/// At each level the smaller hash is prepended so proofs need not encode
+/// position bits — both verifier and tree-builder must use the same rule.
+fn verify_merkle_proof(leaf: [u8; 32], proof: &[[u8; 32]], root: [u8; 32]) -> bool {
+    let mut current = leaf;
+    for sibling in proof {
+        current = if current <= *sibling {
+            solana_sha256_hasher::hashv(&[&current, sibling]).to_bytes()
+        } else {
+            solana_sha256_hasher::hashv(&[sibling, &current]).to_bytes()
+        };
+    }
+    current == root
 }
