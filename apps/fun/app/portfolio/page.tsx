@@ -7,6 +7,7 @@ import { ArrowLeft, Wallet, TrendingUp, Zap, BarChart2, ExternalLink } from "luc
 import Link from "next/link";
 import { shortenAddress } from "@/lib/utils";
 import { ReferralWidget } from "@/components/referral/ReferralWidget";
+import { DividendsCard } from "@/components/portfolio/DividendsCard";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
 
@@ -131,6 +132,9 @@ export default function PortfolioPage() {
             </div>
           ))}
         </motion.div>
+
+        {/* Dividends card — renders only when the wallet has unclaimed rounds. */}
+        <DividendsCard wallet={walletAddress} />
 
         {/* Referral widget — only renders if the API has a code for this wallet. */}
         <ReferralWidget wallet={walletAddress} />

@@ -267,6 +267,106 @@
       ]
     },
     {
+      "name": "claim_dividend",
+      "docs": [
+        "Claim a holder's pro-rata share for a published round.",
+        "",
+        "Permissionless: anyone with a valid (leaf_index, amount, proof)",
+        "matching the on-chain Merkle root and an unset bitmap bit can pull",
+        "their lamports. The leaf is hashed as",
+        "`sha256(round || leaf_index || holder_pubkey || amount)`; the",
+        "proof is OpenZeppelin-style sorted-siblings."
+      ],
+      "discriminator": [
+        15,
+        29,
+        207,
+        120,
+        153,
+        178,
+        164,
+        91
+      ],
+      "accounts": [
+        {
+          "name": "claimer",
+          "docs": [
+            "Holder claiming their share. Pays the tx fee from their own wallet."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "dividend_round",
+          "docs": [
+            "Round account — bitmap mutated to mark leaf claimed; lamports debited.",
+            "Seeds bound to mint + round so a forged round account can't pass."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  105,
+                  118,
+                  105,
+                  100,
+                  101,
+                  110,
+                  100,
+                  95,
+                  114,
+                  111,
+                  117,
+                  110,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              },
+              {
+                "kind": "account",
+                "path": "dividend_round.round",
+                "account": "DividendRound"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "round",
+          "type": "u64"
+        },
+        {
+          "name": "leaf_index",
+          "type": "u8"
+        },
+        {
+          "name": "amount",
+          "type": "u64"
+        },
+        {
+          "name": "proof",
+          "type": {
+            "vec": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "claim_fees",
       "docs": [
         "Distribute accumulated fees from the fee_vault to all recipients.",
@@ -434,11 +534,294 @@
           "writable": true
         },
         {
+          "name": "creator_token_account",
+          "docs": [
+            "Creator's current token account — read-only; used to determine loyalty tier."
+          ]
+        },
+        {
+          "name": "holder_dividend_vault",
+          "docs": [
+            "Holder dividend vault — receives the penalty portion when creator is penalized."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  111,
+                  108,
+                  100,
+                  101,
+                  114,
+                  95,
+                  100,
+                  105,
+                  118,
+                  105,
+                  100,
+                  101,
+                  110,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
           "name": "system_program",
           "address": "11111111111111111111111111111111"
         }
       ],
       "args": []
+    },
+    {
+      "name": "drain_holder_dividend",
+      "docs": [
+        "Drain accumulated holder dividend lamports to the platform wallet for off-chain distribution.",
+        "Only the platform authority can call this. The platform then distributes the SOL",
+        "to top-100 holders proportionally via the holderDividendCron."
+      ],
+      "discriminator": [
+        14,
+        205,
+        103,
+        65,
+        133,
+        107,
+        97,
+        40
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "platform_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  108,
+                  97,
+                  116,
+                  102,
+                  111,
+                  114,
+                  109,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "slot_metadata",
+          "docs": [
+            "Per-mint slot metadata — mutated to bump dividend_rounds_drained."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  108,
+                  111,
+                  116,
+                  95,
+                  109,
+                  101,
+                  116,
+                  97,
+                  100,
+                  97,
+                  116,
+                  97
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "holder_dividend_vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  111,
+                  108,
+                  100,
+                  101,
+                  114,
+                  95,
+                  100,
+                  105,
+                  118,
+                  105,
+                  100,
+                  101,
+                  110,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "platform_wallet",
+          "docs": [
+            "Destination — platform wallet re-distributes off-chain to top-100 holders."
+          ],
+          "writable": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "expire_dividend_round",
+      "docs": [
+        "Sweep an expired round to the per-mint jackpot vault.",
+        "",
+        "Permissionless: anyone can call after `expires_at`. Anchor's",
+        "`close = jackpot_vault` constraint moves all remaining lamports",
+        "(rent + unclaimed) to the jackpot and deallocates the account so",
+        "rent is fully recycled into the next jackpot rather than stuck."
+      ],
+      "discriminator": [
+        88,
+        104,
+        244,
+        135,
+        228,
+        20,
+        211,
+        16
+      ],
+      "accounts": [
+        {
+          "name": "caller",
+          "docs": [
+            "Permissionless caller — anyone can sweep an expired round."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "dividend_round",
+          "docs": [
+            "Closing the round account moves all remaining lamports (rent + unclaimed)",
+            "to the per-mint jackpot vault, then dealloctes the account."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  105,
+                  118,
+                  105,
+                  100,
+                  101,
+                  110,
+                  100,
+                  95,
+                  114,
+                  111,
+                  117,
+                  110,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              },
+              {
+                "kind": "account",
+                "path": "dividend_round.round",
+                "account": "DividendRound"
+              }
+            ]
+          }
+        },
+        {
+          "name": "jackpot_vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  106,
+                  97,
+                  99,
+                  107,
+                  112,
+                  111,
+                  116,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "_round",
+          "type": "u64"
+        }
+      ]
     },
     {
       "name": "initialize_platform",
@@ -741,11 +1124,89 @@
           }
         },
         {
-          "name": "metadata",
-          "writable": true
+          "name": "holder_dividend_vault",
+          "docs": [
+            "Holder dividend vault — accumulates creator loyalty penalty lamports."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  111,
+                  108,
+                  100,
+                  101,
+                  114,
+                  95,
+                  100,
+                  105,
+                  118,
+                  105,
+                  100,
+                  101,
+                  110,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
         },
         {
-          "name": "token_metadata_program"
+          "name": "metadata",
+          "docs": [
+            "Metaplex token-metadata account. Constrained at the Anchor layer to the",
+            "canonical PDA (`[b\"metadata\", metaplex_program_id, mint]` derived",
+            "against the Metaplex program itself). Without this an attacker could",
+            "pass a pre-funded account at an arbitrary address; Metaplex's own CPI",
+            "path validates the PDA too, but defense-in-depth here means we fail",
+            "fast at deserialization before any state writes happen."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  101,
+                  116,
+                  97,
+                  100,
+                  97,
+                  116,
+                  97
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "token_metadata_program"
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ],
+            "program": {
+              "kind": "account",
+              "path": "token_metadata_program"
+            }
+          }
+        },
+        {
+          "name": "token_metadata_program",
+          "docs": [
+            "Pinned to the canonical Metaplex Token Metadata program at the Anchor",
+            "layer (was previously runtime-only via `require_keys_eq!`). Combined",
+            "with the seeds::program above, an attacker can't substitute a forked",
+            "program-id and a matching forged PDA."
+          ]
         },
         {
           "name": "associated_token_program",
@@ -1013,6 +1474,270 @@
       ]
     },
     {
+      "name": "pay_jackpot",
+      "docs": [
+        "Pay out the jackpot vault to a verified winner.",
+        "",
+        "Called by the platform authority (via the API server) immediately after",
+        "the game server confirms an all-SEVENs spin result. The off-chain session",
+        "nonce + server-seed proof serves as the randomness guarantee in lieu of",
+        "on-chain VRF (VRF is a Sprint 4 upgrade).",
+        "",
+        "Transfers the entire vault balance minus the rent-exempt floor so the PDA",
+        "remains funded and can accept future jackpot deposits for the same mint."
+      ],
+      "discriminator": [
+        162,
+        254,
+        59,
+        123,
+        187,
+        96,
+        225,
+        171
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "docs": [
+            "Platform authority — must match PlatformConfig.authority."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "platform_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  108,
+                  97,
+                  116,
+                  102,
+                  111,
+                  114,
+                  109,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "jackpot_vault",
+          "docs": [
+            "Jackpot vault — SOL accumulator funded by claim_fees (30% slice)."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  106,
+                  97,
+                  99,
+                  107,
+                  112,
+                  111,
+                  116,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "winner",
+          "docs": [
+            "Winner's wallet — receives the entire vault balance minus rent floor."
+          ],
+          "writable": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "publish_dividend_root",
+      "docs": [
+        "Publish a new dividend round. Admin-only (platform authority).",
+        "",
+        "Debits `total_amount` lamports from the per-mint `holder_dividend_vault`",
+        "PDA into a freshly-init'd `DividendRound` PDA. Stores the Merkle root",
+        "over the off-chain (round, leaf_index, holder, amount) leaves so that",
+        "individual holders can later submit their leaf + proof to claim",
+        "permissionlessly."
+      ],
+      "discriminator": [
+        102,
+        137,
+        43,
+        200,
+        249,
+        36,
+        42,
+        224
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "docs": [
+            "Platform authority — debits holder_dividend_vault and pays for round account rent."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "platform_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  108,
+                  97,
+                  116,
+                  102,
+                  111,
+                  114,
+                  109,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "holder_dividend_vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  111,
+                  108,
+                  100,
+                  101,
+                  114,
+                  95,
+                  100,
+                  105,
+                  118,
+                  105,
+                  100,
+                  101,
+                  110,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "dividend_round",
+          "docs": [
+            "New round PDA — funded with rent + total_amount lamports."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  105,
+                  118,
+                  105,
+                  100,
+                  101,
+                  110,
+                  100,
+                  95,
+                  114,
+                  111,
+                  117,
+                  110,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              },
+              {
+                "kind": "arg",
+                "path": "round"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "round",
+          "type": "u64"
+        },
+        {
+          "name": "total_amount",
+          "type": "u64"
+        },
+        {
+          "name": "merkle_root",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
       "name": "sell_tokens",
       "discriminator": [
         114,
@@ -1180,6 +1905,86 @@
           "type": "u64"
         }
       ]
+    },
+    {
+      "name": "update_slot_metadata",
+      "docs": [
+        "Update slot metadata (name / ticker / image) before graduation.",
+        "",
+        "Only the original creator can call this, and only while the token is",
+        "still on the bonding curve. Once a slot graduates and goes live in the",
+        "casino lobby its branding becomes immutable — otherwise a creator",
+        "could swap art / ticker on a slot that already has shareholders.",
+        "",
+        "Empty strings (or strings unchanged from current) are no-ops; pass the",
+        "existing value if a field shouldn't be touched."
+      ],
+      "discriminator": [
+        199,
+        105,
+        244,
+        190,
+        14,
+        169,
+        38,
+        52
+      ],
+      "accounts": [
+        {
+          "name": "creator",
+          "docs": [
+            "Original creator. Validated by the seeds-bound metadata account below."
+          ],
+          "signer": true
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "slot_metadata",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  108,
+                  111,
+                  116,
+                  95,
+                  109,
+                  101,
+                  116,
+                  97,
+                  100,
+                  97,
+                  116,
+                  97
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "new_name",
+          "type": "string"
+        },
+        {
+          "name": "new_ticker",
+          "type": "string"
+        },
+        {
+          "name": "new_image",
+          "type": "string"
+        }
+      ]
     }
   ],
   "accounts": [
@@ -1194,6 +1999,19 @@
         145,
         209,
         189
+      ]
+    },
+    {
+      "name": "DividendRound",
+      "discriminator": [
+        136,
+        156,
+        213,
+        145,
+        27,
+        107,
+        109,
+        86
       ]
     },
     {
@@ -1238,6 +2056,45 @@
   ],
   "events": [
     {
+      "name": "DividendClaimed",
+      "discriminator": [
+        32,
+        47,
+        71,
+        8,
+        176,
+        235,
+        196,
+        216
+      ]
+    },
+    {
+      "name": "DividendRoundExpired",
+      "discriminator": [
+        118,
+        163,
+        100,
+        33,
+        23,
+        76,
+        150,
+        112
+      ]
+    },
+    {
+      "name": "DividendRoundPublished",
+      "discriminator": [
+        32,
+        26,
+        157,
+        205,
+        45,
+        77,
+        37,
+        2
+      ]
+    },
+    {
       "name": "FeesDistributed",
       "discriminator": [
         209,
@@ -1248,6 +2105,45 @@
         90,
         154,
         55
+      ]
+    },
+    {
+      "name": "HolderDividendDrained",
+      "discriminator": [
+        175,
+        227,
+        81,
+        213,
+        194,
+        247,
+        1,
+        228
+      ]
+    },
+    {
+      "name": "JackpotPaid",
+      "discriminator": [
+        21,
+        219,
+        85,
+        157,
+        45,
+        247,
+        26,
+        76
+      ]
+    },
+    {
+      "name": "MetadataUpdated",
+      "discriminator": [
+        132,
+        36,
+        215,
+        246,
+        166,
+        90,
+        189,
+        44
       ]
     },
     {
@@ -1396,6 +2292,66 @@
       "code": 6015,
       "name": "AlreadyMigrated",
       "msg": "Token has already been migrated to AMM"
+    },
+    {
+      "code": 6016,
+      "name": "InvalidCreatorTokenAccount",
+      "msg": "creator_token_account must be the creator's ATA for this mint"
+    },
+    {
+      "code": 6017,
+      "name": "InvalidJackpotWinner",
+      "msg": "Jackpot winner cannot be a platform-controlled wallet"
+    },
+    {
+      "code": 6018,
+      "name": "VaultInsolvent",
+      "msg": "Vault has insufficient lamports for the requested transfer"
+    },
+    {
+      "code": 6019,
+      "name": "NotCreator",
+      "msg": "Only the original creator can update slot metadata"
+    },
+    {
+      "code": 6020,
+      "name": "MetadataLocked",
+      "msg": "Cannot update metadata after graduation"
+    },
+    {
+      "code": 6021,
+      "name": "SnipeBlocked",
+      "msg": "Buys not allowed in the same slot as launch — anti-bundle protection"
+    },
+    {
+      "code": 6022,
+      "name": "InvalidProof",
+      "msg": "Merkle proof verification failed"
+    },
+    {
+      "code": 6023,
+      "name": "AlreadyClaimed",
+      "msg": "This holder already claimed for this round"
+    },
+    {
+      "code": 6024,
+      "name": "LeafIndexOutOfRange",
+      "msg": "Leaf index out of range (max 99)"
+    },
+    {
+      "code": 6025,
+      "name": "RoundExpired",
+      "msg": "Dividend round has expired — cannot claim"
+    },
+    {
+      "code": 6026,
+      "name": "RoundNotExpired",
+      "msg": "Dividend round has not yet expired — cannot sweep"
+    },
+    {
+      "code": 6027,
+      "name": "InsufficientDividendVault",
+      "msg": "holder_dividend_vault has insufficient lamports for this publish"
     }
   ],
   "types": [
@@ -1444,8 +2400,191 @@
             "type": "u64"
           },
           {
+            "name": "dev_buy_amount",
+            "type": "u64"
+          },
+          {
+            "name": "dev_buy_sol",
+            "type": "u64"
+          },
+          {
+            "name": "launched_at_slot",
+            "docs": [
+              "Solana slot of launch. Used for sniper / anti-bundle protection: a",
+              "non-creator buy in the same slot as launch is rejected, killing the",
+              "\"atomic launch+buy bundle\" sandwich pattern. The creator is exempt so",
+              "dev-buys (already capped at 5% by MAX_WALLET_BPS) still go through."
+            ],
+            "type": "u64"
+          },
+          {
             "name": "bump",
             "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "DividendClaimed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "round",
+            "type": "u64"
+          },
+          {
+            "name": "holder",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "leaf_index",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "DividendRound",
+      "docs": [
+        "Per-mint, per-round dividend snapshot. Stored on-chain as a 32-byte",
+        "Merkle root; off-chain server keeps the (holder, amount) leaves and",
+        "each holder's proof in Supabase. Holders permissionlessly claim their",
+        "share by submitting their leaf + proof; the program verifies against",
+        "the on-chain root, marks the leaf claimed in the bitmap, and transfers",
+        "lamports directly from this PDA to the claimer.",
+        "",
+        "At publish time the platform authority debits `total_amount` lamports",
+        "from `holder_dividend_vault` into this account; it sits here until",
+        "either claimed or `expires_at` lapses, at which point any caller can",
+        "invoke `expire_dividend_round` to sweep the unclaimed remainder",
+        "(plus rent) to the per-mint jackpot vault."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "round",
+            "type": "u64"
+          },
+          {
+            "name": "merkle_root",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "total_amount",
+            "type": "u64"
+          },
+          {
+            "name": "claimed_amount",
+            "type": "u64"
+          },
+          {
+            "name": "claimed_count",
+            "type": "u8"
+          },
+          {
+            "name": "claimed_bitmap",
+            "type": {
+              "array": [
+                "u8",
+                13
+              ]
+            }
+          },
+          {
+            "name": "published_at",
+            "type": "i64"
+          },
+          {
+            "name": "expires_at",
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "DividendRoundExpired",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "round",
+            "type": "u64"
+          },
+          {
+            "name": "unclaimed_amount",
+            "type": "u64"
+          },
+          {
+            "name": "claimed_count",
+            "type": "u8"
+          },
+          {
+            "name": "redirected_to_jackpot",
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "DividendRoundPublished",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "round",
+            "type": "u64"
+          },
+          {
+            "name": "merkle_root",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "total_amount",
+            "type": "u64"
+          },
+          {
+            "name": "published_at",
+            "type": "i64"
+          },
+          {
+            "name": "expires_at",
+            "type": "i64"
           }
         ]
       }
@@ -1484,8 +2623,55 @@
             "type": "u64"
           },
           {
+            "name": "holder_dividend_share",
+            "type": "u64"
+          },
+          {
+            "name": "creator_hold_bps",
+            "type": "u64"
+          },
+          {
             "name": "jackpot_expired",
             "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "HolderDividendDrained",
+      "docs": [
+        "Emitted whenever the platform authority drains the per-mint",
+        "holder_dividend_vault. This is the on-chain audit trail for the off-chain",
+        "distribution cron — the platform must transfer EXACTLY `amount` lamports",
+        "to top-100 holders within a reasonable window, and indexers can flag",
+        "drains where the off-chain follow-up doesn't materialise.",
+        "",
+        "Full on-chain snapshot + per-holder claim PDA is a future redesign; this",
+        "event is the stop-gap that makes the current cron-based flow auditable",
+        "instead of opaque."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "round",
+            "type": "u64"
+          },
+          {
+            "name": "drained_at",
+            "type": "i64"
+          },
+          {
+            "name": "destination",
+            "type": "pubkey"
           }
         ]
       }
@@ -1506,6 +2692,26 @@
           {
             "name": "license_wallet",
             "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "JackpotPaid",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "winner",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
           }
         ]
       }
@@ -1538,6 +2744,34 @@
                 "name": "SlotModel"
               }
             }
+          }
+        ]
+      }
+    },
+    {
+      "name": "MetadataUpdated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "new_name",
+            "type": "string"
+          },
+          {
+            "name": "new_ticker",
+            "type": "string"
+          },
+          {
+            "name": "new_image",
+            "type": "string"
           }
         ]
       }
@@ -1586,6 +2820,23 @@
           {
             "name": "real_sol",
             "type": "u64"
+          },
+          {
+            "name": "jackpot_expired",
+            "docs": [
+              "True if the 30-day jackpot expiry window passed before graduation —",
+              "signals to off-chain systems that the jackpot pool wasn't seeded by",
+              "the bonding curve's normal fee flow and may need a platform top-up."
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "graduated_at",
+            "docs": [
+              "Unix seconds at graduation. Lets indexers compute time-to-graduation",
+              "without joining against the launch timestamp from a separate event."
+            ],
+            "type": "i64"
           }
         ]
       }
@@ -1668,6 +2919,14 @@
             "type": "i64"
           },
           {
+            "name": "dividend_rounds_drained",
+            "docs": [
+              "Monotonic counter — incremented every drain_holder_dividend call.",
+              "Off-chain cron uses (mint, round) as a dedup key when distributing."
+            ],
+            "type": "u64"
+          },
+          {
             "name": "bump",
             "type": "u8"
           }
@@ -1698,6 +2957,15 @@
           {
             "name": "tokens_seeded",
             "type": "u64"
+          },
+          {
+            "name": "migrated_at",
+            "docs": [
+              "Unix seconds when migration completed. Lets indexers compute the",
+              "graduation→migration latency window without joining against",
+              "SlotGraduated.graduated_at."
+            ],
+            "type": "i64"
           }
         ]
       }
