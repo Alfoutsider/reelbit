@@ -6,6 +6,7 @@ import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { ThemeProvider } from "@/components/layout/ThemeProvider";
 import { LanguagePrompt } from "@/components/layout/LanguagePrompt";
+import { SupportChat } from "@/components/layout/SupportChat";
 import { Toaster } from "sonner";
 
 export const metadata: Metadata = {
@@ -51,8 +52,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <main className="relative z-10 flex-1">{children}</main>
             <Footer />
             <LanguagePrompt />
-            {/* Dark theme matches the rest of the app; bottom-right keeps */}
-            {/* notifications out of the navbar / hero. */}
+            <SupportChat />
             <Toaster
               position="bottom-right"
               theme="dark"

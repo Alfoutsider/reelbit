@@ -1628,6 +1628,68 @@ app.post("/admin/themes/:mint/regenerate", requireAdminCode, async (req: Request
   res.json({ accepted: true, mint });
 });
 
+// ── AI Customer Support ───────────────────────────────────────────────────────
+
+const SUPPORT_SYSTEM_PROMPT = `You are the ReelBit support assistant — a helpful, concise AI for the ReelBit platform. Keep responses short (2-4 sentences max unless a list is needed). Never make up specific numbers or balances the user hasn't shared.
+
+ReelBit has two products:
+• reelbit.fun — free slot machine token launchpad on Solana. Launch a token for $0 upfront. It starts on a bonding curve at $5k market cap and graduates to the casino at $100k.
+• reelbit.casino — provably fair slot machines powered by graduated tokens. Deposit SOL, play slots, win jackpots. 96% RTP, no player fees.
+
+Key facts:
+- Launching is free. Creators earn 25% of trading fees from their token.
+- Trading fees are dynamic: 2% early, dropping to 1.5% then 1% as the token approaches graduation. Players never pay fees — the house edge is baked into RTP.
+- Graduation: token hits $100k market cap → automatically migrates to casino. Holders keep their tokens and earn SOL dividends from casino revenue.
+- Jackpot: land 3 ReelBit logos on the payline to drain the jackpot vault.
+- Wallets: Phantom, Backpack, and all standard Solana wallets via Privy.
+- Demo mode: new users can apply for a $100 USDC demo credit to try the casino risk-free.
+- Minimum casino deposit: $10 USDC equivalent in SOL.
+
+If asked about specific account balances, transaction status, or bugs, tell the user you can't access their account and ask them to contact the team on Discord.`;
+
+const _supportRateMap = new Map<string, { count: number; resetAt: number }>();
+
+app.post("/support/chat", async (req: Request, res: Response) => {
+  if (!config.anthropicApiKey) {
+    return res.status(503).json({ error: "Support chat not available" });
+  }
+
+  // Per-IP rate limit: 30 messages per minute
+  const ip = String(req.headers["x-forwarded-for"] ?? req.socket.remoteAddress ?? "unknown");
+  const now = Date.now();
+  const bucket = _supportRateMap.get(ip) ?? { count: 0, resetAt: now + 60_000 };
+  if (now > bucket.resetAt) { bucket.count = 0; bucket.resetAt = now + 60_000; }
+  bucket.count++;
+  _supportRateMap.set(ip, bucket);
+  if (bucket.count > 30) return res.status(429).json({ error: "Too many messages. Please wait a moment." });
+
+  const { messages } = req.body;
+  if (!Array.isArray(messages) || messages.length === 0) {
+    return res.status(400).json({ error: "Invalid messages" });
+  }
+
+  const trimmed = (messages as Array<{ role: string; content: string }>)
+    .slice(-20)
+    .filter(m => m.role === "user" || m.role === "assistant")
+    .map(m => ({ role: m.role as "user" | "assistant", content: String(m.content).slice(0, 2000) }));
+
+  try {
+    const { default: Anthropic } = await import("@anthropic-ai/sdk");
+    const client = new Anthropic({ apiKey: config.anthropicApiKey });
+    const response = await client.messages.create({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 512,
+      system: SUPPORT_SYSTEM_PROMPT,
+      messages: trimmed,
+    });
+    const text = response.content[0].type === "text" ? response.content[0].text : "";
+    res.json({ message: text });
+  } catch (err) {
+    console.error("[support] Anthropic error:", err);
+    res.status(500).json({ error: "Support chat is temporarily unavailable." });
+  }
+});
+
 // ── Error handler ─────────────────────────────────────────────────────────────
 
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
