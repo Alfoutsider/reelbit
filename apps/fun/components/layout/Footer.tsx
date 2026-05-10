@@ -41,7 +41,7 @@ export function Footer() {
           <div className="col-span-2 md:col-span-1 space-y-3">
             <div className="flex items-center gap-2">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/logo-icon.png" alt="ReelBit" className="w-8 h-8 object-contain" />
+              <img src="/logo-icon.svg" alt="ReelBit" className="w-8 h-8 object-contain" />
               <span className="font-orbitron text-[14px] font-black leading-none">
                 <span style={{ color: "var(--footer-l)" }}>Reel</span>
                 <span style={{ color: "var(--brand-red)" }}>Bit</span>

@@ -100,7 +100,7 @@ export function SuccessAnimation({ username, onDone }: Props) {
         transition={{ type: "spring", stiffness: 280, damping: 22 }}
         className="flex items-center gap-2.5">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/logo-icon.png" alt="ReelBit" className="w-11 h-11 object-contain" />
+        <img src="/logo-icon.svg" alt="ReelBit" className="w-11 h-11 object-contain" />
         <span className="font-rajdhani text-2xl font-bold">
           <span className="text-white">Reel</span>
           <span className="gold-text">Bit</span>

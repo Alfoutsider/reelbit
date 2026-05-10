@@ -101,7 +101,7 @@ export function Navbar() {
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2.5 group" onClick={() => setMobileOpen(false)}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logo-icon.png" alt="ReelBit" className="w-10 h-10 object-contain" />
+            <img src="/logo-icon.svg" alt="ReelBit" className="w-10 h-10 object-contain" />
             <span className="font-orbitron text-[15px] font-black leading-none">
               <span style={{ color: "var(--brand-cream)" }}>Reel</span>
               <span style={{ color: "var(--brand-red)" }}>Bit</span>
