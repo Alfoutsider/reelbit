@@ -411,7 +411,7 @@ app.post("/profile/:wallet/pfp/nft", validateWallet, async (req: Request, res: R
 async function fetchNftImage(mintAddress: string): Promise<string> {
   const key = config.heliusApiKey;
   if (!key) throw new Error("Helius API key not configured");
-  const res = await fetch(`https://mainnet.helius-rpc.com/?api-key=${key}`, {
+  const res = await fetch(config.heliusDasUrl, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ jsonrpc: "2.0", id: "nft-pfp", method: "getAsset", params: { id: mintAddress } }),
@@ -1170,9 +1170,7 @@ app.get("/feed/trades", (req: Request, res: Response) => {
 
 // ── Holder list ───────────────────────────────────────────────────────────────
 
-const HELIUS_DAS_URL = config.rpcUrl.includes("mainnet")
-  ? `https://mainnet.helius-rpc.com/?api-key=${config.heliusApiKey}`
-  : `https://devnet.helius-rpc.com/?api-key=${config.heliusApiKey}`;
+const HELIUS_DAS_URL = config.heliusDasUrl;
 
 /** GET /tokens/:mint/holders?limit=50 — top token holders via Helius DAS */
 app.get("/tokens/:mint/holders", async (req: Request, res: Response) => {

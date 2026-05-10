@@ -31,6 +31,13 @@ export const config = {
   internalSecret: process.env.INTERNAL_API_SECRET ?? "dev-secret-change-in-prod",
   adminKey:       process.env.ADMIN_API_KEY ?? "admin-dev-key",
   heliusApiKey:   process.env.HELIUS_API_KEY ?? "",
+  get heliusDasUrl(): string {
+    const key = this.heliusApiKey;
+    const host = this.rpcUrl.includes("mainnet")
+      ? "mainnet.helius-rpc.com"
+      : "devnet.helius-rpc.com";
+    return `https://${host}/?api-key=${key}`;
+  },
   serverBaseUrl:       process.env.SERVER_BASE_URL ?? "http://localhost:3001",
   dataDir:             process.env.DATA_DIR ?? "./data",
   turnstileSecretKey:  process.env.TURNSTILE_SECRET_KEY ?? "",

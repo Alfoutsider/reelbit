@@ -37,10 +37,7 @@ const MAX_HOLDERS              = 100;                     // top-N holders to in
 const MAX_TRANSFERS_PER_TX     = 20;                      // wallets per transaction (safe batch size)
 const MIN_HOLDER_SHARE_LAMPORTS = 1_000;                  // dust filter — skip if share < 0.000001 SOL
 
-// Helius DAS endpoint (mainnet or devnet depending on RPC config)
-const HELIUS_DAS_URL = config.rpcUrl.includes("mainnet")
-  ? `https://mainnet.helius-rpc.com/?api-key=${config.heliusApiKey}`
-  : `https://devnet.helius-rpc.com/?api-key=${config.heliusApiKey}`;
+const HELIUS_DAS_URL = config.heliusDasUrl;
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
