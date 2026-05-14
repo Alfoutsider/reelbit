@@ -60,12 +60,14 @@ export async function confirmDeposit(
 export async function requestWithdraw(
   wallet: string,
   usdcUnits: number,
-  destination?: string,
+  destination: string,
+  signature: string,
+  message: string,
 ): Promise<{ txSignature: string; balance: number; withdrawalFee: number }> {
   const res = await fetch(`${API}/withdraw`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ wallet, usdcUnits, destination: destination ?? wallet }),
+    body: JSON.stringify({ wallet, usdcUnits, destination, signature, message }),
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error ?? "Withdrawal failed");

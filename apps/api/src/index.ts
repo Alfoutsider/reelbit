@@ -1,5 +1,6 @@
 import express, { Request, Response, NextFunction } from "express";
 import path from "path";
+import { createPublicKey, verify as cryptoVerify } from "crypto";
 import { Connection, PublicKey, Transaction, TransactionInstruction, sendAndConfirmTransaction } from "@solana/web3.js";
 import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { config } from "./config";
@@ -693,27 +694,56 @@ app.post("/withdraw/stripe", async (req: Request, res: Response) => {
   });
 });
 
+// ed25519 SPKI header (DER) — prepended to the raw 32-byte Solana public key
+const ED25519_SPKI_PREFIX = Buffer.from("302a300506032b6570032100", "hex");
+const WITHDRAW_SIG_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+function verifyWithdrawSignature(wallet: string, message: string, signatureBase64: string): boolean {
+  try {
+    const pubkeyBytes = new PublicKey(wallet).toBytes();
+    const spkiKey     = Buffer.concat([ED25519_SPKI_PREFIX, pubkeyBytes]);
+    const publicKey   = createPublicKey({ key: spkiKey, format: "der", type: "spki" });
+    return cryptoVerify(null, Buffer.from(message), publicKey, Buffer.from(signatureBase64, "base64"));
+  } catch {
+    return false;
+  }
+}
+
 /**
  * POST /withdraw
- * Body: { wallet, usdcUnits, destination? }
- * Converts USDC μ-units back to SOL at current Pyth price and sends on-chain.
+ * Body: { wallet, usdcUnits, destination?, signature, message }
+ * Requires a wallet-signed message to prove key ownership — prevents session-only drains.
+ * message format: "ReelBit withdrawal {usdcUnits} at {unixMs}"
  */
 app.post("/withdraw", async (req: Request, res: Response) => {
-  const { wallet, usdcUnits, destination } = req.body as {
+  const { wallet, usdcUnits, destination, signature, message } = req.body as {
     wallet: string;
     usdcUnits: number;
     destination?: string;
+    signature: string;
+    message: string;
   };
   if (!wallet || !usdcUnits) {
     return res.status(400).json({ error: "wallet and usdcUnits required" });
   }
+  if (!signature || !message) {
+    return res.status(401).json({ error: "Wallet signature required for withdrawal" });
+  }
   if (usdcUnits < USDC_UNIT || usdcUnits > 100_000 * USDC_UNIT) {
     return res.status(400).json({ error: "Withdraw amount must be between $1 and $100,000" });
   }
-  // Destination must be the owner's wallet — prevents draining to a third party
-  // without proper signature verification
   if (destination && destination !== wallet) {
     return res.status(400).json({ error: "Withdrawal destination must match the source wallet" });
+  }
+  // Verify the signed message matches this exact withdrawal and is fresh
+  const expected = `ReelBit withdrawal ${usdcUnits} at `;
+  const tsMatch  = message.match(/at (\d+)$/);
+  const ts       = tsMatch ? parseInt(tsMatch[1]) : 0;
+  if (!message.startsWith(expected) || Date.now() - ts > WITHDRAW_SIG_TTL_MS) {
+    return res.status(401).json({ error: "Withdrawal message invalid or expired" });
+  }
+  if (!verifyWithdrawSignature(wallet, message, signature)) {
+    return res.status(401).json({ error: "Invalid wallet signature" });
   }
   if (await isDemoUser(wallet)) {
     return res.status(403).json({ error: "Demo balances cannot be withdrawn. Deposit real funds to unlock withdrawals." });

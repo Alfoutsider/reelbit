@@ -164,7 +164,19 @@ export function WalletModal({ open, onClose, walletAddress, onBalanceChange }: P
     if (!effectiveWithdrawUsd || effectiveWithdrawUsd <= 0) throw new Error("Enter a withdrawal amount");
     const usdcUnits = usdToUsdc(effectiveWithdrawUsd);
     const dest      = withdrawDest.trim() || walletAddress;
-    const { txSignature, withdrawalFee } = await requestWithdraw(walletAddress, usdcUnits, dest);
+
+    // Sign a withdrawal message to prove wallet ownership
+    const wallet = wallets[0];
+    if (!wallet) throw new Error("No wallet connected");
+    const provider = await (wallet as { getSolanaProvider?: () => Promise<{ signMessage: (msg: Uint8Array) => Promise<{ signature: Uint8Array }> }> }).getSolanaProvider?.();
+    if (!provider) throw new Error("Solana provider unavailable");
+
+    const message   = `ReelBit withdrawal ${usdcUnits} at ${Date.now()}`;
+    const msgBytes  = new TextEncoder().encode(message);
+    const { signature: sigBytes } = await provider.signMessage(msgBytes);
+    const signature = Buffer.from(sigBytes).toString("base64");
+
+    const { txSignature, withdrawalFee } = await requestWithdraw(walletAddress, usdcUnits, dest, signature, message);
     await refreshBalance();
     setMsg({ text: `Withdrew ${formatUsdc(usdcUnits)} (fee: ${formatUsdc(withdrawalFee ?? 0)}). Tx: ${txSignature.slice(0, 16)}…`, ok: true });
     setWithdrawUsd(null);
