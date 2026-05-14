@@ -20,8 +20,8 @@ export function generateReelPositions(
     const hmac = createHash("sha256")
       .update(`${seed.serverSeed}:${seed.clientSeed}:${seed.nonce}:${i}`)
       .digest("hex");
-    // Take first 8 hex chars → uint32, divide by max uint32
-    const value = parseInt(hmac.slice(0, 8), 16) / 0xffffffff;
+    // Take first 8 hex chars → uint32, divide by 2^32 to get [0, 1)
+    const value = parseInt(hmac.slice(0, 8), 16) / 0x100000000;
     results.push(value);
   }
   return results;

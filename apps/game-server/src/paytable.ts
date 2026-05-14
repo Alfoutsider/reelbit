@@ -129,8 +129,9 @@ function weightedStrip(weights: Record<SymbolId, number>): SymbolId[] {
   for (const [id, w] of Object.entries(weights)) {
     for (let i = 0; i < w; i++) strip.push(id as SymbolId);
   }
-  // Shuffle deterministically enough for a strip
-  return strip.sort(() => 0.5 - Math.random());
+  // Strip order is fixed and deterministic — required for provably fair verification.
+  // Symbol weights control frequency; the RNG picks a position uniformly across the strip.
+  return strip;
 }
 
 export function buildReelStrip(model: "Classic3Reel" | "Standard5Reel" | "FiveReelFreeSpins"): SymbolId[][] {
