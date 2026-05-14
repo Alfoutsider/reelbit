@@ -44,7 +44,6 @@ import { isProcessed, markProcessed, requireHeliusSignature, validateWallet, val
 import { loggedFnf } from "./loggedFireAndForget";
 import { getCreatorRevTier, computeRevTier } from "./creatorHoldingTracker";
 import { stripe } from "./stripeClient";
-import type Stripe from "stripe";
 import {
   getOrCreateCode, registerReferral, getReferrerStats, getLeaderboard,
   onTrade as referralOnTrade, onTokenLaunch as referralOnLaunch, onGraduation as referralOnGraduation,
@@ -642,7 +641,7 @@ app.post("/deposit/stripe/webhook", async (req: Request, res: Response) => {
     console.warn("[stripe] STRIPE_WEBHOOK_SECRET not set — rejecting webhook");
     return res.status(503).json({ error: "Webhook not configured" });
   }
-  let event: Stripe.Event;
+  let event: ReturnType<typeof stripe.webhooks.constructEvent>;
   try {
     event = stripe.webhooks.constructEvent(rawBody, sig, config.stripeWebhookSecret);
   } catch (err) {
@@ -650,7 +649,7 @@ app.post("/deposit/stripe/webhook", async (req: Request, res: Response) => {
   }
 
   if (event.type === "payment_intent.succeeded") {
-    const pi     = event.data.object as Stripe.PaymentIntent;
+    const pi = event.data.object as { metadata: Record<string, string>; amount_received: number; id: string };
     const wallet = pi.metadata?.wallet;
     if (!wallet) {
       console.error("[stripe] PaymentIntent succeeded but no wallet in metadata", pi.id);
