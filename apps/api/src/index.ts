@@ -1816,7 +1816,7 @@ app.post("/support/chat", async (req: Request, res: Response) => {
         "X-Title": "ReelBit Support",
       },
       body: JSON.stringify({
-        model: "meta-llama/llama-3.1-8b-instruct:free",
+        model: "openai/gpt-oss-20b:free",
         max_tokens: 512,
         messages: [
           { role: "system", content: SUPPORT_SYSTEM_PROMPT },
