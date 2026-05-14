@@ -2,8 +2,9 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Copy, Check, ArrowDownToLine, ArrowUpFromLine, ArrowLeftRight, Wallet, Gift } from "lucide-react";
+import { X, Copy, Check, ArrowDownToLine, ArrowUpFromLine, ArrowLeftRight, Wallet, Gift, CreditCard, Banknote, Coins } from "lucide-react";
 import { SwipeToConfirm } from "@/components/wallet/SwipeToConfirm";
+import { StripeCardForm } from "@/components/wallet/StripeCardForm";
 import { Connection, PublicKey, SystemProgram, Transaction, LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { useWallets } from "@/lib/privy";
 import { cn } from "@/lib/utils";
@@ -19,6 +20,9 @@ import {
   USDC_UNIT,
   type BalanceEntry,
 } from "@/lib/balanceClient";
+
+type DepositMethod  = "crypto" | "card" | "bank";
+type WithdrawMethod = "crypto" | "bank";
 
 const RPC_URL = process.env.NEXT_PUBLIC_RPC_URL ?? "https://api.devnet.solana.com";
 
@@ -46,7 +50,11 @@ export function WalletModal({ open, onClose, walletAddress, onBalanceChange }: P
 
   // Connected wallet's on-chain SOL balance
   const [walletSolLamports, setWalletSolLamports] = useState(0);
-  const [solPrice, setSolPrice]     = useState(150);
+  const [solPrice, setSolPrice]     = useState(0);
+
+  // Payment method selection
+  const [depositMethod, setDepositMethod]   = useState<DepositMethod>("crypto");
+  const [withdrawMethod, setWithdrawMethod] = useState<WithdrawMethod>("crypto");
 
   // Deposit state
   const [depositUsd, setDepositUsd] = useState<number | null>(null);
@@ -324,7 +332,7 @@ export function WalletModal({ open, onClose, walletAddress, onBalanceChange }: P
                         {(walletSolLamports / LAMPORTS_PER_SOL).toFixed(4)} SOL
                       </span>
                       <span className="text-white/30 text-xs">
-                        ≈ ${((walletSolLamports / LAMPORTS_PER_SOL) * solPrice).toFixed(2)}
+                        {solPrice > 0 ? `≈ $${((walletSolLamports / LAMPORTS_PER_SOL) * solPrice).toFixed(2)}` : ""}
                       </span>
                     </div>
                   </div>
@@ -339,73 +347,198 @@ export function WalletModal({ open, onClose, walletAddress, onBalanceChange }: P
               {/* DEPOSIT tab */}
               {tab === "deposit" && (
                 <div className="space-y-4">
-                  {/* Wallet SOL balance */}
-                  <div className="rounded-xl bg-white/[0.02] border border-white/5 p-3 flex items-center justify-between">
-                    <div>
-                      <p className="text-white/30 text-[10px] font-orbitron">WALLET BALANCE</p>
-                      <p className="text-white/80 font-bold text-sm">
-                        {(walletSolLamports / LAMPORTS_PER_SOL).toFixed(4)} SOL
+                  {/* Payment method selector */}
+                  <div className="grid grid-cols-3 gap-2">
+                    {([
+                      { id: "crypto" as DepositMethod, label: "Crypto",   icon: <Coins size={13} /> },
+                      { id: "card"   as DepositMethod, label: "Card",     icon: <CreditCard size={13} /> },
+                      { id: "bank"   as DepositMethod, label: "Bank",     icon: <Banknote size={13} /> },
+                    ] as { id: DepositMethod; label: string; icon: React.ReactNode }[]).map(({ id, label, icon }) => (
+                      <button
+                        key={id}
+                        onClick={() => { setDepositMethod(id); setMsg(null); }}
+                        className={cn(
+                          "flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-xs font-orbitron font-bold tracking-wider transition-all",
+                          depositMethod === id
+                            ? "bg-purple-600 text-white"
+                            : "bg-white/[0.04] text-white/40 hover:text-white hover:bg-white/[0.08] border border-white/5",
+                        )}
+                      >
+                        {icon} {label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* CRYPTO deposit */}
+                  {depositMethod === "crypto" && (
+                    <>
+                      <div className="rounded-xl bg-white/[0.02] border border-white/5 p-3 flex items-center justify-between">
+                        <div>
+                          <p className="text-white/30 text-[10px] font-orbitron">WALLET BALANCE</p>
+                          <p className="text-white/80 font-bold text-sm">
+                            {(walletSolLamports / LAMPORTS_PER_SOL).toFixed(4)} SOL
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-white/30 text-[10px]">≈ USD</p>
+                          <p className="text-white/50 text-sm">
+                            {solPrice > 0 ? `$${((walletSolLamports / LAMPORTS_PER_SOL) * solPrice).toFixed(2)}` : "—"}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <p className="text-white/60 text-xs font-orbitron tracking-wider">DEPOSIT AMOUNT</p>
+                        <PresetGrid
+                          presets={DEPOSIT_PRESETS_USD}
+                          selected={depositUsd}
+                          onSelect={setDepositUsd}
+                          custom={customDepositUsd}
+                          onCustom={setCustomDepositUsd}
+                        />
+                      </div>
+
+                      {effectiveDepositUsd > 0 && solPrice > 0 && (
+                        <div className="rounded-xl bg-white/[0.02] border border-white/5 p-3 text-xs space-y-1 text-white/40">
+                          <div className="flex justify-between">
+                            <span>You send (SOL)</span>
+                            <span className="text-white/70">{(effectiveDepositUsd / solPrice).toFixed(4)} SOL</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>Platform fee (0.3%)</span>
+                            <span className="text-red-400/70">−${(effectiveDepositUsd * 0.003).toFixed(3)}</span>
+                          </div>
+                          <div className="flex justify-between border-t border-white/5 pt-1 mt-1">
+                            <span className="text-white/60">You receive</span>
+                            <span className="text-green-400/80 font-bold">${(effectiveDepositUsd * 0.997).toFixed(2)} USDC</span>
+                          </div>
+                        </div>
+                      )}
+
+                      {entry && !entry.welcomeBonusClaimed && (
+                        <div className="flex items-center gap-2 rounded-xl bg-gold/5 border border-gold/20 p-3 text-xs text-gold/80">
+                          <Gift size={13} />
+                          <span>First deposit gets 100% bonus up to $200 (35× wagering)</span>
+                        </div>
+                      )}
+
+                      <SwipeToConfirm
+                        label="SWIPE TO DEPOSIT"
+                        variant="purple"
+                        onConfirm={handleDeposit}
+                        onError={(e) => setMsg({ text: e.message, ok: false })}
+                        disabled={!effectiveDepositUsd || effectiveDepositUsd <= 0}
+                      />
+
+                      <p className="text-white/15 text-[10px] text-center">
+                        SOL automatically converted to USDC at live market rate.
+                      </p>
+                    </>
+                  )}
+
+                  {/* CARD deposit */}
+                  {depositMethod === "card" && (
+                    <>
+                      <div className="space-y-2">
+                        <p className="text-white/60 text-xs font-orbitron tracking-wider">DEPOSIT AMOUNT</p>
+                        <PresetGrid
+                          presets={DEPOSIT_PRESETS_USD}
+                          selected={depositUsd}
+                          onSelect={setDepositUsd}
+                          custom={customDepositUsd}
+                          onCustom={setCustomDepositUsd}
+                        />
+                      </div>
+
+                      {entry && !entry.welcomeBonusClaimed && (
+                        <div className="flex items-center gap-2 rounded-xl bg-gold/5 border border-gold/20 p-3 text-xs text-gold/80">
+                          <Gift size={13} />
+                          <span>First deposit gets 100% bonus up to $200 (35× wagering)</span>
+                        </div>
+                      )}
+
+                      {effectiveDepositUsd >= 10 ? (
+                        <StripeCardForm
+                          amountUsd={effectiveDepositUsd}
+                          wallet={walletAddress}
+                          onSuccess={async () => {
+                            await refreshBalance();
+                            setMsg({ text: `Deposited $${effectiveDepositUsd.toFixed(2)} via card.`, ok: true });
+                            setDepositUsd(null);
+                            setCustomDepositUsd("");
+                            recordDeposit(effectiveDepositUsd);
+                          }}
+                        />
+                      ) : (
+                        <p className="text-white/30 text-xs text-center">
+                          Select an amount ($10 minimum) to continue
+                        </p>
+                      )}
+                    </>
+                  )}
+
+                  {/* BANK deposit */}
+                  {depositMethod === "bank" && (
+                    <div className="space-y-3">
+                      <div className="rounded-xl bg-white/[0.02] border border-white/5 p-4 space-y-3 text-sm">
+                        <p className="text-white/60 text-xs font-orbitron tracking-wider">WIRE / ACH TRANSFER</p>
+                        <p className="text-white/50 text-xs leading-relaxed">
+                          Send funds via bank transfer to the account below. Your balance will be credited within 1–3 business days after confirmation.
+                        </p>
+                        <div className="space-y-2 text-xs font-mono">
+                          <div className="flex justify-between text-white/40">
+                            <span>Bank</span>
+                            <span className="text-white/70">Mercury</span>
+                          </div>
+                          <div className="flex justify-between text-white/40">
+                            <span>Account name</span>
+                            <span className="text-white/70">ReelBit Ltd</span>
+                          </div>
+                          <div className="flex justify-between text-white/40">
+                            <span>Routing (ABA)</span>
+                            <span className="text-white/70">— configure in env —</span>
+                          </div>
+                          <div className="flex justify-between text-white/40">
+                            <span>Account #</span>
+                            <span className="text-white/70">— configure in env —</span>
+                          </div>
+                        </div>
+                        <p className="text-white/30 text-[10px]">
+                          Include your wallet address in the memo field so we can identify your deposit.
+                        </p>
+                      </div>
+                      <p className="text-white/20 text-[10px] text-center">
+                        Bank transfers are processed manually. Contact support if your balance isn&apos;t credited within 3 business days.
                       </p>
                     </div>
-                    <div className="text-right">
-                      <p className="text-white/30 text-[10px]">≈ USD</p>
-                      <p className="text-white/50 text-sm">${((walletSolLamports / LAMPORTS_PER_SOL) * solPrice).toFixed(2)}</p>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <p className="text-white/60 text-xs font-orbitron tracking-wider">DEPOSIT AMOUNT</p>
-                    <PresetGrid
-                      presets={DEPOSIT_PRESETS_USD}
-                      selected={depositUsd}
-                      onSelect={setDepositUsd}
-                      custom={customDepositUsd}
-                      onCustom={setCustomDepositUsd}
-                    />
-                  </div>
-
-                  {effectiveDepositUsd > 0 && (
-                    <div className="rounded-xl bg-white/[0.02] border border-white/5 p-3 text-xs space-y-1 text-white/40">
-                      <div className="flex justify-between">
-                        <span>You send (SOL)</span>
-                        <span className="text-white/70">{(effectiveDepositUsd / solPrice).toFixed(4)} SOL</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Platform fee (0.3%)</span>
-                        <span className="text-red-400/70">−${(effectiveDepositUsd * 0.003).toFixed(3)}</span>
-                      </div>
-                      <div className="flex justify-between border-t border-white/5 pt-1 mt-1">
-                        <span className="text-white/60">You receive</span>
-                        <span className="text-green-400/80 font-bold">${(effectiveDepositUsd * 0.997).toFixed(2)} USDC</span>
-                      </div>
-                    </div>
                   )}
-
-                  {/* First-deposit bonus hint */}
-                  {entry && !entry.welcomeBonusClaimed && (
-                    <div className="flex items-center gap-2 rounded-xl bg-gold/5 border border-gold/20 p-3 text-xs text-gold/80">
-                      <Gift size={13} />
-                      <span>First deposit gets 100% bonus up to $200 (35× wagering)</span>
-                    </div>
-                  )}
-
-                  <SwipeToConfirm
-                    label="SWIPE TO DEPOSIT"
-                    variant="purple"
-                    onConfirm={handleDeposit}
-                    onError={(e) => setMsg({ text: e.message, ok: false })}
-                    disabled={!effectiveDepositUsd || effectiveDepositUsd <= 0}
-                  />
-
-                  <p className="text-white/15 text-[10px] text-center">
-                    SOL automatically converted to USDC. Rates update every 10 seconds.
-                  </p>
                 </div>
               )}
 
               {/* WITHDRAW tab */}
               {tab === "withdraw" && (
                 <div className="space-y-4">
+                  {/* Method selector */}
+                  <div className="grid grid-cols-2 gap-2">
+                    {([
+                      { id: "crypto" as WithdrawMethod, label: "Crypto (SOL)", icon: <Coins size={13} /> },
+                      { id: "bank"   as WithdrawMethod, label: "Bank",         icon: <Banknote size={13} /> },
+                    ] as { id: WithdrawMethod; label: string; icon: React.ReactNode }[]).map(({ id, label, icon }) => (
+                      <button
+                        key={id}
+                        onClick={() => { setWithdrawMethod(id); setMsg(null); }}
+                        className={cn(
+                          "flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-xs font-orbitron font-bold tracking-wider transition-all",
+                          withdrawMethod === id
+                            ? "bg-purple-600 text-white"
+                            : "bg-white/[0.04] text-white/40 hover:text-white hover:bg-white/[0.08] border border-white/5",
+                        )}
+                      >
+                        {icon} {label}
+                      </button>
+                    ))}
+                  </div>
+
                   <div className="rounded-xl bg-white/[0.02] border border-white/5 p-3 text-center">
                     <p className="text-white/40 text-xs">Available to withdraw</p>
                     <p className="font-orbitron text-xl font-bold text-white">
@@ -418,62 +551,88 @@ export function WalletModal({ open, onClose, walletAddress, onBalanceChange }: P
                     )}
                   </div>
 
-                  <div className="space-y-2">
-                    <p className="text-white/60 text-xs font-orbitron tracking-wider">WITHDRAW AMOUNT</p>
-                    <div className="grid grid-cols-4 gap-2">
-                      {WITHDRAW_PRESETS_USD.map((v) => (
-                        <button
-                          key={v}
-                          onClick={() => { setWithdrawUsd(v); setCustomWithdrawUsd(""); }}
-                          className={cn(
-                            "rounded-xl py-2.5 text-sm font-bold font-rajdhani transition-all",
-                            withdrawUsd === v && !customWithdrawUsd
-                              ? "bg-purple-600 text-white"
-                              : "bg-white/[0.04] text-white/50 hover:text-white hover:bg-white/[0.08] border border-white/5",
-                          )}
-                        >
-                          ${v}
-                        </button>
-                      ))}
+                  {/* CRYPTO withdraw */}
+                  {withdrawMethod === "crypto" && (
+                    <>
+                      <div className="space-y-2">
+                        <p className="text-white/60 text-xs font-orbitron tracking-wider">WITHDRAW AMOUNT</p>
+                        <div className="grid grid-cols-4 gap-2">
+                          {WITHDRAW_PRESETS_USD.map((v) => (
+                            <button
+                              key={v}
+                              onClick={() => { setWithdrawUsd(v); setCustomWithdrawUsd(""); }}
+                              className={cn(
+                                "rounded-xl py-2.5 text-sm font-bold font-rajdhani transition-all",
+                                withdrawUsd === v && !customWithdrawUsd
+                                  ? "bg-purple-600 text-white"
+                                  : "bg-white/[0.04] text-white/50 hover:text-white hover:bg-white/[0.08] border border-white/5",
+                              )}
+                            >
+                              ${v}
+                            </button>
+                          ))}
+                          <button
+                            onClick={() => { setWithdrawUsd(playableUsd); setCustomWithdrawUsd(""); }}
+                            className={cn(
+                              "rounded-xl py-2.5 text-sm font-bold font-rajdhani transition-all",
+                              withdrawUsd === playableUsd && !customWithdrawUsd
+                                ? "bg-purple-600 text-white"
+                                : "bg-white/[0.04] text-white/50 hover:text-white hover:bg-white/[0.08] border border-white/5",
+                            )}
+                          >
+                            ALL
+                          </button>
+                        </div>
+                        <input
+                          type="number"
+                          min="1"
+                          value={customWithdrawUsd}
+                          onChange={(e) => { setCustomWithdrawUsd(e.target.value); setWithdrawUsd(null); }}
+                          placeholder="Custom amount ($)"
+                          className="input-casino text-sm"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <p className="text-white/60 text-xs font-orbitron tracking-wider">DESTINATION (optional)</p>
+                        <input
+                          value={withdrawDest}
+                          onChange={(e) => setWithdrawDest(e.target.value)}
+                          placeholder={walletAddress.slice(0, 20) + "… (connected wallet)"}
+                          className="input-casino text-xs font-mono"
+                        />
+                      </div>
+
+                      <SwipeToConfirm
+                        label="SWIPE TO WITHDRAW"
+                        variant="gold"
+                        onConfirm={handleWithdraw}
+                        onError={(e) => setMsg({ text: e.message, ok: false })}
+                        disabled={!effectiveWithdrawUsd || effectiveWithdrawUsd <= 0}
+                      />
+                    </>
+                  )}
+
+                  {/* BANK withdraw */}
+                  {withdrawMethod === "bank" && (
+                    <div className="space-y-3">
+                      <div className="rounded-xl bg-white/[0.03] border border-white/5 p-4 space-y-3">
+                        <p className="text-white/60 text-xs font-orbitron tracking-wider">BANK WITHDRAWAL</p>
+                        <p className="text-white/50 text-xs leading-relaxed">
+                          Bank withdrawals (ACH / wire) are being set up. Crypto (SOL) withdrawals are available now and process instantly.
+                        </p>
+                        <div className="rounded-lg bg-purple-500/10 border border-purple-500/20 p-3 text-xs text-purple-300/80">
+                          Bank withdrawals will be available once Stripe Connect onboarding is complete. You&apos;ll receive an email when this goes live.
+                        </div>
+                      </div>
                       <button
-                        onClick={() => { setWithdrawUsd(playableUsd); setCustomWithdrawUsd(""); }}
-                        className={cn(
-                          "rounded-xl py-2.5 text-sm font-bold font-rajdhani transition-all",
-                          withdrawUsd === playableUsd && !customWithdrawUsd
-                            ? "bg-purple-600 text-white"
-                            : "bg-white/[0.04] text-white/50 hover:text-white hover:bg-white/[0.08] border border-white/5",
-                        )}
+                        onClick={() => setWithdrawMethod("crypto")}
+                        className="btn-launch w-full py-3 text-xs"
                       >
-                        ALL
+                        Switch to Crypto Withdrawal
                       </button>
                     </div>
-                    <input
-                      type="number"
-                      min="1"
-                      value={customWithdrawUsd}
-                      onChange={(e) => { setCustomWithdrawUsd(e.target.value); setWithdrawUsd(null); }}
-                      placeholder="Custom amount ($)"
-                      className="input-casino text-sm"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <p className="text-white/60 text-xs font-orbitron tracking-wider">DESTINATION (optional)</p>
-                    <input
-                      value={withdrawDest}
-                      onChange={(e) => setWithdrawDest(e.target.value)}
-                      placeholder={walletAddress.slice(0, 20) + "… (connected wallet)"}
-                      className="input-casino text-xs font-mono"
-                    />
-                  </div>
-
-                  <SwipeToConfirm
-                    label="SWIPE TO WITHDRAW"
-                    variant="gold"
-                    onConfirm={handleWithdraw}
-                    onError={(e) => setMsg({ text: e.message, ok: false })}
-                    disabled={!effectiveWithdrawUsd || effectiveWithdrawUsd <= 0}
-                  />
+                  )}
                 </div>
               )}
 

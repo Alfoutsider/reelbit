@@ -43,6 +43,8 @@ import { addSSEClient, broadcast } from "./sseEmitter";
 import { isProcessed, markProcessed, requireHeliusSignature, validateWallet, validateMint } from "./webhookSecurity";
 import { loggedFnf } from "./loggedFireAndForget";
 import { getCreatorRevTier, computeRevTier } from "./creatorHoldingTracker";
+import { stripe } from "./stripeClient";
+import type Stripe from "stripe";
 import {
   getOrCreateCode, registerReferral, getReferrerStats, getLeaderboard,
   onTrade as referralOnTrade, onTokenLaunch as referralOnLaunch, onGraduation as referralOnGraduation,
@@ -594,6 +596,101 @@ app.post("/deposit/confirm", async (req: Request, res: Response) => {
   } catch (err) {
     res.status(400).json({ error: (err as Error).message });
   }
+});
+
+/**
+ * POST /deposit/stripe/intent
+ * Creates a Stripe PaymentIntent for a card deposit.
+ * Returns { clientSecret } — used by the frontend to render Stripe Elements.
+ */
+app.post("/deposit/stripe/intent", async (req: Request, res: Response) => {
+  const { wallet, amountUsd } = req.body as { wallet: string; amountUsd: number };
+  if (!wallet || !amountUsd) {
+    return res.status(400).json({ error: "wallet and amountUsd required" });
+  }
+  if (amountUsd < 10 || amountUsd > 10_000) {
+    return res.status(400).json({ error: "Deposit amount must be between $10 and $10,000" });
+  }
+  if (!config.stripeSecretKey) {
+    return res.status(503).json({ error: "Card payments not configured" });
+  }
+  try {
+    const pi = await stripe.paymentIntents.create({
+      amount: Math.round(amountUsd * 100),
+      currency: "usd",
+      metadata: { wallet, amountUsd: amountUsd.toString() },
+      automatic_payment_methods: { enabled: true },
+    });
+    res.json({ clientSecret: pi.client_secret });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+/**
+ * POST /deposit/stripe/webhook
+ * Stripe sends this when a payment succeeds — we credit the user's USDC balance.
+ * Uses rawBody (captured by the express.json verify callback) for signature verification.
+ */
+app.post("/deposit/stripe/webhook", async (req: Request, res: Response) => {
+  const sig     = req.headers["stripe-signature"] as string;
+  const rawBody = (req as Request & { rawBody?: Buffer }).rawBody;
+  if (!rawBody || !sig) {
+    return res.status(400).json({ error: "Missing body or signature" });
+  }
+  if (!config.stripeWebhookSecret) {
+    console.warn("[stripe] STRIPE_WEBHOOK_SECRET not set — rejecting webhook");
+    return res.status(503).json({ error: "Webhook not configured" });
+  }
+  let event: Stripe.Event;
+  try {
+    event = stripe.webhooks.constructEvent(rawBody, sig, config.stripeWebhookSecret);
+  } catch (err) {
+    return res.status(400).json({ error: `Webhook verification failed: ${(err as Error).message}` });
+  }
+
+  if (event.type === "payment_intent.succeeded") {
+    const pi     = event.data.object as Stripe.PaymentIntent;
+    const wallet = pi.metadata?.wallet;
+    if (!wallet) {
+      console.error("[stripe] PaymentIntent succeeded but no wallet in metadata", pi.id);
+      return res.status(400).json({ error: "No wallet in metadata" });
+    }
+    // Idempotency — ignore if we've already processed this PaymentIntent
+    if (await isSeenDeposit(`stripe:${pi.id}`)) {
+      return res.json({ received: true, skipped: true });
+    }
+    await markDepositSeen(`stripe:${pi.id}`);
+
+    // amount_received is in cents; 1 cent = 10,000 USDC micro-units
+    const usdcCredited = pi.amount_received * 10_000;
+    await credit(wallet, usdcCredited);
+    await credit(PLATFORM_REVENUE_KEY, 0); // fee absorbed by house (Stripe fee comes out of payout)
+
+    const bonusEntry = await applyWelcomeBonus(wallet, usdcCredited);
+    console.log(`[stripe] Credited $${(usdcCredited / USDC_UNIT).toFixed(2)} USDC to ${wallet} (${pi.id})`);
+
+    broadcast("balance", { wallet, playable: bonusEntry.playable }, wallet);
+  }
+
+  res.json({ received: true });
+});
+
+/**
+ * POST /withdraw/stripe
+ * Bank/card withdrawal. Requires Stripe Connect (payouts to external accounts).
+ * Currently scaffolded — returns 503 until Stripe Connect is configured.
+ */
+app.post("/withdraw/stripe", async (req: Request, res: Response) => {
+  const { wallet } = req.body as { wallet: string };
+  if (!wallet) return res.status(400).json({ error: "wallet required" });
+  // Stripe Connect payouts require additional KYC and account setup.
+  // This endpoint will be wired once Stripe Connect is live.
+  return res.status(503).json({
+    error: "Bank withdrawals are being set up",
+    detail: "Crypto (SOL) withdrawals are available now. Bank withdrawals will be enabled once Stripe Connect onboarding is complete.",
+    eta: "coming soon",
+  });
 });
 
 /**

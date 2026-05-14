@@ -46,4 +46,6 @@ export const config = {
   supabaseUrl:         process.env.SUPABASE_URL ?? "",
   supabaseKey:         process.env.SUPABASE_KEY ?? "",
   anthropicApiKey:     process.env.ANTHROPIC_API_KEY ?? "",
+  stripeSecretKey:     process.env.STRIPE_SECRET_KEY ?? "",
+  stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET ?? "",
 };

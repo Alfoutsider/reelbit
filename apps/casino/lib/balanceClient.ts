@@ -93,3 +93,17 @@ export async function fetchHouseWallet(): Promise<string> {
   const data = await res.json();
   return data.address ?? "";
 }
+
+export async function createStripeIntent(
+  wallet: string,
+  amountUsd: number,
+): Promise<{ clientSecret: string }> {
+  const res = await fetch(`${API}/deposit/stripe/intent`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ wallet, amountUsd }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error ?? "Failed to create payment");
+  return data;
+}

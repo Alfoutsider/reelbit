@@ -52,10 +52,31 @@ export async function getSolUsdPrice(connection: Connection): Promise<number> {
     _cacheTs     = Date.now();
     return price;
   } catch (err) {
-    console.warn("[pyth] Price read failed, using fallback:", (err as Error).message);
-    // Fallback to a conservative price if Pyth unavailable (devnet mostly)
-    return _cachedPrice ?? 150;
+    console.warn("[pyth] Price read failed, trying CoinGecko:", (err as Error).message);
+    return _cachedPrice ?? fetchCoinGeckoPrice();
   }
+}
+
+async function fetchCoinGeckoPrice(): Promise<number> {
+  try {
+    const res = await fetch(
+      "https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd",
+      { signal: AbortSignal.timeout(5_000) },
+    );
+    const data = await res.json() as { solana?: { usd?: number } };
+    const price = data?.solana?.usd;
+    if (price && price > 0 && price < 100_000) {
+      console.log(`[coingecko] SOL/USD fallback: $${price}`);
+      _cachedPrice = price;
+      _cacheTs     = Date.now();
+      return price;
+    }
+  } catch (err) {
+    console.warn("[coingecko] Fallback also failed:", (err as Error).message);
+  }
+  // Last resort: use last cached value or refuse to proceed
+  if (_cachedPrice) return _cachedPrice;
+  throw new Error("SOL price unavailable from all sources — cannot process swap");
 }
 
 /** Convert lamports to USDC micro-units using live SOL price. */
