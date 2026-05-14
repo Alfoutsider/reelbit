@@ -223,7 +223,7 @@ export function WalletModal({ open, onClose, walletAddress, onBalanceChange }: P
               className={cn(
                 "rounded-xl py-2.5 text-sm font-bold font-rajdhani transition-all",
                 selected === v && !custom
-                  ? "bg-purple-600 text-white"
+                  ? "text-[#0a0a18]"
                   : "bg-white/[0.04] text-white/50 hover:text-white hover:bg-white/[0.08] border border-white/5",
               )}
             >
@@ -274,7 +274,7 @@ export function WalletModal({ open, onClose, walletAddress, onBalanceChange }: P
                   onClick={() => { setTab(id); setMsg(null); }}
                   className={cn(
                     "flex-1 flex flex-col items-center gap-1 py-3 text-[10px] font-orbitron font-bold tracking-wider transition-all",
-                    tab === id ? "text-purple-400 border-b-2 border-purple-400" : "text-white/30 hover:text-white/60",
+                    tab === id ? "text-[#f5c842] border-b-2 border-[#d4a017]" : "text-white/30 hover:text-white/60",
                   )}
                 >
                   {icon} {label}
@@ -300,7 +300,7 @@ export function WalletModal({ open, onClose, walletAddress, onBalanceChange }: P
               {tab === "balance" && (
                 <div className="space-y-4">
                   {/* Casino balance */}
-                  <div className="rounded-2xl bg-gradient-to-br from-purple-900/20 to-purple-800/10 border border-purple-500/20 p-6 text-center space-y-1">
+                  <div className="rounded-2xl p-6 text-center space-y-1" style={{ background: "linear-gradient(135deg, rgba(160,120,16,0.25) 0%, rgba(212,160,23,0.08) 100%)", border: "1px solid rgba(212,160,23,0.3)" }}>
                     <p className="text-white/40 text-xs font-orbitron tracking-widest">CASINO BALANCE</p>
                     <p className="font-orbitron text-4xl font-black text-white">
                       {entry ? formatUsdc(entry.playable) : "—"}
@@ -372,7 +372,7 @@ export function WalletModal({ open, onClose, walletAddress, onBalanceChange }: P
                         className={cn(
                           "flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-xs font-orbitron font-bold tracking-wider transition-all",
                           depositMethod === id
-                            ? "bg-purple-600 text-white"
+                            ? "text-[#0a0a18]"
                             : "bg-white/[0.04] text-white/40 hover:text-white hover:bg-white/[0.08] border border-white/5",
                         )}
                       >
@@ -436,7 +436,7 @@ export function WalletModal({ open, onClose, walletAddress, onBalanceChange }: P
 
                       <SwipeToConfirm
                         label="SWIPE TO DEPOSIT"
-                        variant="purple"
+                        variant="gold"
                         onConfirm={handleDeposit}
                         onError={(e) => setMsg({ text: e.message, ok: false })}
                         disabled={!effectiveDepositUsd || effectiveDepositUsd <= 0}
@@ -542,7 +542,7 @@ export function WalletModal({ open, onClose, walletAddress, onBalanceChange }: P
                         className={cn(
                           "flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-xs font-orbitron font-bold tracking-wider transition-all",
                           withdrawMethod === id
-                            ? "bg-purple-600 text-white"
+                            ? "text-[#0a0a18]"
                             : "bg-white/[0.04] text-white/40 hover:text-white hover:bg-white/[0.08] border border-white/5",
                         )}
                       >
@@ -576,7 +576,7 @@ export function WalletModal({ open, onClose, walletAddress, onBalanceChange }: P
                               className={cn(
                                 "rounded-xl py-2.5 text-sm font-bold font-rajdhani transition-all",
                                 withdrawUsd === v && !customWithdrawUsd
-                                  ? "bg-purple-600 text-white"
+                                  ? "text-[#0a0a18]"
                                   : "bg-white/[0.04] text-white/50 hover:text-white hover:bg-white/[0.08] border border-white/5",
                               )}
                             >
@@ -588,7 +588,7 @@ export function WalletModal({ open, onClose, walletAddress, onBalanceChange }: P
                             className={cn(
                               "rounded-xl py-2.5 text-sm font-bold font-rajdhani transition-all",
                               withdrawUsd === playableUsd && !customWithdrawUsd
-                                ? "bg-purple-600 text-white"
+                                ? "text-[#0a0a18]"
                                 : "bg-white/[0.04] text-white/50 hover:text-white hover:bg-white/[0.08] border border-white/5",
                             )}
                           >
@@ -633,7 +633,7 @@ export function WalletModal({ open, onClose, walletAddress, onBalanceChange }: P
                         <p className="text-white/50 text-xs leading-relaxed">
                           Bank withdrawals (ACH / wire) are being set up. Crypto (SOL) withdrawals are available now and process instantly.
                         </p>
-                        <div className="rounded-lg bg-purple-500/10 border border-purple-500/20 p-3 text-xs text-purple-300/80">
+                        <div className="rounded-lg p-3 text-xs" style={{ background: "rgba(212,160,23,0.06)", border: "1px solid rgba(212,160,23,0.2)", color: "rgba(245,200,66,0.7)" }}>
                           Bank withdrawals will be available once Stripe Connect onboarding is complete. You&apos;ll receive an email when this goes live.
                         </div>
                       </div>

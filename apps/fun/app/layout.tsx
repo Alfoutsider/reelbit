@@ -7,6 +7,7 @@ import { Footer } from "@/components/layout/Footer";
 import { ThemeProvider } from "@/components/layout/ThemeProvider";
 import { LanguagePrompt } from "@/components/layout/LanguagePrompt";
 import { SupportChat } from "@/components/layout/SupportChat";
+import { IntroAnimation } from "@/components/layout/IntroAnimation";
 import { Toaster } from "sonner";
 
 export const metadata: Metadata = {
@@ -53,6 +54,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <Footer />
             <LanguagePrompt />
             <SupportChat />
+            <IntroAnimation />
             <Toaster
               position="bottom-right"
               theme="dark"

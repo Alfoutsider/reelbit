@@ -578,7 +578,7 @@ function SlotCard({ slot, index }: { slot: SlotEntry; index: number }) {
     <motion.div
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.04, ease: "easeOut" }}
+      transition={{ delay: Math.min(index * 0.04, 0.18), ease: "easeOut" }}
     >
       <Link href={`/slot/${slot.mint}`} className="block h-full group">
         <div
@@ -742,7 +742,7 @@ function DemoSlotCard({ slot, index }: { slot: DemoSlot; index: number }) {
     <motion.div
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.04, ease: "easeOut" }}
+      transition={{ delay: Math.min(index * 0.04, 0.18), ease: "easeOut" }}
     >
       <Link href={`/demo/slot/${slot.id}`} className="block h-full group">
         <div

@@ -10,6 +10,7 @@ import { useRouter } from "next/navigation";
 import { WalletModal } from "@/components/wallet/WalletModal";
 import { ProfileModal } from "@/components/profile/ProfileModal";
 import { RegisterModal } from "@/components/auth/RegisterModal";
+import { MobileBottomNav } from "@/components/layout/MobileBottomNav";
 import { fetchBalance, formatUsdc } from "@/lib/balanceClient";
 import { fetchProfile, type UserProfile } from "@/lib/profileClient";
 import { shortenAddress } from "@/lib/utils";
@@ -277,12 +278,16 @@ export function Navbar() {
             onClose={() => setRegisterOpen(false)}
             onDone={() => {
               setRegisterOpen(false);
-              // Re-fetch full profile after registration
               fetchProfile(walletAddress).then(setProfile).catch(() => {});
             }}
           />
         )}
       </AnimatePresence>
+
+      <MobileBottomNav
+        onWalletClick={() => { if (authenticated && walletAddress) setWalletOpen(true); else login(); }}
+        onProfileClick={() => { if (authenticated && walletAddress) setProfileOpen(true); else login(); }}
+      />
     </>
   );
 }

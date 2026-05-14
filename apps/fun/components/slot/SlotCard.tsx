@@ -49,7 +49,7 @@ export function SlotCard({ slot, solPrice = 150, index = 0 }: Props) {
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.05, duration: 0.35 }}
+      transition={{ delay: Math.min(index * 0.05, 0.2), duration: 0.35 }}
     >
       <Link href={`/slot/${slot.mint}`} className="block card-slot group">
         <div className="relative h-40 w-full overflow-hidden rounded-t-2xl">

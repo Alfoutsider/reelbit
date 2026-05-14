@@ -144,15 +144,15 @@ export default function PortfolioPage() {
         {loading && (
           <div className="space-y-3">
             {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="card-panel p-4 flex items-center gap-4 animate-pulse">
-                <div className="w-12 h-12 rounded-lg bg-white/[0.05]" />
+              <div key={i} className="card-panel p-4 flex items-center gap-4">
+                <div className="w-12 h-12 rounded-lg skeleton" />
                 <div className="flex-1 space-y-2">
-                  <div className="h-3 w-32 rounded bg-white/[0.06]" />
-                  <div className="h-2.5 w-20 rounded bg-white/[0.04]" />
+                  <div className="h-3 w-32 skeleton" />
+                  <div className="h-2.5 w-20 skeleton" />
                 </div>
                 <div className="space-y-2 text-right">
-                  <div className="h-3 w-20 rounded bg-white/[0.06] ml-auto" />
-                  <div className="h-2.5 w-16 rounded bg-white/[0.04] ml-auto" />
+                  <div className="h-3 w-20 skeleton ml-auto" />
+                  <div className="h-2.5 w-16 skeleton ml-auto" />
                 </div>
               </div>
             ))}

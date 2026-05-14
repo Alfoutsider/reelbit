@@ -95,9 +95,7 @@ function TopBitCard({ token }: { token: TokenListItem }) {
       style={{ borderColor: "rgba(212,175,55,0.35)", background: "rgba(212,175,55,0.04)" }}
     >
       {/* Animated shimmer */}
-      <div className="absolute inset-0 pointer-events-none"
-        style={{ background: "linear-gradient(105deg, transparent 30%, rgba(212,175,55,0.06) 50%, transparent 70%)",
-          animation: "shimmer 3s infinite" }} />
+      <div className="card-sheen" style={{ background: "linear-gradient(90deg, transparent, rgba(212,175,55,0.08), transparent)" }} />
 
       <div className="relative flex flex-col sm:flex-row items-start sm:items-center gap-5 px-5 py-4">
 
