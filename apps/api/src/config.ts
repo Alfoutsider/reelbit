@@ -48,4 +48,5 @@ export const config = {
   anthropicApiKey:     process.env.ANTHROPIC_API_KEY ?? "",
   stripeSecretKey:     process.env.STRIPE_SECRET_KEY ?? "",
   stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET ?? "",
+  openRouterApiKey:    process.env.OPENROUTER_API_KEY ?? "",
 };

@@ -1747,7 +1747,7 @@ If asked about specific account balances, transaction status, or bugs, tell the 
 const _supportRateMap = new Map<string, { count: number; resetAt: number }>();
 
 app.post("/support/chat", async (req: Request, res: Response) => {
-  if (!config.anthropicApiKey) {
+  if (!config.openRouterApiKey) {
     return res.status(503).json({ error: "Support chat not available" });
   }
 
@@ -1771,18 +1771,35 @@ app.post("/support/chat", async (req: Request, res: Response) => {
     .map(m => ({ role: m.role as "user" | "assistant", content: String(m.content).slice(0, 2000) }));
 
   try {
-    const { default: Anthropic } = await import("@anthropic-ai/sdk");
-    const client = new Anthropic({ apiKey: config.anthropicApiKey });
-    const response = await client.messages.create({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 512,
-      system: SUPPORT_SYSTEM_PROMPT,
-      messages: trimmed,
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${config.openRouterApiKey}`,
+        "Content-Type": "application/json",
+        "HTTP-Referer": config.frontendUrl,
+        "X-Title": "ReelBit Support",
+      },
+      body: JSON.stringify({
+        model: "meta-llama/llama-3.1-8b-instruct:free",
+        max_tokens: 512,
+        messages: [
+          { role: "system", content: SUPPORT_SYSTEM_PROMPT },
+          ...trimmed,
+        ],
+      }),
+      signal: AbortSignal.timeout(15_000),
     });
-    const text = response.content[0].type === "text" ? response.content[0].text : "";
+
+    if (!response.ok) {
+      const body = await response.text();
+      throw new Error(`OpenRouter error ${response.status}: ${body.slice(0, 200)}`);
+    }
+
+    const data = await response.json() as { choices: Array<{ message: { content: string } }> };
+    const text = data.choices?.[0]?.message?.content ?? "";
     res.json({ message: text });
   } catch (err) {
-    console.error("[support] Anthropic error:", err);
+    console.error("[support] OpenRouter error:", err);
     res.status(500).json({ error: "Support chat is temporarily unavailable." });
   }
 });
