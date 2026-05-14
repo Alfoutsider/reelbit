@@ -43,7 +43,7 @@ import { addSSEClient, broadcast } from "./sseEmitter";
 import { isProcessed, markProcessed, requireHeliusSignature, validateWallet, validateMint } from "./webhookSecurity";
 import { loggedFnf } from "./loggedFireAndForget";
 import { getCreatorRevTier, computeRevTier } from "./creatorHoldingTracker";
-import { stripe } from "./stripeClient";
+import { getStripe } from "./stripeClient";
 import {
   getOrCreateCode, registerReferral, getReferrerStats, getLeaderboard,
   onTrade as referralOnTrade, onTokenLaunch as referralOnLaunch, onGraduation as referralOnGraduation,
@@ -614,7 +614,7 @@ app.post("/deposit/stripe/intent", async (req: Request, res: Response) => {
     return res.status(503).json({ error: "Card payments not configured" });
   }
   try {
-    const pi = await stripe.paymentIntents.create({
+    const pi = await getStripe().paymentIntents.create({
       amount: Math.round(amountUsd * 100),
       currency: "usd",
       metadata: { wallet, amountUsd: amountUsd.toString() },
@@ -641,9 +641,9 @@ app.post("/deposit/stripe/webhook", async (req: Request, res: Response) => {
     console.warn("[stripe] STRIPE_WEBHOOK_SECRET not set — rejecting webhook");
     return res.status(503).json({ error: "Webhook not configured" });
   }
-  let event: ReturnType<typeof stripe.webhooks.constructEvent>;
+  let event: { type: string; data: { object: Record<string, unknown> } };
   try {
-    event = stripe.webhooks.constructEvent(rawBody, sig, config.stripeWebhookSecret);
+    event = getStripe().webhooks.constructEvent(rawBody, sig, config.stripeWebhookSecret);
   } catch (err) {
     return res.status(400).json({ error: `Webhook verification failed: ${(err as Error).message}` });
   }
