@@ -6,7 +6,7 @@ import { usePrivy, useWallets } from "@/lib/privy";
 import type { AnchorWallet } from "@solana/wallet-adapter-react";
 import { launchSlot, buyTokens, VIRTUAL_SOL, VIRTUAL_TOKENS, LAMPORTS_PER_SOL_BIGINT } from "@/lib/tokenLaunch";
 import { PublicKey } from "@solana/web3.js";
-import { Rocket, CheckCircle, ChevronRight, Sparkles, TrendingUp, Share2 } from "lucide-react";
+import { Rocket, CheckCircle, ChevronRight, Sparkles, TrendingUp, Share2, Check } from "lucide-react";
 import { ImageUploader } from "@/components/slot/ImageUploader";
 import { BondingCurveChart } from "@/components/chart/BondingCurveChart";
 import { cn } from "@/lib/utils";
@@ -53,10 +53,17 @@ const HOW_IT_WORKS = [
   { step: "04", title: "Earn Forever",     desc: "25% of all casino GGR + trading fees sent to your wallet." },
 ];
 
+const WIZARD_STEPS = [
+  { label: "Identity" },
+  { label: "Slot Design" },
+  { label: "Launch Settings" },
+];
+
 export default function LaunchPage() {
   const { authenticated, login } = usePrivy();
   const { wallets } = useWallets();
   const [step, setStep] = useState<Step>("form");
+  const [wizardStep, setWizardStep] = useState<1 | 2 | 3>(1);
   const [form, setForm] = useState<FormData>(EMPTY);
   const [errors, setErrors] = useState<Partial<FormData>>({});
   const [mintAddress, setMintAddress] = useState("");
@@ -73,6 +80,17 @@ export default function LaunchPage() {
     if (!form.ticker.trim())   e.ticker = "Required";
     if (form.ticker.length > 10) e.ticker = "Max 10 chars";
     if (!/^[A-Z0-9]+$/.test(form.ticker.toUpperCase())) e.ticker = "Letters and numbers only";
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  }
+
+  function validateStep1(): boolean {
+    const e: Partial<FormData> = {};
+    if (!form.name.trim())     e.name = "Required";
+    if (form.name.length > 32) e.name = "Max 32 chars";
+    if (!form.ticker.trim())   e.ticker = "Required";
+    if (form.ticker.length > 10) e.ticker = "Max 10 chars";
+    if (form.ticker.trim() && !/^[A-Z0-9]+$/.test(form.ticker.toUpperCase())) e.ticker = "Letters and numbers only";
     setErrors(e);
     return Object.keys(e).length === 0;
   }
@@ -136,119 +154,213 @@ export default function LaunchPage() {
         <AnimatePresence mode="wait">
           {step === "form" && (
             <motion.div key="form" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+              {/* Wizard progress indicator */}
+              <div className="flex items-center justify-center gap-0 mb-8">
+                {WIZARD_STEPS.map((ws, i) => {
+                  const n = (i + 1) as 1 | 2 | 3;
+                  const isCompleted = wizardStep > n;
+                  const isActive = wizardStep === n;
+                  return (
+                    <div key={n} className="flex items-center">
+                      <div className="flex flex-col items-center gap-1.5">
+                        <div
+                          className={cn(
+                            "w-8 h-8 rounded-full flex items-center justify-center border-2 transition-all duration-300",
+                            isActive && "bg-gold border-gold",
+                            isCompleted && "bg-gold/20 border-gold/40",
+                            !isActive && !isCompleted && "bg-transparent border-white/20",
+                          )}
+                        >
+                          {isCompleted
+                            ? <Check size={14} className="text-gold/70" />
+                            : <span className={cn("font-orbitron text-[11px] font-black", isActive ? "text-white" : "text-white/25")}>{n}</span>
+                          }
+                        </div>
+                        <span className={cn("font-orbitron text-[9px] font-bold tracking-wide", isActive ? "text-gold" : isCompleted ? "text-gold/40" : "text-white/20")}>
+                          {ws.label.toUpperCase()}
+                        </span>
+                      </div>
+                      {i < WIZARD_STEPS.length - 1 && (
+                        <div className={cn("w-16 h-px mx-2 mb-5 transition-all duration-300", wizardStep > n ? "bg-gold/40" : "bg-white/10")} />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
               <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
                 <div className="lg:col-span-3 card-panel p-6 space-y-5">
-                  <h2 className="font-orbitron text-sm font-bold text-white/70 tracking-widest">TOKEN DETAILS</h2>
+                  <AnimatePresence mode="wait">
+                    {/* Step 1 — Identity */}
+                    {wizardStep === 1 && (
+                      <motion.div key="ws1" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-5">
+                        <h2 className="font-orbitron text-sm font-bold text-white/70 tracking-widest">IDENTITY</h2>
 
-                  <div className="space-y-1.5">
-                    <label className="section-label">Slot Name <span className="text-red-400 ml-0.5">*</span></label>
-                    <input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                      placeholder="Dragon Hoard" maxLength={32} className={cn("input-casino", errors.name && "error")} />
-                    {errors.name && <p className="text-xs text-red-400 font-rajdhani">{errors.name}</p>}
-                  </div>
+                        <div className="space-y-1.5">
+                          <label className="section-label">Slot Name <span className="text-red-400 ml-0.5">*</span></label>
+                          <input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                            placeholder="Dragon Hoard" maxLength={32} className={cn("input-casino", errors.name && "error")} />
+                          {errors.name && <p className="text-xs text-red-400 font-rajdhani">{errors.name}</p>}
+                        </div>
 
-                  <div className="space-y-1.5">
-                    <label className="section-label">Ticker Symbol <span className="text-red-400 ml-0.5">*</span></label>
-                    <input value={form.ticker} onChange={(e) => setForm((f) => ({ ...f, ticker: e.target.value.toUpperCase() }))}
-                      placeholder="DHOARD" maxLength={10} className={cn("input-casino font-orbitron tracking-widest", errors.ticker && "error")} />
-                    {errors.ticker && <p className="text-xs text-red-400 font-rajdhani">{errors.ticker}</p>}
-                  </div>
+                        <div className="space-y-1.5">
+                          <label className="section-label">Ticker Symbol <span className="text-red-400 ml-0.5">*</span></label>
+                          <input value={form.ticker} onChange={(e) => setForm((f) => ({ ...f, ticker: e.target.value.toUpperCase() }))}
+                            placeholder="DHOARD" maxLength={10} className={cn("input-casino font-orbitron tracking-widest", errors.ticker && "error")} />
+                          {errors.ticker && <p className="text-xs text-red-400 font-rajdhani">{errors.ticker}</p>}
+                        </div>
 
-                  <div className="space-y-2">
-                    <label className="section-label">Slot Model</label>
-                    <div className="grid grid-cols-3 gap-2">
-                      {SLOT_MODELS.map((m) => (
-                        <motion.button
-                          key={m.id}
-                          type="button"
-                          whileHover={{ scale: 1.03 }}
-                          whileTap={{ scale: 0.95 }}
-                          onClick={() => setForm((f) => ({ ...f, model: m.id as SlotModel }))}
-                          className={cn("model-card", form.model === m.id && "selected")}>
-                          <motion.div
-                            animate={{ scale: form.model === m.id ? 1.15 : 1 }}
-                            transition={{ type: "spring", stiffness: 400, damping: 20 }}
-                            className="text-2xl mb-2"
-                          >{m.emoji}</motion.div>
-                          <p className="font-orbitron text-[10px] font-bold tracking-wide text-white/60">{m.label}</p>
-                          <p className="text-[9px] text-white/25 font-rajdhani mt-0.5">{m.reels} reels</p>
-                        </motion.button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="section-label">Slot Image <span className="text-white/20 ml-1">(optional)</span></label>
-                    <ImageUploader
-                      value={form.imageUri}
-                      onChange={(url) => setForm((f) => ({ ...f, imageUri: url }))}
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="section-label">Description</label>
-                    <textarea value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-                      placeholder="Tell players about your slot theme…" rows={3} className="input-casino resize-none" />
-                  </div>
-
-                  <div className="space-y-2">
-                    <label className="section-label flex items-center gap-1.5">
-                      <TrendingUp size={10} className="text-gold" />
-                      Dev Buy <span className="text-white/20 ml-1">(optional)</span>
-                    </label>
-                    <p className="text-[11px] text-white/30 font-rajdhani">Buy SOL worth of your token at launch. Max 5% of supply. Visible to traders.</p>
-                    <div className="flex gap-2">
-                      <motion.button type="button" whileTap={{ scale: 0.93 }}
-                        onClick={() => setForm((f) => ({ ...f, devBuySol: "" }))}
-                        className={cn("flex-1 rounded-xl py-2 border text-center transition-all text-[11px] font-orbitron font-bold",
-                          !form.devBuySol ? "border-gold/60 bg-gold/10 gold-text" : "border-white/8 bg-white/[0.02] text-white/40 hover:border-gold/30")}>
-                        None
-                      </motion.button>
-                      {DEV_BUY_PRESETS.map((sol) => (
-                        <motion.button key={sol} type="button" whileTap={{ scale: 0.93 }}
-                          onClick={() => setForm((f) => ({ ...f, devBuySol: String(sol) }))}
-                          className={cn("flex-1 rounded-xl py-2 border text-center transition-all",
-                            form.devBuySol === String(sol)
-                              ? "border-gold/60 bg-gold/10"
-                              : "border-white/8 bg-white/[0.02] hover:border-gold/30")}>
-                          <p className={cn("font-orbitron text-[11px] font-bold", form.devBuySol === String(sol) ? "gold-text" : "text-white/50")}>
-                            {sol} SOL
-                          </p>
-                          <p className="text-[9px] text-white/25 font-rajdhani mt-0.5">~{solToPct(sol).toFixed(1)}%</p>
-                        </motion.button>
-                      ))}
-                    </div>
-                    <div className="relative">
-                      <input
-                        type="number"
-                        min="0"
-                        max={MAX_DEV_SOL.toFixed(3)}
-                        step="0.01"
-                        value={form.devBuySol}
-                        onChange={(e) => {
-                          const v = e.target.value;
-                          if (v === "" || parseFloat(v) <= MAX_DEV_SOL + 0.001) {
-                            setForm((f) => ({ ...f, devBuySol: v }));
-                          }
-                        }}
-                        placeholder={`Custom amount (max ${MAX_DEV_SOL.toFixed(2)} SOL)`}
-                        className="input-casino pr-16"
-                      />
-                      <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[11px] font-orbitron text-white/30">SOL</span>
-                    </div>
-                    {form.devBuySol && parseFloat(form.devBuySol) > 0 && (
-                      <p className="text-[11px] font-rajdhani text-gold/60">
-                        {solToPct(Math.min(parseFloat(form.devBuySol), MAX_DEV_SOL)).toFixed(2)}% of supply · ≈${(Math.min(parseFloat(form.devBuySol), MAX_DEV_SOL) * SOL_PRICE_USD).toFixed(0)} sent on-chain after launch
-                      </p>
+                        <div className="flex gap-3 pt-2">
+                          <motion.button
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.97 }}
+                            onClick={() => { if (validateStep1()) setWizardStep(2); }}
+                            className="ml-auto btn-launch flex items-center justify-center gap-2 px-8 py-3 text-[13px]"
+                          >
+                            NEXT <ChevronRight size={14} />
+                          </motion.button>
+                        </div>
+                      </motion.div>
                     )}
-                  </div>
 
-                  <motion.button whileHover={{ scale: 1.02, boxShadow: "0 0 32px rgba(139,92,246,0.6)" }} whileTap={{ scale: 0.97 }}
-                    onClick={handleLaunch} className="w-full btn-launch flex items-center justify-center gap-2.5 py-4 text-[13px]">
-                    <Rocket size={16} />
-                    {authenticated ? "PREVIEW LAUNCH" : "CONNECT WALLET TO LAUNCH"}
-                    <ChevronRight size={14} />
-                  </motion.button>
+                    {/* Step 2 — Slot Design */}
+                    {wizardStep === 2 && (
+                      <motion.div key="ws2" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-5">
+                        <h2 className="font-orbitron text-sm font-bold text-white/70 tracking-widest">SLOT DESIGN</h2>
+
+                        <div className="space-y-2">
+                          <label className="section-label">Slot Model</label>
+                          <div className="grid grid-cols-3 gap-2">
+                            {SLOT_MODELS.map((m) => (
+                              <motion.button
+                                key={m.id}
+                                type="button"
+                                whileHover={{ scale: 1.03 }}
+                                whileTap={{ scale: 0.95 }}
+                                onClick={() => setForm((f) => ({ ...f, model: m.id as SlotModel }))}
+                                className={cn("model-card", form.model === m.id && "selected")}>
+                                <motion.div
+                                  animate={{ scale: form.model === m.id ? 1.15 : 1 }}
+                                  transition={{ type: "spring", stiffness: 400, damping: 20 }}
+                                  className="text-2xl mb-2"
+                                >{m.emoji}</motion.div>
+                                <p className="font-orbitron text-[10px] font-bold tracking-wide text-white/60">{m.label}</p>
+                                <p className="text-[9px] text-white/25 font-rajdhani mt-0.5">{m.reels} reels</p>
+                              </motion.button>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <label className="section-label">Slot Image <span className="text-white/20 ml-1">(optional)</span></label>
+                          <ImageUploader
+                            value={form.imageUri}
+                            onChange={(url) => setForm((f) => ({ ...f, imageUri: url }))}
+                          />
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <label className="section-label">Description</label>
+                          <textarea value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+                            placeholder="Tell players about your slot theme…" rows={3} className="input-casino resize-none" />
+                        </div>
+
+                        <div className="flex gap-3 pt-2">
+                          <button
+                            onClick={() => setWizardStep(1)}
+                            className="btn-ghost px-6 py-3 font-orbitron text-[12px] tracking-wide"
+                          >
+                            ← BACK
+                          </button>
+                          <motion.button
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.97 }}
+                            onClick={() => setWizardStep(3)}
+                            className="ml-auto btn-launch flex items-center justify-center gap-2 px-8 py-3 text-[13px]"
+                          >
+                            NEXT <ChevronRight size={14} />
+                          </motion.button>
+                        </div>
+                      </motion.div>
+                    )}
+
+                    {/* Step 3 — Launch Settings */}
+                    {wizardStep === 3 && (
+                      <motion.div key="ws3" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-5">
+                        <h2 className="font-orbitron text-sm font-bold text-white/70 tracking-widest">LAUNCH SETTINGS</h2>
+
+                        <div className="space-y-2">
+                          <label className="section-label flex items-center gap-1.5">
+                            <TrendingUp size={10} className="text-gold" />
+                            Dev Buy <span className="text-white/20 ml-1">(optional)</span>
+                          </label>
+                          <p className="text-[11px] text-white/30 font-rajdhani">Buy SOL worth of your token at launch. Max 5% of supply. Visible to traders.</p>
+                          <div className="flex gap-2">
+                            <motion.button type="button" whileTap={{ scale: 0.93 }}
+                              onClick={() => setForm((f) => ({ ...f, devBuySol: "" }))}
+                              className={cn("flex-1 rounded-xl py-2 border text-center transition-all text-[11px] font-orbitron font-bold",
+                                !form.devBuySol ? "border-gold/60 bg-gold/10 gold-text" : "border-white/8 bg-white/[0.02] text-white/40 hover:border-gold/30")}>
+                              None
+                            </motion.button>
+                            {DEV_BUY_PRESETS.map((sol) => (
+                              <motion.button key={sol} type="button" whileTap={{ scale: 0.93 }}
+                                onClick={() => setForm((f) => ({ ...f, devBuySol: String(sol) }))}
+                                className={cn("flex-1 rounded-xl py-2 border text-center transition-all",
+                                  form.devBuySol === String(sol)
+                                    ? "border-gold/60 bg-gold/10"
+                                    : "border-white/8 bg-white/[0.02] hover:border-gold/30")}>
+                                <p className={cn("font-orbitron text-[11px] font-bold", form.devBuySol === String(sol) ? "gold-text" : "text-white/50")}>
+                                  {sol} SOL
+                                </p>
+                                <p className="text-[9px] text-white/25 font-rajdhani mt-0.5">~{solToPct(sol).toFixed(1)}%</p>
+                              </motion.button>
+                            ))}
+                          </div>
+                          <div className="relative">
+                            <input
+                              type="number"
+                              min="0"
+                              max={MAX_DEV_SOL.toFixed(3)}
+                              step="0.01"
+                              value={form.devBuySol}
+                              onChange={(e) => {
+                                const v = e.target.value;
+                                if (v === "" || parseFloat(v) <= MAX_DEV_SOL + 0.001) {
+                                  setForm((f) => ({ ...f, devBuySol: v }));
+                                }
+                              }}
+                              placeholder={`Custom amount (max ${MAX_DEV_SOL.toFixed(2)} SOL)`}
+                              className="input-casino pr-16"
+                            />
+                            <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[11px] font-orbitron text-white/30">SOL</span>
+                          </div>
+                          {form.devBuySol && parseFloat(form.devBuySol) > 0 && (
+                            <p className="text-[11px] font-rajdhani text-gold/60">
+                              {solToPct(Math.min(parseFloat(form.devBuySol), MAX_DEV_SOL)).toFixed(2)}% of supply · ≈${(Math.min(parseFloat(form.devBuySol), MAX_DEV_SOL) * SOL_PRICE_USD).toFixed(0)} sent on-chain after launch
+                            </p>
+                          )}
+                        </div>
+
+                        <div className="flex gap-3 pt-2">
+                          <button
+                            onClick={() => setWizardStep(2)}
+                            className="btn-ghost px-6 py-3 font-orbitron text-[12px] tracking-wide"
+                          >
+                            ← BACK
+                          </button>
+                          <motion.button
+                            whileHover={{ scale: 1.02, boxShadow: "0 0 32px rgba(139,92,246,0.6)" }}
+                            whileTap={{ scale: 0.97 }}
+                            onClick={handleLaunch}
+                            className="ml-auto btn-launch flex items-center justify-center gap-2.5 px-8 py-3 text-[13px]"
+                          >
+                            <Rocket size={16} />
+                            {authenticated ? "PREVIEW LAUNCH →" : "CONNECT WALLET TO LAUNCH"}
+                          </motion.button>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
 
                 <div className="lg:col-span-2 space-y-4">
@@ -261,7 +373,7 @@ export default function LaunchPage() {
                     <p className="font-orbitron text-[10px] font-bold text-white/40 tracking-widest">HOW IT WORKS</p>
                     {HOW_IT_WORKS.map(({ step: s, title, desc }) => (
                       <div key={s} className="flex gap-3 items-start">
-                        <span className="font-orbitron text-[10px] font-black text-purple-500/70 mt-0.5 shrink-0">{s}</span>
+                        <span className="font-orbitron text-[10px] font-black text-[#c41e1e]/70 mt-0.5 shrink-0">{s}</span>
                         <div>
                           <p className="font-rajdhani font-bold text-white/70 text-[13px]">{title}</p>
                           <p className="font-rajdhani text-[12px] text-white/35 leading-relaxed">{desc}</p>
@@ -319,8 +431,8 @@ export default function LaunchPage() {
                     <p className="text-xs font-rajdhani text-red-300 leading-relaxed">{launchError}</p>
                   </div>
                 )}
-                <div className="bg-purple-500/8 border border-purple-500/20 rounded-xl p-4">
-                  <p className="text-xs font-rajdhani text-purple-300/80 leading-relaxed">
+                <div className="border border-[rgba(212,175,55,0.2)] bg-[rgba(212,175,55,0.06)] rounded-xl p-4">
+                  <p className="text-xs font-rajdhani text-[rgba(212,175,55,0.8)] leading-relaxed">
                     This will send a transaction to the <strong>ReelBit Token Launch</strong> program on Solana devnet.
                   </p>
                 </div>
@@ -351,7 +463,7 @@ export default function LaunchPage() {
               className="flex flex-col items-center justify-center py-40 gap-6">
               <div className="relative">
                 <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1.2, ease: "linear" }}
-                  className="w-16 h-16 rounded-full border-2 border-purple-500/30 border-t-purple-500" />
+                  className="w-16 h-16 rounded-full border-2 border-[#c41e1e]/30 border-t-[#c41e1e]" />
                 <div className="absolute inset-0 flex items-center justify-center text-2xl">🎰</div>
               </div>
               <div className="text-center space-y-1">
@@ -397,7 +509,7 @@ export default function LaunchPage() {
                     <Share2 size={14} /> SHARE ON X
                   </motion.button>
                 </a>
-                <button onClick={() => { setStep("form"); setForm(EMPTY); }}
+                <button onClick={() => { setStep("form"); setForm(EMPTY); setWizardStep(1); }}
                   className="btn-ghost px-6 py-3 font-orbitron text-[11px] tracking-wide">LAUNCH ANOTHER</button>
               </div>
             </motion.div>

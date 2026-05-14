@@ -457,6 +457,29 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* Live stats strip */}
+      {!loading && (
+        <div className="mx-auto max-w-7xl px-4 pb-2">
+          <div className="flex items-center gap-4 sm:gap-8 flex-wrap py-3 px-5 rounded-2xl border border-white/5"
+            style={{ background: "rgba(255,255,255,0.02)" }}>
+            <div className="flex items-center gap-2">
+              <span className="live-dot" />
+              <span className="font-orbitron text-[10px] text-white/40 tracking-widest">{total} TOKENS LIVE</span>
+            </div>
+            <div className="flex items-center gap-1.5 font-orbitron text-[10px] text-green-400/50 tracking-widest">
+              <Zap size={9} />
+              {graduated} GRADUATED TO CASINO
+            </div>
+            {topBit && (
+              <div className="hidden sm:flex items-center gap-1.5 font-orbitron text-[10px] tracking-widest" style={{ color: "rgba(212,175,55,0.5)" }}>
+                <TrendingUp size={9} />
+                LEADING: ${topBit.symbol} · {topBit.progressPct.toFixed(0)}%
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Slot explorer */}
       <section className="mx-auto max-w-7xl px-4 py-10 space-y-6">
 

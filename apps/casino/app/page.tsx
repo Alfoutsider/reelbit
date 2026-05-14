@@ -57,6 +57,32 @@ type Filter    = "all" | "demo" | "graduated";
 type ModelFilter = "all" | "Classic3Reel" | "Standard5Reel" | "FiveReelFreeSpins";
 type SortMode  = "featured" | "new" | "name";
 
+// ── Live stats bar ────────────────────────────────────────────────────────────
+
+function LiveStatsBar({ slotCount, graduatedCount }: { slotCount: number; graduatedCount: number }) {
+  return (
+    <div className="flex items-center gap-4 sm:gap-8 flex-wrap py-3 px-5 rounded-2xl border border-white/5"
+      style={{ background: "rgba(255,255,255,0.02)" }}>
+      <div className="flex items-center gap-2">
+        <span className="live-dot" />
+        <span className="font-orbitron text-[10px] text-white/40 tracking-widest">243 PLAYERS ONLINE</span>
+      </div>
+      <div className="flex items-center gap-1.5 font-orbitron text-[10px] text-white/30 tracking-widest">
+        <Zap size={9} style={{ color: "#d4a017" }} />
+        {slotCount} SLOTS LIVE
+      </div>
+      <div className="flex items-center gap-1.5 font-orbitron text-[10px] text-green-400/50 tracking-widest">
+        <Trophy size={9} />
+        {graduatedCount} GRADUATED
+      </div>
+      <div className="hidden sm:flex items-center gap-1.5 font-orbitron text-[10px] text-white/25 tracking-widest">
+        <TrendingUp size={9} />
+        4,218 SOL WAGERED TODAY
+      </div>
+    </div>
+  );
+}
+
 // ── Live wins ticker ──────────────────────────────────────────────────────────
 
 function LiveTicker() {
@@ -329,6 +355,11 @@ export default function CasinoLobby() {
           </div>
         </motion.div>
 
+        {/* Live stats bar */}
+        {tab === "lobby" && !loading && (
+          <LiveStatsBar slotCount={allSlots.length} graduatedCount={graduatedSlots.length} />
+        )}
+
         {/* Model filter chips — lobby only */}
         {tab === "lobby" && (
           <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-hide">
@@ -481,6 +512,11 @@ export default function CasinoLobby() {
             </span>
             <div className="h-px flex-1 bg-gradient-to-l from-transparent via-green-500/20 to-transparent" />
           </div>
+        )}
+
+        {/* Featured graduated slots */}
+        {tab === "lobby" && !loading && filter !== "demo" && graduatedSlots.length >= 2 && (
+          <FeaturedSlotsRow slots={graduatedSlots} />
         )}
 
         {/* Slot grid — lobby only */}
@@ -840,5 +876,91 @@ function DemoSlotCard({ slot, index }: { slot: DemoSlot; index: number }) {
         </div>
       </Link>
     </motion.div>
+  );
+}
+
+// ── Featured Slot Card (wide, card-premium border) ─────────────────────────────
+
+function FeaturedSlotCard({ slot, rank }: { slot: SlotEntry; rank: number }) {
+  const rtp = MODEL_RTP[slot.slotModel] ?? "96%";
+  return (
+    <Link href={`/slot/${slot.mint}`} className="block group flex-1 min-w-0">
+      <div
+        className="relative overflow-hidden rounded-2xl card-premium cursor-pointer h-full"
+        style={{ "--bgc": "var(--bg-card)" } as React.CSSProperties}
+      >
+        <div className="card-sheen" />
+
+        {/* Art */}
+        <div
+          className="h-52 relative overflow-hidden"
+          style={{ background: `linear-gradient(135deg, ${slot.primaryColor}25 0%, ${slot.accentColor}15 50%, #080818 100%)` }}
+        >
+          {slot.heroImageUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={slot.heroImageUrl} alt={slot.tokenName}
+              className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
+          ) : (
+            <PlaceholderArt slot={slot} />
+          )}
+
+          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+            style={{ background: "rgba(0,0,0,0.5)" }}>
+            <div className="font-orbitron text-sm font-black text-white tracking-widest bg-white/15 backdrop-blur-sm rounded-xl px-6 py-3 border border-white/20">
+              PLAY NOW →
+            </div>
+          </div>
+
+          <div className="absolute top-3 left-3 flex gap-1.5">
+            <span className="badge badge-gold text-[9px] px-2 py-0.5">#{rank} FEATURED</span>
+            <span className="badge badge-graduated text-[9px]"><Flame size={8} /> LIVE</span>
+          </div>
+          <div className="absolute top-3 right-3">
+            <span className="font-orbitron text-[9px] font-bold text-green-400/80 bg-green-500/10 border border-green-500/20 rounded-full px-2 py-1">
+              {rtp} RTP
+            </span>
+          </div>
+          <div className="absolute bottom-0 inset-x-0 h-20 bg-gradient-to-t from-[#10101e] to-transparent" />
+        </div>
+
+        {/* Info */}
+        <div className="p-5 space-y-3">
+          <div>
+            <p className="font-orbitron text-base font-black text-white/95">{slot.tokenName}</p>
+            <p className="text-[12px] text-white/35 font-rajdhani mt-0.5">${slot.tokenSymbol} · {MODEL_LABEL[slot.slotModel]}</p>
+          </div>
+          <div
+            className="w-full py-3 rounded-xl text-center text-[11px] font-orbitron font-black tracking-wider transition-all group-hover:brightness-110"
+            style={{
+              background: `${slot.primaryColor}28`,
+              color: slot.primaryColor,
+              border: `1px solid ${slot.primaryColor}45`,
+            }}
+          >
+            PLAY NOW →
+          </div>
+        </div>
+      </div>
+    </Link>
+  );
+}
+
+function FeaturedSlotsRow({ slots }: { slots: SlotEntry[] }) {
+  const featured = slots.slice(0, 2);
+  if (featured.length < 2) return null;
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-3">
+        <span className="font-orbitron text-[10px] font-bold tracking-widest" style={{ color: "var(--fg4)" }}>
+          ★ FEATURED SLOTS
+        </span>
+        <div className="h-px flex-1" style={{ background: "linear-gradient(to right, rgba(212,160,23,0.3), transparent)" }} />
+      </div>
+      <div className="flex gap-4">
+        {featured.map((slot, i) => (
+          <FeaturedSlotCard key={slot.mint} slot={slot} rank={i + 1} />
+        ))}
+      </div>
+    </div>
   );
 }

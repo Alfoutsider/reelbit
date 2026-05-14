@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { usePrivy, useWallets } from "@/lib/privy";
-import { ArrowLeft, Wallet, TrendingUp, Zap, BarChart2, ExternalLink } from "lucide-react";
+import { ArrowLeft, Wallet, Zap, ExternalLink } from "lucide-react";
 import Link from "next/link";
 import { shortenAddress } from "@/lib/utils";
 import { ReferralWidget } from "@/components/referral/ReferralWidget";
@@ -107,30 +107,40 @@ export default function PortfolioPage() {
           </Link>
         </div>
 
-        {/* Header */}
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-1">
-          <h1 className="font-orbitron text-2xl font-black text-white">My Portfolio</h1>
-          <p className="font-rajdhani text-sm text-white/35">
-            {shortenAddress(walletAddress)} · {positions.length} position{positions.length !== 1 ? "s" : ""}
-          </p>
-        </motion.div>
-
-        {/* Summary strip */}
-        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}
-          className="grid grid-cols-3 gap-3">
-          {[
-            { label: "Total Value",  value: fmtUsd(totalValueUsd),       icon: BarChart2  },
-            { label: "Positions",    value: String(positions.length),     icon: TrendingUp },
-            { label: "Graduated",    value: String(positions.filter(p => p.graduated).length), icon: Zap },
-          ].map(({ label, value, icon: Icon }) => (
-            <div key={label} className="stat-box">
-              <div className="flex items-center gap-1.5 mb-1">
-                <Icon size={10} className="text-purple-400" />
-                <p className="label">{label}</p>
-              </div>
-              <p className="value text-lg">{value}</p>
+        {/* PnL hero */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="relative overflow-hidden rounded-2xl px-6 py-6"
+          style={{
+            background: "linear-gradient(135deg, rgba(196,30,30,0.12) 0%, rgba(139,0,0,0.06) 50%, rgba(6,6,15,0.8) 100%)",
+            border: "1px solid rgba(196,30,30,0.2)",
+          }}
+        >
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,rgba(196,30,30,0.1),transparent_60%)]" />
+          <div className="relative flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <p className="font-orbitron text-[10px] font-bold tracking-widest mb-1" style={{ color: "rgba(196,30,30,0.7)" }}>
+                PORTFOLIO VALUE
+              </p>
+              <p className="font-orbitron text-4xl font-black text-white">
+                {loading ? <span className="skeleton inline-block w-36 h-9 rounded-lg" /> : fmtUsd(totalValueUsd)}
+              </p>
+              <p className="font-rajdhani text-sm text-white/35 mt-1">
+                {shortenAddress(walletAddress)} · {positions.length} position{positions.length !== 1 ? "s" : ""}
+              </p>
             </div>
-          ))}
+            <div className="flex gap-4 sm:flex-col sm:items-end">
+              <div className="text-center sm:text-right">
+                <p className="font-orbitron text-lg font-black text-white">{positions.length}</p>
+                <p className="font-orbitron text-[9px] tracking-widest text-white/30 mt-0.5">POSITIONS</p>
+              </div>
+              <div className="text-center sm:text-right">
+                <p className="font-orbitron text-lg font-black text-green-400">{positions.filter(p => p.graduated).length}</p>
+                <p className="font-orbitron text-[9px] tracking-widest text-white/30 mt-0.5">GRADUATED</p>
+              </div>
+            </div>
+          </div>
         </motion.div>
 
         {/* Dividends card — renders only when the wallet has unclaimed rounds. */}
@@ -227,8 +237,8 @@ export default function PortfolioPage() {
                     {!p.graduated && (
                       <div className="mt-2 flex items-center gap-2">
                         <div className="flex-1 h-1 rounded-full bg-white/5">
-                          <div className="h-full rounded-full bg-purple-500/60"
-                            style={{ width: `${Math.min(100, p.progressPct)}%` }} />
+                          <div className="h-full rounded-full"
+                            style={{ width: `${Math.min(100, p.progressPct)}%`, background: "var(--brand-red)" }} />
                         </div>
                         <span className="text-[10px] font-orbitron text-white/25">{p.progressPct.toFixed(0)}%</span>
                       </div>
