@@ -1460,8 +1460,11 @@ app.post("/tokens/:mint/buy", async (req: Request, res: Response) => {
   try { mint = new PublicKey(mintStr); buyer = new PublicKey(wallet); }
   catch { return res.status(400).json({ error: "Invalid mint or wallet address" }); }
 
-  const solLamports = BigInt(Math.round(Number(solAmount)));
-  if (solLamports <= 0n) return res.status(400).json({ error: "solAmount must be positive" });
+  const solNum = Number(solAmount);
+  if (!Number.isFinite(solNum) || solNum <= 0 || solNum > 1e18) {
+    return res.status(400).json({ error: "solAmount out of range" });
+  }
+  const solLamports = BigInt(Math.round(solNum));
 
   const curve = await fetchBondingCurveState(connection, mint);
   if (!curve) return res.status(404).json({ error: "Bonding curve not found for this mint" });
@@ -1494,8 +1497,11 @@ app.post("/tokens/:mint/sell", async (req: Request, res: Response) => {
   try { mint = new PublicKey(mintStr); seller = new PublicKey(wallet); }
   catch { return res.status(400).json({ error: "Invalid mint or wallet address" }); }
 
-  const rawTokens = BigInt(Math.round(Number(tokenAmount)));
-  if (rawTokens <= 0n) return res.status(400).json({ error: "tokenAmount must be positive" });
+  const tokenNum = Number(tokenAmount);
+  if (!Number.isFinite(tokenNum) || tokenNum <= 0 || tokenNum > 1e18) {
+    return res.status(400).json({ error: "tokenAmount out of range" });
+  }
+  const rawTokens = BigInt(Math.round(tokenNum));
 
   const curve = await fetchBondingCurveState(connection, mint);
   if (!curve) return res.status(404).json({ error: "Bonding curve not found for this mint" });
