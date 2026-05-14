@@ -2,10 +2,11 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import { Wallet, LogOut, Zap, User, Gamepad2, TrendingUp, Sun, Moon, Menu, X } from "lucide-react";
+import { Wallet, LogOut, User, Gamepad2, TrendingUp, Sun, Moon, Menu, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 import { usePrivy, useWallets } from "@/lib/privy";
+import { useJackpot, fmtJackpot } from "@/lib/jackpot";
 import { useRouter } from "next/navigation";
 import { WalletModal } from "@/components/wallet/WalletModal";
 import { ProfileModal } from "@/components/profile/ProfileModal";
@@ -24,6 +25,19 @@ function ThemeToggle() {
       className="w-8 h-8 rounded-lg flex items-center justify-center text-white/30 hover:text-white/60 hover:bg-white/5 transition-all">
       {theme === "dark" ? <Sun size={13} /> : <Moon size={13} />}
     </button>
+  );
+}
+
+function JackpotPill() {
+  const jackpot = useJackpot();
+  return (
+    <div className="hidden sm:flex items-center gap-1.5 rounded-xl px-2.5 py-1"
+      style={{ background: "rgba(212,160,23,0.07)", border: "1px solid rgba(212,160,23,0.18)" }}>
+      <span className="live-dot" style={{ width: 5, height: 5 }} />
+      <span className="font-orbitron text-[9px] font-bold tabular-nums" style={{ color: "#f5c842" }}>
+        {fmtJackpot(jackpot)}
+      </span>
+    </div>
   );
 }
 
@@ -100,9 +114,7 @@ export function Navbar() {
             <Link href="/calculator" className="hidden sm:flex items-center gap-1 text-[#d4a017]/40 hover:text-[#d4a017]/70 text-[10px] font-orbitron tracking-wider transition-colors">
               <TrendingUp size={10} /> CALCULATOR
             </Link>
-            <div className="hidden sm:flex items-center gap-1 text-green-400/50 text-[10px] font-orbitron tracking-wider">
-              <Zap size={10} /> UP TO 98% RTP
-            </div>
+            <JackpotPill />
             <ThemeToggle />
             {/* Hamburger — mobile only */}
             <button
@@ -236,8 +248,8 @@ export function Navbar() {
                 style={{ color: "rgba(212,160,23,0.7)" }}>
                 <TrendingUp size={12} /> CALCULATOR
               </Link>
-              <div className="flex items-center gap-2 px-3 py-2 text-green-400/50 text-[11px] font-orbitron tracking-wider">
-                <Zap size={11} /> UP TO 98% RTP
+              <div className="flex items-center gap-2 px-3 py-2 text-[10px] font-orbitron tracking-wider" style={{ color: "#f5c842" }}>
+                🎰 JACKPOT ACTIVE — SPIN TO WIN
               </div>
               {demoSession && (
                 <button onClick={() => { setMobileOpen(false); handleExitDemo(); }}

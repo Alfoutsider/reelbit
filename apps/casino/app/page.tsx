@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Search, Flame, Star, Trophy, Loader2, Zap, TrendingUp, User, Rocket, Gift, ChevronRight } from "lucide-react";
+import { Search, Flame, Star, Trophy, Zap, TrendingUp, Rocket, Gift, ChevronRight, DollarSign } from "lucide-react";
+import { useJackpot, fmtJackpot } from "@/lib/jackpot";
 import { SlotCardSkeletonGrid } from "@/components/slot/SlotCardSkeleton";
 import Link from "next/link";
 import { usePrivy, useWallets } from "@/lib/privy";
@@ -40,17 +41,32 @@ const MODEL_COLOR: Record<string, string> = {
   Classic3Reel: "#d4a017", Standard5Reel: "#c0c0c0", FiveReelFreeSpins: "#22c55e",
 };
 
-// Sample recent-win events — will be replaced by live feed post-launch
+// Sample recent-win events in USD — will be replaced by live feed post-launch
 const SAMPLE_WINS = [
-  { wallet: "7xK…gAs", sol: "14.4", slot: "Lucky 7s",         mult: 144 },
-  { wallet: "9Wz…NqM", sol: "0.85", slot: "Neon Joker",       mult: 8   },
-  { wallet: "BrE…jnC", sol: "3.2",  slot: "Dragon's Fortune", mult: 32  },
-  { wallet: "5yF…KKC", sol: "1.5",  slot: "Phantom Reels",    mult: 15  },
-  { wallet: "HN7…WrH", sol: "48.0", slot: "Gold Rush",        mult: 480 },
-  { wallet: "ATo…Aev", sol: "0.6",  slot: "Diamond Rush",     mult: 6   },
-  { wallet: "3h1…bYL", sol: "5.0",  slot: "Lucky 7s",         mult: 50  },
-  { wallet: "9xQ…Fin", sol: "2.1",  slot: "Dragon's Fortune", mult: 21  },
+  { wallet: "7xK…gAs", usd: 2_376,  slot: "Lucky 7s",         mult: 144, minsAgo: 3  },
+  { wallet: "9Wz…NqM", usd: 140,    slot: "Neon Joker",       mult: 8,   minsAgo: 7  },
+  { wallet: "BrE…jnC", usd: 528,    slot: "Dragon's Fortune", mult: 32,  minsAgo: 12 },
+  { wallet: "5yF…KKC", usd: 248,    slot: "Phantom Reels",    mult: 15,  minsAgo: 18 },
+  { wallet: "HN7…WrH", usd: 7_920,  slot: "Gold Rush",        mult: 480, minsAgo: 24 },
+  { wallet: "ATo…Aev", usd: 99,     slot: "Diamond Rush",     mult: 6,   minsAgo: 31 },
+  { wallet: "3h1…bYL", usd: 825,    slot: "Lucky 7s",         mult: 50,  minsAgo: 45 },
+  { wallet: "9xQ…Fin", usd: 347,    slot: "Dragon's Fortune", mult: 21,  minsAgo: 58 },
 ];
+
+// Links big-win cards to the correct demo slot
+const WIN_SLOT_MINT: Record<string, string> = {
+  "Lucky 7s":         "So11111111111111111111111111111111111111112",
+  "Neon Joker":       "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+  "Dragon's Fortune": "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB",
+  "Phantom Reels":    "mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So",
+  "Gold Rush":        "7dHbWXmci3dT8UFYWYZweBLXgycu7Y3iL6trKn1Y7ARj",
+  "Diamond Rush":     "4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R",
+};
+
+function fmtUsd(n: number) {
+  if (n >= 1000) return `$${(n / 1000).toFixed(1)}K`;
+  return `$${n.toLocaleString("en-US")}`;
+}
 
 type Tab       = "lobby" | "my-slots";
 type Filter    = "all" | "demo" | "graduated";
@@ -76,8 +92,8 @@ function LiveStatsBar({ slotCount, graduatedCount }: { slotCount: number; gradua
         {graduatedCount} GRADUATED
       </div>
       <div className="hidden sm:flex items-center gap-1.5 font-orbitron text-[10px] text-white/25 tracking-widest">
-        <TrendingUp size={9} />
-        4,218 SOL WAGERED TODAY
+        <DollarSign size={9} />
+        $697K WAGERED TODAY
       </div>
     </div>
   );
@@ -95,8 +111,8 @@ function LiveTicker() {
             <div key={i} className="flex items-center gap-2 px-8 text-[11px] whitespace-nowrap">
               <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse flex-shrink-0" />
               <span className="font-mono" style={{ color: "var(--fg4)" }}>{w.wallet}</span>
-              <span style={{ color: "var(--fg4)" }}>won</span>
-              <span className="font-bold text-green-400">{w.sol} SOL</span>
+              <span style={{ color: "var(--fg4)" }}>just won</span>
+              <span className="font-bold text-green-400">{fmtUsd(w.usd)}</span>
               <span style={{ color: "var(--fg4)" }}>on</span>
               <span className="font-rajdhani font-semibold" style={{ color: "var(--fg2)" }}>{w.slot}</span>
               {w.mult >= 50 && (
@@ -106,6 +122,121 @@ function LiveTicker() {
             </div>
           ))}
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Jackpot banner ────────────────────────────────────────────────────────────
+
+function JackpotBanner({ onPlay }: { onPlay: () => void }) {
+  const jackpot = useJackpot();
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -8 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="relative overflow-hidden rounded-2xl cursor-pointer group"
+      onClick={onPlay}
+      style={{
+        background: "linear-gradient(135deg, rgba(160,120,16,0.28) 0%, rgba(212,160,23,0.12) 40%, rgba(6,6,15,0.9) 100%)",
+        border: "1px solid rgba(212,160,23,0.35)",
+      }}
+    >
+      <div className="card-sheen" style={{ background: "linear-gradient(90deg, transparent, rgba(212,160,23,0.1), transparent)" }} />
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_left,rgba(212,160,23,0.15),transparent_55%)]" />
+
+      <div className="relative px-6 py-5 flex flex-col sm:flex-row items-center justify-between gap-4">
+        {/* Left */}
+        <div className="text-center sm:text-left">
+          <div className="flex items-center gap-2 justify-center sm:justify-start mb-1">
+            <span className="live-dot" />
+            <span className="font-orbitron text-[9px] font-bold tracking-[0.2em] text-white/40">GROWING JACKPOT</span>
+          </div>
+          <motion.p
+            key={Math.floor(jackpot)}
+            className="font-orbitron text-4xl sm:text-5xl font-black tracking-tight gold-text tabular-nums"
+          >
+            {fmtJackpot(jackpot)}
+          </motion.p>
+          <p className="font-rajdhani text-sm text-white/35 mt-1">
+            Feeds with every spin — anyone can win it on any slot
+          </p>
+        </div>
+
+        {/* Right */}
+        <motion.button
+          whileHover={{ scale: 1.04, boxShadow: "0 0 32px rgba(212,160,23,0.5)" }}
+          whileTap={{ scale: 0.97 }}
+          className="btn-launch flex items-center gap-2 px-7 py-3.5 text-[13px] flex-shrink-0"
+        >
+          🎰 SPIN TO WIN
+        </motion.button>
+      </div>
+    </motion.div>
+  );
+}
+
+// ── Big wins grid ─────────────────────────────────────────────────────────────
+
+function BigWinsGrid() {
+  // Sort by usd descending for max visual impact
+  const top = [...SAMPLE_WINS].sort((a, b) => b.usd - a.usd).slice(0, 6);
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-3">
+        <Flame size={12} style={{ color: "#d4a017" }} />
+        <span className="font-orbitron text-[10px] font-bold tracking-widest" style={{ color: "var(--fg4)" }}>
+          RECENT BIG WINS
+        </span>
+        <div className="h-px flex-1" style={{ background: "linear-gradient(to right, rgba(212,160,23,0.25), transparent)" }} />
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        {top.map((w, i) => {
+          const mint = WIN_SLOT_MINT[w.slot];
+          return (
+            <motion.div
+              key={i}
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: Math.min(i * 0.06, 0.24) }}
+            >
+              <Link href={mint ? `/slot/${mint}` : "/"} className="block group">
+                <div className="relative overflow-hidden rounded-2xl border border-white/5 hover:border-[rgba(212,160,23,0.25)] transition-colors p-4 space-y-3"
+                  style={{ background: "var(--bg-card)" }}>
+                  <div className="card-sheen" />
+
+                  {/* Multiplier badge */}
+                  {w.mult >= 30 && (
+                    <div className="absolute top-3 right-3">
+                      <span className="badge badge-gold text-[9px]">×{w.mult}</span>
+                    </div>
+                  )}
+
+                  {/* Slot + player */}
+                  <div>
+                    <p className="font-orbitron text-[11px] font-bold text-white/80 tracking-wide">{w.slot}</p>
+                    <p className="font-mono text-[10px] text-white/30 mt-0.5">{w.wallet}</p>
+                  </div>
+
+                  {/* Win amount */}
+                  <p className="font-orbitron text-2xl font-black text-green-400">
+                    {fmtUsd(w.usd)}
+                  </p>
+
+                  {/* Footer */}
+                  <div className="flex items-center justify-between pt-1 border-t border-white/5">
+                    <span className="font-rajdhani text-[10px] text-white/25">{w.minsAgo}m ago</span>
+                    <span className="font-orbitron text-[9px] font-bold tracking-wider text-white/30 group-hover:text-[#d4a017] transition-colors">
+                      PLAY →
+                    </span>
+                  </div>
+                </div>
+              </Link>
+            </motion.div>
+          );
+        })}
       </div>
     </div>
   );
@@ -341,11 +472,10 @@ export default function CasinoLobby() {
           {/* Stats strip */}
           <div className="flex items-center justify-center gap-6 sm:gap-10 pt-2 flex-wrap">
             {([
-              { label: "Live Slots",   value: loading ? "…" : String(allSlots.length), color: "gold-text",     valueStyle: undefined as React.CSSProperties | undefined },
-              { label: "Graduated",    value: loading ? "…" : String(graduatedSlots.length), color: "gold-text", valueStyle: undefined },
-              { label: "Max RTP",      value: "98%",   color: "text-green-400", valueStyle: undefined },
-              { label: "House Edge",   value: "4%",    color: "",               valueStyle: { color: "var(--fg2)" } },
-              { label: "Auto Spin",    value: "✓",     color: "",               valueStyle: { color: "#c0c0c0" } },
+              { label: "Players Online", value: "243",                                              color: "text-green-400" },
+              { label: "Live Slots",     value: loading ? "…" : String(allSlots.length),           color: "gold-text"      },
+              { label: "Biggest Win",    value: "$7,920",                                           color: "gold-text"      },
+              { label: "Wagered Today",  value: "$697K",                                            color: "",              valueStyle: { color: "var(--fg2)" } as React.CSSProperties },
             ]).map(({ label, value, color, valueStyle }) => (
               <div key={label} className="text-center">
                 <p className={`font-orbitron text-xl font-black ${color}`} style={valueStyle}>{value}</p>
@@ -354,6 +484,17 @@ export default function CasinoLobby() {
             ))}
           </div>
         </motion.div>
+
+        {/* Jackpot banner + big wins — lobby only */}
+        {tab === "lobby" && (
+          <>
+            <JackpotBanner onPlay={() => {
+              const first = filtered[0];
+              if (first) window.location.href = `/slot/${first.mint}`;
+            }} />
+            <BigWinsGrid />
+          </>
+        )}
 
         {/* Live stats bar */}
         {tab === "lobby" && !loading && (
