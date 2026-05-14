@@ -641,7 +641,8 @@ app.post("/deposit/stripe/webhook", async (req: Request, res: Response) => {
     console.warn("[stripe] STRIPE_WEBHOOK_SECRET not set — rejecting webhook");
     return res.status(503).json({ error: "Webhook not configured" });
   }
-  let event: { type: string; data: { object: Record<string, unknown> } };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let event: any;
   try {
     event = getStripe().webhooks.constructEvent(rawBody, sig, config.stripeWebhookSecret);
   } catch (err) {
