@@ -26,8 +26,6 @@ const LINKS = {
   ],
   social: [
     { href: "https://twitter.com/reelbitfun", label: "X / Twitter", icon: <XIcon /> },
-    { href: "https://t.me/reelbit",           label: "Telegram",    icon: null },
-    { href: "https://discord.gg/reelbit",     label: "Discord",     icon: null },
   ],
 };
 
