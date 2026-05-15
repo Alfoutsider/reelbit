@@ -330,7 +330,7 @@ export function WalletModal({ open, onClose, walletAddress, onBalanceChange }: P
                           />
                         </div>
                         <p className="text-[10px] text-white/20">
-                          {formatUsdc(entry.wageringCompleted)} / {formatUsdc(entry.wageringRequired)} wagered (35× requirement)
+                          {formatUsdc(entry.wageringCompleted)} / {formatUsdc(entry.wageringRequired)} wagered (45× requirement)
                         </p>
                       </div>
                     </div>
@@ -430,7 +430,7 @@ export function WalletModal({ open, onClose, walletAddress, onBalanceChange }: P
                       {entry && !entry.welcomeBonusClaimed && (
                         <div className="flex items-center gap-2 rounded-xl bg-gold/5 border border-gold/20 p-3 text-xs text-gold/80">
                           <Gift size={13} />
-                          <span>First deposit gets 100% bonus up to $200 (35× wagering)</span>
+                          <span>First deposit gets 100% bonus up to $200 (45× wagering)</span>
                         </div>
                       )}
 
@@ -465,7 +465,7 @@ export function WalletModal({ open, onClose, walletAddress, onBalanceChange }: P
                       {entry && !entry.welcomeBonusClaimed && (
                         <div className="flex items-center gap-2 rounded-xl bg-gold/5 border border-gold/20 p-3 text-xs text-gold/80">
                           <Gift size={13} />
-                          <span>First deposit gets 100% bonus up to $200 (35× wagering)</span>
+                          <span>First deposit gets 100% bonus up to $200 (45× wagering)</span>
                         </div>
                       )}
 

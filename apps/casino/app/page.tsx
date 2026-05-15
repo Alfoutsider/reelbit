@@ -41,6 +41,8 @@ const MODEL_COLOR: Record<string, string> = {
   Classic3Reel: "#d4a017", Standard5Reel: "#c0c0c0", FiveReelFreeSpins: "#22c55e",
 };
 
+// TODO(mainnet): Replace with live feed. Set SHOW_SAMPLE_SOCIAL=false and wire up real WebSocket events.
+const SHOW_SAMPLE_SOCIAL = process.env.NEXT_PUBLIC_SHOW_SAMPLE_SOCIAL !== "false";
 // Sample recent-win events in USD — will be replaced by live feed post-launch
 const SAMPLE_WINS = [
   { wallet: "7xK…gAs", usd: 2_376,  slot: "Lucky 7s",         mult: 144, minsAgo: 3  },
@@ -79,10 +81,12 @@ function LiveStatsBar({ slotCount, graduatedCount }: { slotCount: number; gradua
   return (
     <div className="flex items-center gap-4 sm:gap-8 flex-wrap py-3 px-5 rounded-2xl border border-white/5"
       style={{ background: "rgba(255,255,255,0.02)" }}>
-      <div className="flex items-center gap-2">
-        <span className="live-dot" />
-        <span className="font-orbitron text-[10px] text-white/40 tracking-widest">243 PLAYERS ONLINE</span>
-      </div>
+      {SHOW_SAMPLE_SOCIAL ? (
+        <div className="flex items-center gap-2">
+          <span className="live-dot" />
+          <span className="font-orbitron text-[10px] text-white/40 tracking-widest">243 PLAYERS ONLINE</span>
+        </div>
+      ) : null}
       <div className="flex items-center gap-1.5 font-orbitron text-[10px] text-white/30 tracking-widest">
         <Zap size={9} style={{ color: "#d4a017" }} />
         {slotCount} SLOTS LIVE
@@ -91,10 +95,12 @@ function LiveStatsBar({ slotCount, graduatedCount }: { slotCount: number; gradua
         <Trophy size={9} />
         {graduatedCount} GRADUATED
       </div>
-      <div className="hidden sm:flex items-center gap-1.5 font-orbitron text-[10px] text-white/25 tracking-widest">
-        <DollarSign size={9} />
-        $697K WAGERED TODAY
-      </div>
+      {SHOW_SAMPLE_SOCIAL && (
+        <div className="hidden sm:flex items-center gap-1.5 font-orbitron text-[10px] text-white/25 tracking-widest">
+          <DollarSign size={9} />
+          $697K WAGERED TODAY
+        </div>
+      )}
     </div>
   );
 }
@@ -369,7 +375,7 @@ export default function CasinoLobby() {
       <div className="orb w-[500px] h-[500px] top-10 -left-48" style={{ background: "rgba(212,160,23,0.05)", animationDelay: "0s" }} />
       <div className="orb w-80 h-80 bottom-40 right-10" style={{ background: "rgba(160,120,16,0.04)", animationDelay: "4s" }} />
 
-      <LiveTicker />
+      {SHOW_SAMPLE_SOCIAL && <LiveTicker />}
 
       {/* Tab bar */}
       <div className="border-b" style={{ background: "var(--bg2)", borderColor: "var(--bdr2)" }}>
@@ -472,10 +478,10 @@ export default function CasinoLobby() {
           {/* Stats strip */}
           <div className="flex items-center justify-center gap-6 sm:gap-10 pt-2 flex-wrap">
             {([
-              { label: "Players Online", value: "243",                                              color: "text-green-400" },
-              { label: "Live Slots",     value: loading ? "…" : String(allSlots.length),           color: "gold-text"      },
-              { label: "Biggest Win",    value: "$7,920",                                           color: "gold-text"      },
-              { label: "Wagered Today",  value: "$697K",                                            color: "",              valueStyle: { color: "var(--fg2)" } as React.CSSProperties },
+              ...(SHOW_SAMPLE_SOCIAL ? [{ label: "Players Online", value: "243",    color: "text-green-400" }] : []),
+              { label: "Live Slots",    value: loading ? "…" : String(allSlots.length), color: "gold-text" },
+              ...(SHOW_SAMPLE_SOCIAL ? [{ label: "Biggest Win",    value: "$7,920", color: "gold-text"      }] : []),
+              ...(SHOW_SAMPLE_SOCIAL ? [{ label: "Wagered Today",  value: "$697K",  color: "",              valueStyle: { color: "var(--fg2)" } as React.CSSProperties }] : []),
             ]).map(({ label, value, color, valueStyle }) => (
               <div key={label} className="text-center">
                 <p className={`font-orbitron text-xl font-black ${color}`} style={valueStyle}>{value}</p>
@@ -492,7 +498,7 @@ export default function CasinoLobby() {
               const first = filtered[0];
               if (first) window.location.href = `/slot/${first.mint}`;
             }} />
-            <BigWinsGrid />
+            {SHOW_SAMPLE_SOCIAL && <BigWinsGrid />}
           </>
         )}
 

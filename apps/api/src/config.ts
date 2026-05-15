@@ -15,6 +15,9 @@ if (isProduction) {
   if (!process.env.INTERNAL_API_SECRET || process.env.INTERNAL_API_SECRET === "dev-secret-change-in-prod") {
     throw new Error("[config] INTERNAL_API_SECRET must be set to a secret value in production");
   }
+  if (!process.env.HELIUS_WEBHOOK_SECRET) {
+    throw new Error("[config] HELIUS_WEBHOOK_SECRET must be set in production");
+  }
 }
 
 export const config = {

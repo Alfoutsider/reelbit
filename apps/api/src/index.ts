@@ -62,15 +62,15 @@ import {
 
 const app = express();
 
+const isProduction = process.env.NODE_ENV === "production";
+
 const ALLOWED_ORIGINS = [
   "https://reelbit-fun.vercel.app",
   "https://reelbit-casino.vercel.app",
   process.env.ADMIN_URL ?? "",
   config.funUrl,
   config.frontendUrl,
-  "http://localhost:3000",
-  "http://localhost:3002",
-  "http://localhost:3003",
+  ...(!isProduction ? ["http://localhost:3000", "http://localhost:3002", "http://localhost:3003"] : []),
 ].filter(Boolean);
 
 app.use((req: Request, res: Response, next: NextFunction) => {
@@ -193,6 +193,9 @@ app.post("/register", async (req: Request, res: Response) => {
 
   // 18+ check
   const birth = new Date(dob);
+  if (isNaN(birth.getTime())) {
+    return res.status(400).json({ error: "Invalid date of birth" });
+  }
   const now   = new Date();
   let age = now.getFullYear() - birth.getFullYear();
   const m = now.getMonth() - birth.getMonth();
@@ -256,7 +259,7 @@ app.get("/tokens/:mint/rtp", (req: Request, res: Response) => {
   res.json({ mint: theme.mint, rtp, model: theme.slotModel });
 });
 
-app.post("/themes/trigger", async (req: Request, res: Response) => {
+app.post("/themes/trigger", requireAdmin, async (req: Request, res: Response) => {
   const { mint, tokenName, tokenSymbol } = req.body as Record<string, string>;
   if (!mint || !tokenName || !tokenSymbol) {
     return res.status(400).json({ error: "mint, tokenName, tokenSymbol required" });
@@ -461,7 +464,7 @@ app.get("/metadata/:mint", (req: Request, res: Response) => {
 });
 
 // Pre-register a token before launch so /metadata/:mint is ready for the Metaplex URI
-app.post("/themes/register", (req: Request, res: Response) => {
+app.post("/themes/register", requireInternal, (req: Request, res: Response) => {
   const { mint, tokenName, tokenSymbol, imageUri, description, model, creator, devBuyPct } = req.body as {
     mint: string; tokenName: string; tokenSymbol: string;
     imageUri?: string; description?: string; model?: string; creator?: string; devBuyPct?: number;
@@ -534,8 +537,11 @@ app.get("/bonus/status/:wallet", validateWallet, async (req: Request, res: Respo
  * Allows the player to voluntarily burn their active bonus so they can withdraw.
  */
 app.post("/bonus/forfeit", async (req: Request, res: Response) => {
-  const { wallet } = req.body as { wallet: string };
+  const { wallet, signature } = req.body as { wallet: string; signature: string };
   if (!wallet) return res.status(400).json({ error: "wallet required" });
+  if (!signature || !verifyWithdrawSignature(wallet, "reelbit-forfeit-bonus", signature)) {
+    return res.status(401).json({ error: "Valid wallet signature required" });
+  }
   try {
     const entry = await forfeitBonus(wallet);
     res.json({ ok: true, playable: entry.playable, bonusState: entry.bonusState });
@@ -567,8 +573,10 @@ app.post("/deposit/confirm", async (req: Request, res: Response) => {
     return res.status(409).json({ error: "This transaction has already been credited" });
   }
   try {
-    const { lamports } = await verifyDepositTx(connection, txSignature);
-    await markDepositSeen(txSignature);
+    const { lamports, depositor } = await verifyDepositTx(connection, txSignature);
+    if (depositor !== wallet) {
+      return res.status(403).json({ error: "Transaction was not sent from this wallet" });
+    }
 
     // Swap the received SOL to USDC (Jupiter routing fee already embedded in outAmount)
     const usdcSwapped  = await swapSolToUsdc(connection, lamports);
@@ -580,6 +588,7 @@ app.post("/deposit/confirm", async (req: Request, res: Response) => {
     // Platform collects the fee
     await credit(PLATFORM_REVENUE_KEY, depositFee);
     await credit(wallet, usdcCredited);
+    await markDepositSeen(txSignature);
 
     // Welcome bonus — one-time, first deposit only
     const wasAlreadyClaimed = (await getBalance(wallet)).welcomeBonusClaimed;
@@ -778,9 +787,13 @@ app.post("/withdraw", async (req: Request, res: Response) => {
  * Instant internal transfer — no blockchain tx, no gas.
  */
 app.post("/transfer", async (req: Request, res: Response) => {
-  const { from, toUserId, usdcUnits } = req.body as { from: string; toUserId: string; usdcUnits: number };
+  const { from, toUserId, usdcUnits, signature } = req.body as { from: string; toUserId: string; usdcUnits: number; signature: string };
   if (!from || !toUserId || !usdcUnits) {
     return res.status(400).json({ error: "from, toUserId, usdcUnits required" });
+  }
+  const message = `reelbit-transfer:${toUserId}:${usdcUnits}`;
+  if (!signature || !verifyWithdrawSignature(from, message, signature)) {
+    return res.status(401).json({ error: "Valid wallet signature required" });
   }
   if (await isDemoUser(from)) {
     return res.status(403).json({ error: "Demo balances cannot be transferred. Deposit real funds to unlock transfers." });
@@ -911,6 +924,7 @@ app.post("/internal/jackpot-won", requireInternal, async (req: Request, res: Res
     const txSignature = await sendAndConfirmTransaction(connection, tx, [keypair]);
     console.log(`[jackpot] Paid jackpot to ${wallet} for mint ${mintStr} — ${txSignature}`);
     const poolEntry = await getBalance(JACKPOT_KEY);
+    await debit(JACKPOT_KEY, poolEntry.playable);
     loggedFnf(
       analyticsLogJackpotPayout({
         txSig:        txSignature,
@@ -1862,7 +1876,7 @@ app.listen(config.port, () => {
   startMcapWatcher(connection);
 
   // Tick fake bots every 20s for all known tokens when demo mode is enabled
-  if (process.env.ENABLE_FAKE_BOTS === "true") {
+  if (process.env.ENABLE_FAKE_BOTS === "true" && !isProduction) {
     setInterval(() => {
       const themes = getAllThemes().filter((t) => !t.graduated);
       for (const t of themes) tickFakeBots(t.mint);
