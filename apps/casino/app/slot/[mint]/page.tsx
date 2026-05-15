@@ -225,6 +225,12 @@ export default function CasinoSlotPage({ params }: { params: { mint: string } })
     setIsSpinning(true);
     playSpin();
 
+    // Timestamp spin start so we can enforce a minimum visible spin duration.
+    // demoSpin() is synchronous — without this, isSpinning goes true then
+    // immediately false in the same tick and the reel animation never renders.
+    const spinStart = Date.now();
+    const MIN_SPIN_MS = turbo ? 600 : 1500;
+
     try {
       const isFree = freeSpinsLeft > 0;
       const effectiveBet = isFree ? 0 : betUsdc;
@@ -244,9 +250,9 @@ export default function CasinoSlotPage({ params }: { params: { mint: string } })
         setTimeout(refreshBalance, 500);
       }
 
+      // Store result while reels are still visibly spinning
       spinResultRef.current = result;
       setSpinResult(result);
-      setIsSpinning(false);
       if (isFree) setFreeSpinsLeft((p) => p - 1);
       if (result.freeSpinsAwarded > 0) {
         setFreeSpinsLeft((p) => p + result.freeSpinsAwarded);
@@ -277,6 +283,14 @@ export default function CasinoSlotPage({ params }: { params: { mint: string } })
         const netLoss = (isFree ? 0 : betUsdc) - result.totalPayout;
         recordSpin(netLoss);
       }
+
+      // Wait out the remaining minimum spin time, then release reels to stop
+      const elapsed = Date.now() - spinStart;
+      await new Promise<void>((resolve) =>
+        setTimeout(resolve, Math.max(0, MIN_SPIN_MS - elapsed)),
+      );
+      setIsSpinning(false);
+
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Spin failed";
       setError(msg);
@@ -287,7 +301,7 @@ export default function CasinoSlotPage({ params }: { params: { mint: string } })
       if (!isDemo && msg.toLowerCase().includes("insufficient")) setWalletOpen(true);
       throw e;
     }
-  }, [isSpinning, isDemo, session, freeSpinsLeft, betUsdc, clientSeed, refreshBalance, theme, playSpin, playFreeSpins]);
+  }, [isSpinning, isDemo, session, freeSpinsLeft, betUsdc, clientSeed, refreshBalance, theme, playSpin, playFreeSpins, turbo]);
 
   // Keep the ref updated so auto-spin loop always calls the latest version
   useEffect(() => { handleSpinRef.current = handleSpin; }, [handleSpin]);
@@ -334,7 +348,6 @@ export default function CasinoSlotPage({ params }: { params: { mint: string } })
   }, []);
 
   const handleSpinComplete = useCallback(() => {
-    setIsSpinning(false);
     const r = spinResultRef.current;
     if (r && r.totalPayout > 0) {
       const mult = r.betAmount > 0 ? Math.round(r.totalPayout / r.betAmount) : 20;
