@@ -18,6 +18,7 @@ interface Props {
   spinResult: SpinResult | null;
   isSpinning: boolean;
   onSpinComplete?: () => void;
+  onReelStop?: (reelIdx: number) => void;
   theme?: SlotTheme | null;
   customSymbols?: Record<string, string>;
 }
@@ -75,7 +76,7 @@ interface ReelProps {
   spinning:     boolean;
   stopDelay:    number;
   winCells:     Set<string>;
-  onStop:       () => void;
+  onStop:       (reelIdx: number) => void;
   customSymbols?: Record<string, string>;
   themeId:      ThemeId;
   spinPool:     string[];
@@ -94,7 +95,7 @@ function Reel({ reelIndex, symbols, spinning, stopDelay, winCells, onStop, custo
         setPhase("stopping");
         setTimeout(() => {
           setPhase("settled");
-          onStop();
+          onStop(reelIndex);
         }, 300);
       }, stopDelay);
       return () => clearTimeout(t);
@@ -212,7 +213,7 @@ function WinLineDisplay({ result }: { result: SpinResult }) {
 
 // ── SlotMachine ────────────────────────────────────────────────────────────────
 
-export function SlotMachine({ model, spinResult, isSpinning, onSpinComplete, theme, customSymbols }: Props) {
+export function SlotMachine({ model, spinResult, isSpinning, onSpinComplete, onReelStop, theme, customSymbols }: Props) {
   const themeId: ThemeId = MODEL_TO_THEME[model] ?? "classic";
   const themeConfig = getThemeForModel(model);
   const primary    = theme?.primaryColor ?? themeConfig.cabinet.primary;
@@ -257,7 +258,10 @@ export function SlotMachine({ model, spinResult, isSpinning, onSpinComplete, the
     prevSpinning.current = isSpinning;
   }, [isSpinning, lastReelDelay, onSpinComplete, spinResult]);
 
-  const handleReelStop = () => setStoppedReels((n) => n + 1);
+  const handleReelStop = (idx: number) => {
+    setStoppedReels((n) => n + 1);
+    onReelStop?.(idx);
+  };
 
   const totalWidth   = reelCount * SYMBOL_SIZE + (reelCount - 1) * 8;
   const cabinetWidth = totalWidth + 72;

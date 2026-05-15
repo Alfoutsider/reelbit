@@ -7,6 +7,8 @@ import { Connection, PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { ArrowLeft, Shield, Trophy, Wallet, Zap } from "lucide-react";
 import Link from "next/link";
 import { SlotMachine } from "@/components/slot/SlotMachine";
+import { WinPresenter, getWinDisplayTier } from "@/components/slot/WinPresenter";
+import { useSlotSFX } from "@/components/slot/useSlotSFX";
 import { BetControls } from "@/components/slot/BetControls";
 import { WalletModal } from "@/components/wallet/WalletModal";
 import { createSession, spin, generateClientSeed, revealSession, type Session } from "@/lib/gameClient";
@@ -17,6 +19,7 @@ import { getDemoSession, demoSpin, type DemoSession } from "@/lib/demoSession";
 import { shortenAddress } from "@/lib/utils";
 import type { SpinResult } from "@/components/slot/types";
 import type { SlotTheme } from "@/lib/slotTheme";
+import { MODEL_TO_THEME } from "@/lib/slotThemes";
 
 const API_URL  = process.env.NEXT_PUBLIC_API_URL  ?? "http://localhost:3001";
 const RPC_URL  = process.env.NEXT_PUBLIC_RPC_URL  ?? "https://api.devnet.solana.com";
@@ -121,10 +124,14 @@ export default function CasinoSlotPage({ params }: { params: { mint: string } })
   const [jackpotLamports, setJackpotLamports] = useState(0);
   const [jackpotPrev,    setJackpotPrev]    = useState(0);
   const [autoSpinRemaining, setAutoSpinRemaining] = useState(0);
+  const [showWin, setShowWin] = useState<SpinResult | null>(null);
 
   const autoSpinStopRef = useRef(true);
   // Always holds the latest handleSpin without stale closure issues
   const handleSpinRef = useRef<() => Promise<void>>(async () => {});
+  const spinResultRef  = useRef<SpinResult | null>(null);
+
+  const { playSpin, playReelStop, playWin, playCoinPing, playFreeSpins } = useSlotSFX();
 
   const wallet = wallets[0];
   const walletAddress = wallet?.address ?? "";
@@ -205,6 +212,7 @@ export default function CasinoSlotPage({ params }: { params: { mint: string } })
 
     setError(null);
     setIsSpinning(true);
+    playSpin();
 
     try {
       const isFree = freeSpinsLeft > 0;
@@ -225,10 +233,14 @@ export default function CasinoSlotPage({ params }: { params: { mint: string } })
         setTimeout(refreshBalance, 500);
       }
 
+      spinResultRef.current = result;
       setSpinResult(result);
       setIsSpinning(false);
       if (isFree) setFreeSpinsLeft((p) => p - 1);
-      if (result.freeSpinsAwarded > 0) setFreeSpinsLeft((p) => p + result.freeSpinsAwarded);
+      if (result.freeSpinsAwarded > 0) {
+        setFreeSpinsLeft((p) => p + result.freeSpinsAwarded);
+        playFreeSpins();
+      }
       setTotalWagered((p) => p + (isFree ? 0 : betUsdc));
       setTotalWon((p) => p + result.totalPayout);
       setRecentSpins((prev) => [{ result, ts: Date.now() }, ...prev].slice(0, 20));
@@ -263,7 +275,7 @@ export default function CasinoSlotPage({ params }: { params: { mint: string } })
       if (!isDemo && msg.toLowerCase().includes("insufficient")) setWalletOpen(true);
       throw e;
     }
-  }, [isSpinning, isDemo, session, freeSpinsLeft, betUsdc, clientSeed, refreshBalance, theme]);
+  }, [isSpinning, isDemo, session, freeSpinsLeft, betUsdc, clientSeed, refreshBalance, theme, playSpin, playFreeSpins]);
 
   // Keep the ref updated so auto-spin loop always calls the latest version
   useEffect(() => { handleSpinRef.current = handleSpin; }, [handleSpin]);
@@ -302,9 +314,15 @@ export default function CasinoSlotPage({ params }: { params: { mint: string } })
     setAutoSpinRemaining(0);
   }, []);
 
-  function handleSpinComplete() {
+  const handleSpinComplete = useCallback(() => {
     setIsSpinning(false);
-  }
+    const r = spinResultRef.current;
+    if (r && r.totalPayout > 0) {
+      const mult = r.betAmount > 0 ? Math.round(r.totalPayout / r.betAmount) : 20;
+      playWin(getWinDisplayTier(mult));
+      setShowWin(r);
+    }
+  }, [playWin]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -426,6 +444,7 @@ export default function CasinoSlotPage({ params }: { params: { mint: string } })
               spinResult={spinResult}
               isSpinning={isSpinning}
               onSpinComplete={handleSpinComplete}
+              onReelStop={playReelStop}
               theme={theme}
               customSymbols={theme?.customAssets?.symbols && Object.keys(theme.customAssets.symbols).length > 0 ? theme.customAssets.symbols : undefined}
             />
@@ -557,6 +576,16 @@ export default function CasinoSlotPage({ params }: { params: { mint: string } })
         walletAddress={walletAddress}
         onBalanceChange={(playable) => setBalance((prev) => prev ? { ...prev, playable } : null)}
       />
+
+      {showWin && (
+        <WinPresenter
+          payoutUsdc={showWin.totalPayout}
+          betUsdc={showWin.betAmount}
+          themeId={MODEL_TO_THEME[theme?.slotModel ?? "Classic3Reel"]}
+          onDismiss={() => setShowWin(null)}
+          onCoinPing={playCoinPing}
+        />
+      )}
 
       {/* Provably-fair verify modal. Reveal ends the session — subsequent spins */}
       {/* will need a fresh session and a new server seed (which is the point: */}
