@@ -87,6 +87,10 @@ async function fetchTokenRtp(mint: string, model: SlotModel): Promise<number> {
   return BASE_RTP[model] ?? 0.94;
 }
 
+// One entry per session currently executing a spin. Prevents a player from
+// firing two concurrent /spin requests on the same session to cherry-pick results.
+const spinLock = new Set<string>();
+
 async function main() {
   // Load persisted sessions and volume data from disk before accepting requests
   initSessionStore();
@@ -137,74 +141,83 @@ async function main() {
       const session = getSession(sessionId);
       if (!session) return reply.code(404).send({ error: "Session not found" });
 
+      if (spinLock.has(sessionId)) {
+        return reply.code(429).send({ error: "Spin already in progress for this session" });
+      }
+
       const isFree = betUsdc === 0;
       if (!isFree && (betUsdc < 500_000 || betUsdc > 100_000_000)) {
         return reply.code(400).send({ error: "Bet out of range ($0.50 – $100)" });
       }
 
-      if (isFree) {
-        if (session.freeSpinsEarned <= session.freeSpinsUsed) {
-          return reply.code(400).send({ error: "No free spins remaining" });
-        }
-      } else {
-        try {
-          await debitBalance(session.wallet, betUsdc);
-        } catch (err) {
-          return reply.code(402).send({ error: (err as Error).message });
-        }
-      }
-
-      // Persist nonce increment before spinning — if server crashes mid-spin
-      // the nonce is already advanced, preventing any replay attack.
-      const updated = await incrementNonce(sessionId);
-
+      spinLock.add(sessionId);
       try {
-        const cumulativeVolume = getVolume(updated.mint);
-        const effectiveRtp = computeEffectiveRtp(updated.model, updated.targetRtp, cumulativeVolume);
-
-        const result = engine.spin(
-          updated.serverSeed,
-          updated.serverSeedHash,
-          updated.nonce,
-          clientSeed,
-          betUsdc,
-          updated.model,
-          effectiveRtp,
-        );
-
-        if (result.totalPayout > 0) {
-          await creditBalance(updated.wallet, result.totalPayout);
-        }
-
-        // Track free spin consumption / award
         if (isFree) {
-          await updateFreeSpins(sessionId, { used: 1 });
-        }
-        if (result.freeSpinsAwarded > 0) {
-          await updateFreeSpins(sessionId, { earned: result.freeSpinsAwarded });
-        }
-
-        // 4% house edge from every bet goes to the jackpot pool
-        if (!isFree && betUsdc > 0) {
-          const houseEdge = Math.floor(betUsdc * 0.04);
-          fundJackpot(houseEdge);
-          addVolume(updated.mint, betUsdc);
+          if (session.freeSpinsEarned <= session.freeSpinsUsed) {
+            return reply.code(400).send({ error: "No free spins remaining" });
+          }
+        } else {
+          try {
+            await debitBalance(session.wallet, betUsdc);
+          } catch (err) {
+            return reply.code(402).send({ error: (err as Error).message });
+          }
         }
 
-        if (result.isJackpot) {
-          fetch(`${API_URL}/internal/jackpot-won`, {
-            method:  "POST",
-            headers: { "Content-Type": "application/json", "x-internal-secret": INTERNAL_SECRET },
-            body:    JSON.stringify({ wallet: updated.wallet, mint: updated.mint, sessionId }),
-          }).catch((err) => app.log.error("[game-server] jackpot-won call failed:", err));
-        }
+        // Persist nonce increment before spinning — if server crashes mid-spin
+        // the nonce is already advanced, preventing any replay attack.
+        const updated = await incrementNonce(sessionId);
 
-        app.log.info({ wallet: updated.wallet, bet: betUsdc, payout: result.totalPayout, nonce: updated.nonce });
-        return reply.send(result);
-      } catch (err) {
-        if (!isFree) await creditBalance(session.wallet, betUsdc);
-        app.log.error(err);
-        return reply.code(500).send({ error: "Spin failed" });
+        try {
+          const cumulativeVolume = getVolume(updated.mint);
+          const effectiveRtp = computeEffectiveRtp(updated.model, updated.targetRtp, cumulativeVolume);
+
+          const result = engine.spin(
+            updated.serverSeed,
+            updated.serverSeedHash,
+            updated.nonce,
+            clientSeed,
+            betUsdc,
+            updated.model,
+            effectiveRtp,
+          );
+
+          if (result.totalPayout > 0) {
+            await creditBalance(updated.wallet, result.totalPayout);
+          }
+
+          // Track free spin consumption / award
+          if (isFree) {
+            await updateFreeSpins(sessionId, { used: 1 });
+          }
+          if (result.freeSpinsAwarded > 0) {
+            await updateFreeSpins(sessionId, { earned: result.freeSpinsAwarded });
+          }
+
+          // 4% house edge from every bet goes to the jackpot pool
+          if (!isFree && betUsdc > 0) {
+            const houseEdge = Math.floor(betUsdc * 0.04);
+            fundJackpot(houseEdge);
+            addVolume(updated.mint, betUsdc);
+          }
+
+          if (result.isJackpot) {
+            fetch(`${API_URL}/internal/jackpot-won`, {
+              method:  "POST",
+              headers: { "Content-Type": "application/json", "x-internal-secret": INTERNAL_SECRET },
+              body:    JSON.stringify({ wallet: updated.wallet, mint: updated.mint, sessionId }),
+            }).catch((err) => app.log.error("[game-server] jackpot-won call failed:", err));
+          }
+
+          app.log.info({ wallet: updated.wallet, bet: betUsdc, payout: result.totalPayout, nonce: updated.nonce });
+          return reply.send(result);
+        } catch (err) {
+          if (!isFree) await creditBalance(session.wallet, betUsdc);
+          app.log.error(err);
+          return reply.code(500).send({ error: "Spin failed" });
+        }
+      } finally {
+        spinLock.delete(sessionId);
       }
     },
   );

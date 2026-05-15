@@ -209,11 +209,34 @@ function chunk<T>(arr: T[], size: number): T[][] {
   return result;
 }
 
+// Exponential backoff retry — base 5s, doubles each attempt, max 3 tries.
+async function withRetry<T>(
+  label: string,
+  fn: () => Promise<T>,
+  maxAttempts = 3,
+  baseMs = 5_000,
+): Promise<T> {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      if (attempt === maxAttempts) throw err;
+      const wait = baseMs * Math.pow(2, attempt - 1);
+      console.error(
+        `[dividend] ${label} — attempt ${attempt}/${maxAttempts} failed, retrying in ${wait}ms: ` +
+        `${err instanceof Error ? err.message : err}`,
+      );
+      await new Promise((r) => setTimeout(r, wait));
+    }
+  }
+  throw new Error("unreachable");
+}
+
 // ── Run ───────────────────────────────────────────────────────────────────────
 
 async function runDividendRound(connection: Connection): Promise<void> {
   const authority       = getAuthority();
-  const dividendEntries = await getAllDividends();
+  const dividendEntries = await withRetry("getAllDividends", () => getAllDividends());
 
   // Only process mints that have graduated AND have accumulated lamports
   const graduatedMints = new Set(getGraduatedWithPool().map((t) => t.mint));
@@ -236,22 +259,23 @@ async function runDividendRound(connection: Connection): Promise<void> {
     );
 
     try {
-      const sent = await distributeToHolders(
-        connection,
-        authority,
-        entry.mint,
-        entry.accumulated,
+      const sent = await withRetry(
+        `distribute ${entry.mint.slice(0, 8)}…`,
+        () => distributeToHolders(connection, authority, entry.mint, entry.accumulated),
       );
 
       if (sent > 0) {
-        await recordDistribution(entry.mint, sent);
+        await withRetry(
+          `recordDistribution ${entry.mint.slice(0, 8)}…`,
+          () => recordDistribution(entry.mint, sent),
+        );
         console.log(
           `[dividend] ✅ ${entry.mint.slice(0, 8)}… — sent ${(sent / LAMPORTS_PER_SOL).toFixed(6)} SOL`,
         );
       }
     } catch (err: unknown) {
       console.error(
-        `[dividend] ❌ ${entry.mint.slice(0, 8)}… failed: ` +
+        `[dividend] ❌ ${entry.mint.slice(0, 8)}… failed after retries: ` +
         `${err instanceof Error ? err.message : err}`,
       );
     }

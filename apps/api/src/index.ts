@@ -99,6 +99,32 @@ app.use(
 app.use("/images", express.static(path.join(config.dataDir, "images")));
 app.use("/pfp",    express.static(path.join(config.dataDir, "pfp")));
 
+// ── Rate limiting ─────────────────────────────────────────────────────────────
+function makeRateLimiter(max: number, windowMs: number) {
+  const buckets = new Map<string, number[]>();
+  return function allowed(key: string): boolean {
+    const now = Date.now();
+    const cutoff = now - windowMs;
+    const hits = (buckets.get(key) ?? []).filter((t) => t > cutoff);
+    if (hits.length >= max) return false;
+    hits.push(now);
+    buckets.set(key, hits);
+    return true;
+  };
+}
+
+function clientIp(req: Request): string {
+  return String(
+    (req.headers["x-forwarded-for"] as string | undefined)?.split(",")[0].trim() ??
+    req.socket?.remoteAddress ??
+    "unknown",
+  );
+}
+
+const tradeLimiter    = makeRateLimiter(20, 60_000); // 20 buy/sell per IP per minute
+const depositLimiter  = makeRateLimiter(10, 60_000); // 10 deposit confirms per IP per minute
+const withdrawLimiter = makeRateLimiter(5,  60_000); // 5 withdrawals per IP per minute
+
 const connection = new Connection(config.rpcUrl, "confirmed");
 
 // ── Health ────────────────────────────────────────────────────────────────────
@@ -565,6 +591,7 @@ app.get("/sol-price", async (_req: Request, res: Response) => {
  * 4. Applies welcome bonus on first deposit (100% match, max $200, 45× wagering, 7-day expiry)
  */
 app.post("/deposit/confirm", async (req: Request, res: Response) => {
+  if (!depositLimiter(clientIp(req))) return res.status(429).json({ error: "Too many requests" });
   const { txSignature, wallet } = req.body as { txSignature: string; wallet: string };
   if (!txSignature || !wallet) {
     return res.status(400).json({ error: "txSignature and wallet required" });
@@ -725,6 +752,7 @@ function verifyWithdrawSignature(wallet: string, message: string, signatureBase6
  * message format: "ReelBit withdrawal {usdcUnits} at {unixMs}"
  */
 app.post("/withdraw", async (req: Request, res: Response) => {
+  if (!withdrawLimiter(clientIp(req))) return res.status(429).json({ error: "Too many requests" });
   const { wallet, usdcUnits, destination, signature, message } = req.body as {
     wallet: string;
     usdcUnits: number;
@@ -1477,6 +1505,7 @@ app.post("/tokens/:mint/comments/:id/like", (req: Request, res: Response) => {
  * Returns: { transaction: "<base64>", tokensOut: string, minTokensOut: string }
  */
 app.post("/tokens/:mint/buy", async (req: Request, res: Response) => {
+  if (!tradeLimiter(clientIp(req))) return res.status(429).json({ error: "Too many requests" });
   const { mint: mintStr } = req.params;
   const { wallet, solAmount, slippageBps: rawSlippage = 100 } = req.body as {
     wallet: string; solAmount: string | number; slippageBps?: number;
@@ -1515,6 +1544,7 @@ app.post("/tokens/:mint/buy", async (req: Request, res: Response) => {
  * Returns: { transaction: "<base64>", solOut: string, minSolOut: string }
  */
 app.post("/tokens/:mint/sell", async (req: Request, res: Response) => {
+  if (!tradeLimiter(clientIp(req))) return res.status(429).json({ error: "Too many requests" });
   const { mint: mintStr } = req.params;
   const { wallet, tokenAmount, slippageBps: rawSlippage = 100 } = req.body as {
     wallet: string; tokenAmount: string | number; slippageBps?: number;
