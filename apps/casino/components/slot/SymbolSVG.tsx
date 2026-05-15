@@ -30,12 +30,25 @@ export function SymbolSVG({ id, size = 100, highlighted = false, customSvg, them
   const idleFilter = "drop-shadow(0 2px 6px rgba(0,0,0,0.7))";
   const filter = highlighted ? winFilter : idleFilter;
 
-  // Custom AI-generated SVG (creator deployed custom theme)
+  // Custom AI-generated SVG — prefix all SVG element IDs to prevent
+  // gradient collisions when multiple symbols appear on the same page.
   if (customSvg) {
+    const prefix = `${uid}${id}`;
+    const ids: string[] = [];
+    const idRx = /\sid="([^"]+)"/g;
+    let m: RegExpExecArray | null;
+    while ((m = idRx.exec(customSvg)) !== null) ids.push(m[1]);
+    const deduped = ids.reduce((svg, eid) => {
+      const p = `${prefix}_${eid}`;
+      return svg
+        .replaceAll(`id="${eid}"`, `id="${p}"`)
+        .replaceAll(`url(#${eid})`, `url(#${p})`)
+        .replaceAll(`href="#${eid}"`, `href="#${p}"`);
+    }, customSvg);
     return (
       <div
         style={{ width: size, height: size, filter, flexShrink: 0 }}
-        dangerouslySetInnerHTML={{ __html: customSvg }}
+        dangerouslySetInnerHTML={{ __html: deduped }}
       />
     );
   }

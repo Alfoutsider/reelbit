@@ -309,7 +309,7 @@ app.post("/studio/analyze", async (req: Request, res: Response) => {
   if (!theme) return res.status(404).json({ error: "Slot not found" });
 
   try {
-    const analysis = await analyzeImage(base64, safeExt, mint);
+    const analysis = await analyzeImage(base64, safeExt, mint, theme.slotModel);
     res.json(analysis);
   } catch (err) {
     console.error("[studio] analyze error:", err);

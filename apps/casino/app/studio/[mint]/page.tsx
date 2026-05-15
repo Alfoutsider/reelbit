@@ -12,17 +12,25 @@ const ACCEPTED_MIME = ["image/jpeg", "image/png", "image/gif", "image/webp"];
 const EXT_MAP: Record<string, string> = {
   "image/jpeg": "jpg", "image/png": "png", "image/gif": "gif", "image/webp": "webp",
 };
+// Covers all symbol IDs across classic, dragon, and egyptian themes
 const SYMBOL_LABELS: Record<string, string> = {
-  SEVEN: "Jackpot", WILD: "Wild", BAR3: "Triple Bar", BAR2: "Double Bar",
+  // Classic
+  SEVEN: "Jackpot 7", WILD: "Wild", BAR3: "Triple Bar", BAR2: "Double Bar",
   BAR1: "Single Bar", BELL: "Bell", CHERRY: "Cherry", LEMON: "Lemon", ORANGE: "Orange",
+  // Dragon
+  DRAGON: "Dragon", FIRE_ORB: "Fire Orb", GEM: "Gem", SWORD: "Sword",
+  SHIELD: "Shield", HELMET: "Helmet", SCATTER: "Scatter",
+  // Egyptian
+  PHARAOH: "Pharaoh", EYE_RA: "Eye of Ra", ANUBIS: "Anubis", SCARAB: "Scarab",
+  ANKH: "Ankh", SNAKE: "Snake", VASE: "Vase",
 };
-const SYMBOL_ORDER = ["SEVEN", "WILD", "BAR3", "BAR2", "BAR1", "BELL", "CHERRY", "LEMON", "ORANGE"];
 
 interface StudioResult {
   themeDescription: string;
   palette: { primary: string; accent: string; bg: string };
   bgPrompt: string;
   symbols: Record<string, string>;
+  symbolIds?: string[];   // ordered list from backend; falls back to Object.keys
   sourceImageUrl: string;
   bgImageUrl: string;
 }
@@ -256,8 +264,14 @@ export default function StudioPage() {
                     </p>
                   </div>
                   <div className="flex flex-col gap-2 text-center text-xs font-orbitron text-white/20 space-y-1">
-                    {["Identifying visual theme", "Extracting color palette", "Generating SEVEN symbol", "Generating WILD, BAR symbols", "Generating remaining symbols"].map((step, i) => (
-                      <motion.p key={step} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 1.8 }}>
+                    {[
+                      "Identifying visual theme",
+                      "Extracting color palette",
+                      "Generating premium symbols",
+                      "Generating mid-tier symbols",
+                      "Finalizing low-tier symbols",
+                    ].map((step, i) => (
+                      <motion.p key={step} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 2.2 }}>
                         {step}…
                       </motion.p>
                     ))}
@@ -298,27 +312,32 @@ export default function StudioPage() {
                     </div>
                   </div>
 
-                  {/* Symbol grid */}
+                  {/* Symbol grid — uses symbolIds from backend for correct theme order */}
                   <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-5">
                     <p className="font-orbitron text-xs text-white/30 tracking-widest mb-4">GENERATED SYMBOLS</p>
-                    <div className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-9 gap-3">
-                      {SYMBOL_ORDER.map((id) => (
-                        <div key={id} className="flex flex-col items-center gap-2">
-                          <div className="w-20 h-20 rounded-xl overflow-hidden flex items-center justify-center"
-                            style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)" }}>
-                            {result.symbols[id] ? (
-                              <div
-                                style={{ width: 80, height: 80 }}
-                                dangerouslySetInnerHTML={{ __html: result.symbols[id] }}
-                              />
-                            ) : (
-                              <div className="text-white/10 text-xs font-orbitron">N/A</div>
-                            )}
-                          </div>
-                          <span className="text-[9px] font-orbitron text-white/30 text-center">{SYMBOL_LABELS[id]}</span>
+                    {(() => {
+                      const ids = result.symbolIds ?? Object.keys(result.symbols);
+                      const cols = ids.length <= 7 ? ids.length : ids.length <= 9 ? 9 : ids.length;
+                      return (
+                        <div className={`grid gap-3`} style={{ gridTemplateColumns: `repeat(${Math.min(cols, 9)}, minmax(0, 1fr))` }}>
+                          {ids.map((id) => (
+                            <div key={id} className="flex flex-col items-center gap-2">
+                              <div className="w-20 h-20 rounded-xl overflow-hidden flex items-center justify-center"
+                                style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)" }}>
+                                {result.symbols[id] ? (
+                                  <div style={{ width: 80, height: 80 }} dangerouslySetInnerHTML={{ __html: result.symbols[id] }} />
+                                ) : (
+                                  <div className="text-white/10 text-xs font-orbitron">—</div>
+                                )}
+                              </div>
+                              <span className="text-[9px] font-orbitron text-white/30 text-center">
+                                {SYMBOL_LABELS[id] ?? id}
+                              </span>
+                            </div>
+                          ))}
                         </div>
-                      ))}
-                    </div>
+                      );
+                    })()}
                   </div>
 
                   {/* Background preview */}
