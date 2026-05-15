@@ -25,6 +25,7 @@ interface Props {
 
 const REEL_COUNT_MAP = { Classic3Reel: 3, Standard5Reel: 5, FiveReelFreeSpins: 5 };
 const SYMBOL_SIZE = 100;
+const SPECIAL_SYMBOLS = new Set(["WILD", "SCATTER"]);
 
 // Spin pool uses Classic symbols for Classic, otherwise generic mid-tier symbols
 const CLASSIC_POOL: SymbolId[] = [
@@ -33,7 +34,6 @@ const CLASSIC_POOL: SymbolId[] = [
   "ORANGE", "BAR3", "BELL", "BAR2", "CHERRY", "LEMON",
 ];
 
-// For non-classic themes we use the theme's symbol IDs as the spin pool
 function buildSpinPool(themeId: ThemeId): string[] {
   switch (themeId) {
     case "dragon":
@@ -68,6 +68,43 @@ function getWinCells(result: SpinResult | null, is5reel: boolean): Set<string> {
   return cells;
 }
 
+// ── Chrome cabinet accent components ──────────────────────────────────────────
+
+function ChromeShine() {
+  return (
+    <>
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          background:
+            "linear-gradient(180deg, rgba(255,255,255,0.17) 0%, rgba(255,255,255,0.05) 28%, transparent 65%, rgba(0,0,0,0.2) 100%)",
+        }}
+      />
+      <div
+        className="absolute top-0 left-10 right-10 h-px pointer-events-none"
+        style={{
+          background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.5), transparent)",
+        }}
+      />
+    </>
+  );
+}
+
+function Rivet({ top, left, right, bottom }: { top?: number; left?: number; right?: number; bottom?: number }) {
+  return (
+    <div
+      className="absolute pointer-events-none z-20"
+      style={{
+        top, left, right, bottom,
+        width: 10, height: 10, borderRadius: "50%",
+        background:
+          "radial-gradient(circle at 33% 30%, rgba(255,255,255,0.6), rgba(190,195,210,0.3) 50%, rgba(0,0,0,0.55))",
+        boxShadow: "0 1px 4px rgba(0,0,0,0.75), inset 0 1px 0 rgba(255,255,255,0.3)",
+      }}
+    />
+  );
+}
+
 // ── Reel component ─────────────────────────────────────────────────────────────
 
 interface ReelProps {
@@ -80,17 +117,22 @@ interface ReelProps {
   customSymbols?: Record<string, string>;
   themeId:      ThemeId;
   spinPool:     string[];
+  anticipating: boolean;
 }
 
-function Reel({ reelIndex, symbols, spinning, stopDelay, winCells, onStop, customSymbols, themeId, spinPool }: ReelProps) {
-  const [phase, setPhase] = useState<"idle" | "spinning" | "stopping" | "settled">("idle");
+function Reel({
+  reelIndex, symbols, spinning, stopDelay, winCells,
+  onStop, customSymbols, themeId, spinPool, anticipating,
+}: ReelProps) {
+  const [phase, setPhase] = useState<"idle" | "spinning" | "anticipating" | "stopping" | "settled">("idle");
   const phaseRef = useRef(phase);
   phaseRef.current = phase;
 
+  // Main spin lifecycle
   useEffect(() => {
     if (spinning) {
       setPhase("spinning");
-    } else if (phaseRef.current === "spinning") {
+    } else if (phaseRef.current === "spinning" || phaseRef.current === "anticipating") {
       const t = setTimeout(() => {
         setPhase("stopping");
         setTimeout(() => {
@@ -100,9 +142,17 @@ function Reel({ reelIndex, symbols, spinning, stopDelay, winCells, onStop, custo
       }, stopDelay);
       return () => clearTimeout(t);
     }
-  }, [spinning, stopDelay, onStop]);
+  }, [spinning, stopDelay, onStop, reelIndex]);
+
+  // Anticipation trigger: slow this reel while others' specials land
+  useEffect(() => {
+    if (anticipating && phaseRef.current === "spinning") {
+      setPhase("anticipating");
+    }
+  }, [anticipating]);
 
   const spinStrip = [...spinPool, ...spinPool, ...spinPool];
+  const isSpinActive = phase === "spinning" || phase === "stopping" || phase === "anticipating";
 
   return (
     <div
@@ -110,58 +160,136 @@ function Reel({ reelIndex, symbols, spinning, stopDelay, winCells, onStop, custo
       style={{ width: SYMBOL_SIZE, height: SYMBOL_SIZE * 3 }}
     >
       {/* Spinning strip */}
-      {(phase === "spinning" || phase === "stopping") && (
-        <div className="absolute inset-0" style={{ filter: phase === "stopping" ? "blur(1.5px)" : "blur(4px)", opacity: 0.82 }}>
+      {isSpinActive && (
+        <div
+          className="absolute inset-0"
+          style={{
+            filter:
+              phase === "stopping"    ? "blur(1.5px)"
+              : phase === "anticipating" ? "blur(2.5px)"
+              : "blur(4px)",
+            opacity: phase === "anticipating" ? 0.95 : 0.82,
+          }}
+        >
           <motion.div
-            animate={phase === "spinning" ? { y: [0, -SYMBOL_SIZE * 18] } : { y: -SYMBOL_SIZE * 18 }}
+            animate={phase === "stopping" ? { y: -SYMBOL_SIZE * 18 } : { y: [0, -SYMBOL_SIZE * 18] }}
             transition={
-              phase === "spinning"
-                ? { duration: 0.55, repeat: Infinity, ease: "linear" }
-                : { duration: 0.22, ease: "easeOut" }
+              phase === "stopping"
+                ? { duration: 0.22, ease: "easeOut" }
+                : phase === "anticipating"
+                  ? { duration: 4.5, repeat: Infinity, ease: "linear" }
+                  : { duration: 0.55, repeat: Infinity, ease: "linear" }
             }
           >
             {spinStrip.map((sym, i) => (
               <div key={i} style={{ width: SYMBOL_SIZE, height: SYMBOL_SIZE, flexShrink: 0 }}>
-                <SymbolSVG id={sym} size={SYMBOL_SIZE} theme={themeId} customSvg={customSymbols?.[sym]}/>
+                <SymbolSVG id={sym} size={SYMBOL_SIZE} theme={themeId} customSvg={customSymbols?.[sym]} />
               </div>
             ))}
           </motion.div>
         </div>
       )}
 
+      {/* Anticipation border flash — amber pulse around the reel */}
+      {phase === "anticipating" && (
+        <motion.div
+          className="absolute inset-0 z-20 pointer-events-none rounded-lg"
+          animate={{ opacity: [0, 1, 0] }}
+          transition={{ duration: 0.65, repeat: Infinity, ease: "easeInOut" }}
+          style={{
+            border: "2px solid rgba(255,170,0,0.95)",
+            boxShadow: "0 0 22px rgba(255,140,0,0.65), inset 0 0 20px rgba(255,140,0,0.18)",
+          }}
+        />
+      )}
+
       {/* Settled symbols */}
-      {(phase === "settled" || phase === "idle") && symbols.map((sym, row) => {
-        const isWin = winCells.has(`${reelIndex}-${row}`);
-        return (
-          <motion.div
-            key={`${reelIndex}-${row}-${sym}`}
-            initial={phase === "settled" ? { y: -SYMBOL_SIZE * 0.4, opacity: 0 } : false}
-            animate={{ y: 0, opacity: 1 }}
-            transition={{ type: "spring", stiffness: 480, damping: 26, delay: row * 0.035 }}
-            style={{ position: "absolute", top: row * SYMBOL_SIZE, left: 0 }}
-            className={isWin ? "symbol-win" : undefined}
-          >
-            <SymbolSVG id={sym} size={SYMBOL_SIZE} highlighted={isWin} theme={themeId} customSvg={customSymbols?.[sym]}/>
+      {(phase === "settled" || phase === "idle") &&
+        symbols.map((sym, row) => {
+          const isWin     = winCells.has(`${reelIndex}-${row}`);
+          const isScatter = sym === "SCATTER";
+          const isWild    = sym === "WILD";
 
-            {/* Win cell glow border */}
-            {isWin && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: [0, 1, 0.6, 1] }}
-                transition={{ duration: 0.4 }}
-                className="absolute inset-1 rounded-lg pointer-events-none"
-                style={{ border: "2px solid rgba(255,215,0,0.75)", boxShadow: "inset 0 0 14px rgba(255,215,0,0.3), 0 0 20px rgba(255,215,0,0.2)" }}
+          return (
+            <motion.div
+              key={`${reelIndex}-${row}-${sym}`}
+              initial={phase === "settled" ? { y: -SYMBOL_SIZE * 0.4, opacity: 0 } : false}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ type: "spring", stiffness: 480, damping: 26, delay: row * 0.035 }}
+              style={{ position: "absolute", top: row * SYMBOL_SIZE, left: 0 }}
+              className={isWin ? "symbol-win" : undefined}
+            >
+              <SymbolSVG
+                id={sym}
+                size={SYMBOL_SIZE}
+                highlighted={isWin}
+                theme={themeId}
+                customSvg={customSymbols?.[sym]}
               />
-            )}
-          </motion.div>
-        );
-      })}
 
-      {/* Top/bottom fade masks */}
-      <div className="absolute top-0 left-0 right-0 h-10 z-10 pointer-events-none"
-        style={{ background: "linear-gradient(to bottom, rgba(6,6,20,0.92), transparent)" }}/>
-      <div className="absolute bottom-0 left-0 right-0 h-10 z-10 pointer-events-none"
-        style={{ background: "linear-gradient(to top, rgba(6,6,20,0.92), transparent)" }}/>
+              {/* Win cell glow border */}
+              {isWin && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: [0, 1, 0.6, 1] }}
+                  transition={{ duration: 0.4 }}
+                  className="absolute inset-1 rounded-lg pointer-events-none"
+                  style={{
+                    border: "2px solid rgba(255,215,0,0.75)",
+                    boxShadow: "inset 0 0 14px rgba(255,215,0,0.3), 0 0 20px rgba(255,215,0,0.2)",
+                  }}
+                />
+              )}
+
+              {/* Scatter ring pulse — expanding ring that fades out */}
+              {isScatter && phase === "settled" && (
+                <motion.div
+                  key={`scatter-ring-${reelIndex}-${row}`}
+                  className="absolute inset-0 pointer-events-none"
+                  style={{ borderRadius: "50%", border: "2.5px solid rgba(255,210,50,0.95)" }}
+                  initial={{ scale: 0.85, opacity: 1 }}
+                  animate={{ scale: 2.3, opacity: 0 }}
+                  transition={{ duration: 0.75, ease: "easeOut", delay: row * 0.08 }}
+                />
+              )}
+              {isScatter && phase === "settled" && (
+                <motion.div
+                  key={`scatter-glow-${reelIndex}-${row}`}
+                  className="absolute inset-0 rounded-lg pointer-events-none"
+                  style={{ background: "radial-gradient(ellipse, rgba(255,220,60,0.65) 0%, transparent 65%)" }}
+                  initial={{ opacity: 0.9 }}
+                  animate={{ opacity: 0 }}
+                  transition={{ duration: 0.6, ease: "easeOut", delay: row * 0.08 + 0.12 }}
+                />
+              )}
+
+              {/* Wild expand glow — sphere that shrinks inward */}
+              {isWild && phase === "settled" && (
+                <motion.div
+                  key={`wild-glow-${reelIndex}-${row}`}
+                  className="absolute inset-0 rounded-lg pointer-events-none"
+                  style={{
+                    background:
+                      "radial-gradient(ellipse, rgba(185,100,255,0.72) 0%, rgba(120,55,220,0.35) 50%, transparent 75%)",
+                  }}
+                  initial={{ scale: 1.45, opacity: 0.88 }}
+                  animate={{ scale: 1.0, opacity: 0 }}
+                  transition={{ duration: 0.55, ease: "easeOut", delay: row * 0.06 }}
+                />
+              )}
+            </motion.div>
+          );
+        })}
+
+      {/* Top/bottom fade masks — mask the reel behind the bezel edges */}
+      <div
+        className="absolute top-0 left-0 right-0 h-10 z-10 pointer-events-none"
+        style={{ background: "linear-gradient(to bottom, rgba(6,6,20,0.92), transparent)" }}
+      />
+      <div
+        className="absolute bottom-0 left-0 right-0 h-10 z-10 pointer-events-none"
+        style={{ background: "linear-gradient(to top, rgba(6,6,20,0.92), transparent)" }}
+      />
     </div>
   );
 }
@@ -193,19 +321,23 @@ function WinLineDisplay({ result }: { result: SpinResult }) {
         transition={{ duration: 0.18 }}
         className="flex items-center gap-3"
       >
-        <div className="h-px flex-1 bg-gradient-to-r from-transparent to-yellow-500/40"/>
+        <div className="h-px flex-1 bg-gradient-to-r from-transparent to-yellow-500/40" />
         <div className="flex items-center gap-2 bg-black/60 border border-yellow-500/30 rounded-full px-4 py-1.5">
-          <span className="font-orbitron text-[10px] font-bold text-yellow-400/70">LINE {active.paylineIndex + 1}</span>
-          <span className="w-px h-3 bg-white/10"/>
+          <span className="font-orbitron text-[10px] font-bold text-yellow-400/70">
+            LINE {active.paylineIndex + 1}
+          </span>
+          <span className="w-px h-3 bg-white/10" />
           <span className="font-orbitron text-sm font-black text-yellow-300">×{topMult}</span>
           {lines.length > 1 && (
             <>
-              <span className="w-px h-3 bg-white/10"/>
-              <span className="font-orbitron text-[9px] text-white/30">{activeIdx + 1}/{lines.length}</span>
+              <span className="w-px h-3 bg-white/10" />
+              <span className="font-orbitron text-[9px] text-white/30">
+                {activeIdx + 1}/{lines.length}
+              </span>
             </>
           )}
         </div>
-        <div className="h-px flex-1 bg-gradient-to-l from-transparent to-yellow-500/40"/>
+        <div className="h-px flex-1 bg-gradient-to-l from-transparent to-yellow-500/40" />
       </motion.div>
     </AnimatePresence>
   );
@@ -213,20 +345,34 @@ function WinLineDisplay({ result }: { result: SpinResult }) {
 
 // ── SlotMachine ────────────────────────────────────────────────────────────────
 
-export function SlotMachine({ model, spinResult, isSpinning, onSpinComplete, onReelStop, theme, customSymbols }: Props) {
+export function SlotMachine({
+  model, spinResult, isSpinning, onSpinComplete, onReelStop, theme, customSymbols,
+}: Props) {
   const themeId: ThemeId = MODEL_TO_THEME[model] ?? "classic";
   const themeConfig = getThemeForModel(model);
-  const primary    = theme?.primaryColor ?? themeConfig.cabinet.primary;
-  const accent     = theme?.accentColor  ?? themeConfig.cabinet.secondary;
-  const reelCount  = REEL_COUNT_MAP[model];
-  const is5reel    = model !== "Classic3Reel";
-  const prevSpinning = useRef(false);
-  const [settled, setSettled]     = useState(false);
-  const [winFlash, setWinFlash]   = useState(false);
+  const primary  = theme?.primaryColor ?? themeConfig.cabinet.primary;
+  const accent   = theme?.accentColor  ?? themeConfig.cabinet.secondary;
+  const reelCount = REEL_COUNT_MAP[model];
+  const is5reel   = model !== "Classic3Reel";
+
+  const prevSpinning    = useRef(false);
+  const specialLandedRef = useRef(0);
+
+  const [settled,      setSettled]      = useState(false);
+  const [winFlash,     setWinFlash]     = useState(false);
   const [stoppedReels, setStoppedReels] = useState(0);
   const [paytableOpen, setPaytableOpen] = useState(false);
+  const [anticipating, setAnticipating] = useState(false);
 
   const spinPool = buildSpinPool(themeId);
+
+  // Reset anticipation state when a new spin begins
+  useEffect(() => {
+    if (isSpinning) {
+      specialLandedRef.current = 0;
+      setAnticipating(false);
+    }
+  }, [isSpinning]);
 
   const reelGrid: string[][] = spinResult?.reels ?? Array.from(
     { length: reelCount },
@@ -261,6 +407,15 @@ export function SlotMachine({ model, spinResult, isSpinning, onSpinComplete, onR
   const handleReelStop = (idx: number) => {
     setStoppedReels((n) => n + 1);
     onReelStop?.(idx);
+
+    // Anticipation: if this reel has a special symbol and there are reels left to stop, slow them
+    const reelSymbols = spinResult?.reels?.[idx];
+    if (reelSymbols?.some((sym) => SPECIAL_SYMBOLS.has(sym))) {
+      specialLandedRef.current++;
+      if (specialLandedRef.current >= 2 && idx < reelCount - 1) {
+        setAnticipating(true);
+      }
+    }
   };
 
   const totalWidth   = reelCount * SYMBOL_SIZE + (reelCount - 1) * 8;
@@ -268,46 +423,59 @@ export function SlotMachine({ model, spinResult, isSpinning, onSpinComplete, onR
 
   return (
     <>
-      <div className="flex flex-col items-center gap-0 select-none">
+      <div
+        className="flex flex-col items-center gap-0 select-none"
+        style={{ filter: "drop-shadow(0 12px 48px rgba(0,0,0,0.75))" }}
+      >
 
-        {/* ── Cabinet top bar ── */}
+        {/* ── Cabinet top bar — chrome metallic header ── */}
         <div
           className="relative flex items-center justify-center rounded-t-3xl px-6 py-3.5 overflow-hidden"
           style={{
             width: cabinetWidth,
             background: themeConfig.cabinet.bodyGrad,
-            borderTop:    `2px solid ${primary}`,
-            borderLeft:   `2px solid ${primary}`,
-            borderRight:  `2px solid ${primary}`,
-            borderBottom: "1px solid rgba(255,255,255,0.06)",
+            borderTop:    "2px solid rgba(255,255,255,0.20)",
+            borderLeft:   "2px solid rgba(255,255,255,0.14)",
+            borderRight:  "2px solid rgba(255,255,255,0.08)",
+            borderBottom: "1px solid rgba(0,0,0,0.45)",
+            boxShadow:    "inset 0 1px 0 rgba(255,255,255,0.14), 0 4px 24px rgba(0,0,0,0.55)",
           }}
         >
-          {/* Animated theme background inside header */}
+          <ChromeShine />
+
+          {/* Animated theme background at low opacity */}
           <div className="absolute inset-0 opacity-30">
-            <ThemeBackground theme={themeId}/>
+            <ThemeBackground theme={themeId} />
           </div>
 
-          {/* Left diamonds */}
+          {/* Left corner diamonds */}
           <div className="absolute left-5 top-1/2 -translate-y-1/2 flex gap-1 z-10">
             {[1, 0.5].map((o, i) => (
               <div key={i} className="text-sm" style={{ color: primary, opacity: o }}>◆</div>
             ))}
           </div>
 
-          {/* Title */}
+          {/* Embossed title */}
           <div className="text-center z-10 relative">
             <div
               className="text-base tracking-[0.35em] font-black leading-none"
-              style={{ fontFamily: "Orbitron, sans-serif", color: primary, textShadow: `0 0 20px ${primary}aa` }}
+              style={{
+                fontFamily: "Orbitron, sans-serif",
+                color: primary,
+                textShadow: `0 1px 0 rgba(0,0,0,0.6), 0 0 22px ${primary}bb, 0 -1px 0 rgba(255,255,255,0.08)`,
+              }}
             >
               {theme?.status === "ready" ? theme.tokenSymbol : themeConfig.name.toUpperCase()}
             </div>
-            <div className="text-[8px] tracking-[0.45em] font-medium mt-1" style={{ color: "rgba(255,255,255,0.25)" }}>
+            <div
+              className="text-[8px] tracking-[0.45em] font-medium mt-1"
+              style={{ color: "rgba(255,255,255,0.25)" }}
+            >
               {theme?.status === "ready" ? theme.tokenName.toUpperCase() : themeConfig.tagline.toUpperCase()}
             </div>
           </div>
 
-          {/* Right diamonds */}
+          {/* Right corner diamonds */}
           <div className="absolute right-5 top-1/2 -translate-y-1/2 flex gap-1 z-10">
             {[0.5, 1].map((o, i) => (
               <div key={i} className="text-sm" style={{ color: primary, opacity: o }}>◆</div>
@@ -320,86 +488,107 @@ export function SlotMachine({ model, spinResult, isSpinning, onSpinComplete, onR
             className="absolute right-16 top-1/2 -translate-y-1/2 z-10 flex items-center gap-1 opacity-50 hover:opacity-100 transition-opacity"
             title="View Paytable"
           >
-            <BookOpen size={12} style={{ color: primary }}/>
+            <BookOpen size={12} style={{ color: primary }} />
           </button>
         </div>
 
-        {/* ── Reel window ── */}
+        {/* ── Chrome reel bezel — beveled frame surrounding the reel window ── */}
         <div
-          className="relative flex items-center justify-center overflow-hidden"
+          className="relative"
           style={{
             width: cabinetWidth,
-            background: themeConfig.cabinet.reelGrad,
-            borderLeft:  `2px solid ${primary}`,
-            borderRight: `2px solid ${primary}`,
-            padding: "18px 36px",
+            background:
+              "linear-gradient(180deg, rgba(255,255,255,0.11) 0%, rgba(90,90,115,0.07) 45%, rgba(0,0,0,0.28) 100%)",
+            borderLeft:  "2px solid rgba(255,255,255,0.11)",
+            borderRight: "2px solid rgba(255,255,255,0.06)",
+            padding: "5px 0",
           }}
         >
-          {/* Animated background */}
-          <ThemeBackground theme={themeId}/>
+          {/* Bezel corner rivets */}
+          <Rivet top={5} left={7} />
+          <Rivet top={5} right={7} />
+          <Rivet bottom={5} left={7} />
+          <Rivet bottom={5} right={7} />
 
-          {/* Custom token BG image */}
-          {(customSymbols ? theme?.customAssets?.bgImageUrl : theme?.bgImageUrl) && (
-            <div
-              className="absolute inset-0 pointer-events-none z-[1]"
-              style={{
-                backgroundImage: `url(${customSymbols ? theme?.customAssets?.bgImageUrl : theme?.bgImageUrl})`,
-                backgroundSize: "cover",
-                backgroundPosition: "center",
-                opacity: 0.12,
-                filter: "blur(2px)",
-              }}
-            />
-          )}
-
-          {/* Accent radial glow */}
+          {/* Reel window — deep inset look */}
           <div
-            className="absolute inset-0 pointer-events-none z-[2]"
-            style={{ background: `radial-gradient(ellipse 70% 50% at 50% 50%, ${accent}14 0%, transparent 70%)` }}
-          />
+            className="relative flex items-center justify-center overflow-hidden"
+            style={{
+              background: themeConfig.cabinet.reelGrad,
+              padding: "18px 36px",
+              boxShadow:
+                "inset 0 7px 28px rgba(0,0,0,0.78), inset 0 -3px 14px rgba(0,0,0,0.42), inset 0 0 0 1px rgba(255,255,255,0.04)",
+            }}
+          >
+            {/* Animated background */}
+            <ThemeBackground theme={themeId} />
 
-          {/* Win flash overlay */}
-          <AnimatePresence>
-            {winFlash && (
-              <motion.div
-                key="winflash"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: [0, 0.55, 0.2, 0.45, 0] }}
-                transition={{ duration: 0.75, times: [0, 0.15, 0.5, 0.75, 1] }}
-                className="absolute inset-0 pointer-events-none z-30 rounded-none"
-                style={{ background: `radial-gradient(ellipse at center, ${primary}55 0%, transparent 70%)` }}
+            {/* Custom token BG image */}
+            {(customSymbols ? theme?.customAssets?.bgImageUrl : theme?.bgImageUrl) && (
+              <div
+                className="absolute inset-0 pointer-events-none z-[1]"
+                style={{
+                  backgroundImage: `url(${customSymbols ? theme?.customAssets?.bgImageUrl : theme?.bgImageUrl})`,
+                  backgroundSize: "cover",
+                  backgroundPosition: "center",
+                  opacity: 0.12,
+                  filter: "blur(2px)",
+                }}
               />
             )}
-          </AnimatePresence>
 
-          {/* Reels */}
-          <div className="relative flex gap-[8px] z-10" style={{ height: SYMBOL_SIZE * 3 }}>
-            {Array.from({ length: reelCount }, (_, r) => (
-              <Reel
-                key={r}
-                reelIndex={r}
-                symbols={reelGrid[r] ?? spinPool.slice(0, 3)}
-                spinning={isSpinning}
-                stopDelay={stopDelay(r)}
-                winCells={winCells}
-                onStop={handleReelStop}
-                customSymbols={customSymbols}
-                themeId={themeId}
-                spinPool={spinPool}
-              />
-            ))}
+            {/* Accent radial glow */}
+            <div
+              className="absolute inset-0 pointer-events-none z-[2]"
+              style={{
+                background: `radial-gradient(ellipse 70% 50% at 50% 50%, ${accent}14 0%, transparent 70%)`,
+              }}
+            />
+
+            {/* Win flash overlay */}
+            <AnimatePresence>
+              {winFlash && (
+                <motion.div
+                  key="winflash"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: [0, 0.55, 0.2, 0.45, 0] }}
+                  transition={{ duration: 0.75, times: [0, 0.15, 0.5, 0.75, 1] }}
+                  className="absolute inset-0 pointer-events-none z-30"
+                  style={{ background: `radial-gradient(ellipse at center, ${primary}55 0%, transparent 70%)` }}
+                />
+              )}
+            </AnimatePresence>
+
+            {/* Reels */}
+            <div className="relative flex gap-[8px] z-10" style={{ height: SYMBOL_SIZE * 3 }}>
+              {Array.from({ length: reelCount }, (_, r) => (
+                <Reel
+                  key={r}
+                  reelIndex={r}
+                  symbols={reelGrid[r] ?? spinPool.slice(0, 3)}
+                  spinning={isSpinning}
+                  stopDelay={stopDelay(r)}
+                  winCells={winCells}
+                  onStop={handleReelStop}
+                  customSymbols={customSymbols}
+                  themeId={themeId}
+                  spinPool={spinPool}
+                  anticipating={anticipating}
+                />
+              ))}
+            </div>
+
+            {/* Center payline guide */}
+            <div
+              className="absolute inset-x-8 pointer-events-none z-10"
+              style={{
+                top: 18 + SYMBOL_SIZE,
+                height: SYMBOL_SIZE,
+                border: `1px solid ${primary}18`,
+                borderRadius: 4,
+              }}
+            />
           </div>
-
-          {/* Center payline guide */}
-          <div
-            className="absolute inset-x-8 pointer-events-none z-10"
-            style={{
-              top: 18 + SYMBOL_SIZE,
-              height: SYMBOL_SIZE,
-              border: `1px solid ${primary}18`,
-              borderRadius: 4,
-            }}
-          />
         </div>
 
         {/* ── Win line readout ── */}
@@ -407,15 +596,15 @@ export function SlotMachine({ model, spinResult, isSpinning, onSpinComplete, onR
           className="px-6 py-2.5"
           style={{
             width: cabinetWidth,
-            background: "linear-gradient(180deg, #0e0e24 0%, #080818 100%)",
-            borderLeft:   `2px solid ${primary}`,
-            borderRight:  `2px solid ${primary}`,
-            borderBottom: "1px solid rgba(255,255,255,0.04)",
+            background: "linear-gradient(180deg, #0c0c1e 0%, #070712 100%)",
+            borderLeft:   "2px solid rgba(255,255,255,0.07)",
+            borderRight:  "2px solid rgba(255,255,255,0.04)",
+            borderBottom: "1px solid rgba(0,0,0,0.5)",
             minHeight: 44,
           }}
         >
           {settled && spinResult && spinResult.winLines.length > 0 ? (
-            <WinLineDisplay result={spinResult}/>
+            <WinLineDisplay result={spinResult} />
           ) : (
             <div className="flex items-center justify-between text-[9px] font-orbitron text-white/15 tracking-widest">
               <span>{model === "Classic3Reel" ? "1 LINE" : "20 LINES"}</span>
@@ -425,28 +614,51 @@ export function SlotMachine({ model, spinResult, isSpinning, onSpinComplete, onR
           )}
         </div>
 
-        {/* ── Cabinet bottom ── */}
+        {/* ── Cabinet bottom — chrome footer with glass LED housing ── */}
         <div
-          className="rounded-b-3xl px-6 py-2"
+          className="relative rounded-b-3xl overflow-hidden px-6 py-3"
           style={{
             width: cabinetWidth,
-            background: "linear-gradient(180deg, #080818 0%, #050510 100%)",
-            borderBottom: `2px solid ${primary}`,
-            borderLeft:   `2px solid ${primary}`,
-            borderRight:  `2px solid ${primary}`,
+            background: "linear-gradient(180deg, #070712 0%, #04040c 65%, #020208 100%)",
+            borderBottom: "2px solid rgba(255,255,255,0.09)",
+            borderLeft:   "2px solid rgba(255,255,255,0.07)",
+            borderRight:  "2px solid rgba(255,255,255,0.04)",
+            boxShadow:    "inset 0 1px 0 rgba(255,255,255,0.05), 0 8px 36px rgba(0,0,0,0.85)",
           }}
         >
-          {/* LED strip */}
-          <div className="flex items-center justify-center gap-1.5">
-            {Array.from({ length: 7 }, (_, i) => (
-              <motion.div
-                key={i}
-                className="w-1.5 h-1.5 rounded-full"
-                style={{ background: primary }}
-                animate={{ opacity: [0.2, 1, 0.2] }}
-                transition={{ duration: 1.2, repeat: Infinity, delay: i * 0.15, ease: "easeInOut" }}
-              />
-            ))}
+          <ChromeShine />
+
+          {/* Glass LED housing capsule */}
+          <div className="relative flex items-center justify-center">
+            <div
+              className="flex items-center gap-2 px-6 py-2 rounded-full"
+              style={{
+                background: "linear-gradient(180deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.01) 100%)",
+                boxShadow:
+                  "inset 0 1px 0 rgba(255,255,255,0.12), inset 0 -1px 0 rgba(0,0,0,0.35), 0 2px 10px rgba(0,0,0,0.6)",
+                border: "1px solid rgba(255,255,255,0.09)",
+              }}
+            >
+              {Array.from({ length: 9 }, (_, i) => (
+                <motion.div
+                  key={i}
+                  className="rounded-full"
+                  style={{
+                    width: 6,
+                    height: 6,
+                    background: `radial-gradient(circle at 33% 33%, rgba(255,255,255,0.85), ${primary})`,
+                    boxShadow: `0 0 7px ${primary}cc, 0 0 2px ${primary}`,
+                  }}
+                  animate={{ opacity: [0.14, 1, 0.14] }}
+                  transition={{
+                    duration: 1.4,
+                    repeat: Infinity,
+                    delay: i * 0.13,
+                    ease: "easeInOut",
+                  }}
+                />
+              ))}
+            </div>
           </div>
         </div>
       </div>
