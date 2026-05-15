@@ -1435,12 +1435,27 @@ app.get("/tokens/:mint/comments", (req: Request, res: Response) => {
   res.json(getComments(req.params.mint, limit));
 });
 
-/** POST /tokens/:mint/comments  { wallet, text } */
+// Per-wallet comment rate limit: max 5 comments per minute
+const commentRateLimit = new Map<string, number[]>();
+const COMMENT_WINDOW_MS = 60_000;
+const COMMENT_MAX       = 5;
+
+/** POST /tokens/:mint/comments  { wallet, text, signature } */
 app.post("/tokens/:mint/comments", (req: Request, res: Response) => {
-  const { wallet, text } = req.body as { wallet?: string; text?: string };
+  const { wallet, text, signature } = req.body as { wallet?: string; text?: string; signature?: string };
   if (!wallet || !text?.trim()) {
     return res.status(400).json({ error: "wallet and text required" });
   }
+  if (!signature || !verifyWithdrawSignature(wallet, `reelbit-comment:${text.trim()}`, signature)) {
+    return res.status(401).json({ error: "Valid wallet signature required" });
+  }
+  const now  = Date.now();
+  const hits = (commentRateLimit.get(wallet) ?? []).filter((t) => now - t < COMMENT_WINDOW_MS);
+  if (hits.length >= COMMENT_MAX) {
+    return res.status(429).json({ error: "Too many comments — wait a moment before posting again" });
+  }
+  hits.push(now);
+  commentRateLimit.set(wallet, hits);
   try {
     const comment = addComment(req.params.mint, wallet, text);
     res.status(201).json(comment);
@@ -1463,9 +1478,10 @@ app.post("/tokens/:mint/comments/:id/like", (req: Request, res: Response) => {
  */
 app.post("/tokens/:mint/buy", async (req: Request, res: Response) => {
   const { mint: mintStr } = req.params;
-  const { wallet, solAmount, slippageBps = 100 } = req.body as {
+  const { wallet, solAmount, slippageBps: rawSlippage = 100 } = req.body as {
     wallet: string; solAmount: string | number; slippageBps?: number;
   };
+  const slippageBps = Math.min(Math.max(Number(rawSlippage) || 100, 1), 500);
 
   if (!wallet || !solAmount) return res.status(400).json({ error: "wallet and solAmount required" });
 
@@ -1500,9 +1516,10 @@ app.post("/tokens/:mint/buy", async (req: Request, res: Response) => {
  */
 app.post("/tokens/:mint/sell", async (req: Request, res: Response) => {
   const { mint: mintStr } = req.params;
-  const { wallet, tokenAmount, slippageBps = 100 } = req.body as {
+  const { wallet, tokenAmount, slippageBps: rawSlippage = 100 } = req.body as {
     wallet: string; tokenAmount: string | number; slippageBps?: number;
   };
+  const slippageBps = Math.min(Math.max(Number(rawSlippage) || 100, 1), 500);
 
   if (!wallet || !tokenAmount) return res.status(400).json({ error: "wallet and tokenAmount required" });
 
@@ -1863,6 +1880,12 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
 
 app.listen(config.port, () => {
   console.log(`[api] ReelBit API running on port ${config.port}`);
+  if (isProduction && !process.env.DATA_DIR) {
+    console.warn(
+      "[api] WARNING: DATA_DIR is not set. Balance store and session data are written to ./data " +
+      "which is wiped on every Render deploy. Set DATA_DIR to a persistent disk mount path before mainnet launch."
+    );
+  }
   loadTrades();
   startDistributionCron(connection);
   startCreatorHoldingCron(connection);

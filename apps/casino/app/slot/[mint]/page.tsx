@@ -58,16 +58,28 @@ async function sha256Hex(input: string): Promise<string> {
   return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+// Mirrors server rng.ts: HMAC-SHA256(key=serverSeed, data="clientSeed:nonce:reelIndex")
+async function hmacSha256Hex(key: string, data: string): Promise<string> {
+  const enc = new TextEncoder();
+  const cryptoKey = await crypto.subtle.importKey(
+    "raw", enc.encode(key), { name: "HMAC", hash: "SHA-256" }, false, ["sign"],
+  );
+  const buf = await crypto.subtle.sign("HMAC", cryptoKey, enc.encode(data));
+  return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
 async function verifyAllSpinsOffline(
   serverSeed:     string,
   serverSeedHash: string,
   spins:          RecentSpin[],
 ): Promise<VerifyResult> {
+  // Server seed hash is plain SHA-256 of the seed
   const computedHash = await sha256Hex(serverSeed);
   const hashMatch    = computedHash.toLowerCase() === serverSeedHash.toLowerCase();
   const spinFingerprints: VerifyResult["spinFingerprints"] = [];
   for (const s of spins) {
-    const fp = await sha256Hex(`${serverSeed}:${s.result.clientSeed}:${s.result.nonce}:0`);
+    // Reel 0 fingerprint: HMAC-SHA256(serverSeed, "clientSeed:nonce:0")
+    const fp = await hmacSha256Hex(serverSeed, `${s.result.clientSeed}:${s.result.nonce}:0`);
     spinFingerprints.push({ nonce: s.result.nonce, clientSeed: s.result.clientSeed, reel0Hex: fp.slice(0, 8) });
   }
   return { hashMatch, computedHash, spinFingerprints };

@@ -227,6 +227,12 @@ async function main() {
   const PORT = parseInt(process.env.PORT ?? "3003");
   await app.listen({ port: PORT, host: "0.0.0.0" });
   console.log(`[game-server] Running on port ${PORT}`);
+  if (process.env.NODE_ENV === "production" && !process.env.DATA_DIR) {
+    console.warn(
+      "[game-server] WARNING: DATA_DIR is not set. Session store writes to ./data " +
+      "which is wiped on every Render deploy. Set DATA_DIR to a persistent disk mount path before mainnet launch."
+    );
+  }
 }
 
 main().catch((err) => { console.error(err); process.exit(1); });
