@@ -765,7 +765,7 @@ function SlotCard({ slot, index }: { slot: SlotEntry; index: number }) {
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: Math.min(index * 0.04, 0.18), ease: "easeOut" }}
     >
-      <Link href={`/slot/${slot.mint}`} className="block h-full group">
+      <Link href={`/slot/${slot.mint}?model=${slot.slotModel}`} className="block h-full group">
         <div
           className="card-slot h-full cursor-pointer"
           style={{ "--hover-color": slot.primaryColor } as React.CSSProperties}
@@ -1030,7 +1030,7 @@ function DemoSlotCard({ slot, index }: { slot: DemoSlot; index: number }) {
 function FeaturedSlotCard({ slot, rank }: { slot: SlotEntry; rank: number }) {
   const rtp = MODEL_RTP[slot.slotModel] ?? "96%";
   return (
-    <Link href={`/slot/${slot.mint}`} className="block group flex-1 min-w-0">
+    <Link href={`/slot/${slot.mint}?model=${slot.slotModel}`} className="block group flex-1 min-w-0">
       <div
         className="relative overflow-hidden rounded-2xl card-premium cursor-pointer h-full"
         style={{ "--bgc": "var(--bg-card)" } as React.CSSProperties}

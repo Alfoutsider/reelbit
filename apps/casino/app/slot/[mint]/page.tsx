@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { usePrivy, useWallets } from "@/lib/privy";
 import { Connection, PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
@@ -88,8 +89,16 @@ async function verifyAllSpinsOffline(
   return { hashMatch, computedHash, spinFingerprints };
 }
 
+type SlotModel = "Classic3Reel" | "Standard5Reel" | "FiveReelFreeSpins";
+const VALID_MODELS = new Set<SlotModel>(["Classic3Reel", "Standard5Reel", "FiveReelFreeSpins"]);
+
 export default function CasinoSlotPage({ params }: { params: { mint: string } }) {
   const { mint } = params;
+  const searchParams = useSearchParams();
+  const modelParam = (() => {
+    const m = searchParams.get("model");
+    return m && VALID_MODELS.has(m as SlotModel) ? (m as SlotModel) : null;
+  })();
   const { authenticated, login } = usePrivy();
   const { wallets } = useWallets();
 
@@ -196,7 +205,7 @@ export default function CasinoSlotPage({ params }: { params: { mint: string } })
   // Create game-server session (non-demo only)
   useEffect(() => {
     if (isDemo || !authenticated || !walletAddress || session) return;
-    createSession(walletAddress, theme?.slotModel ?? "Classic3Reel", mint)
+    createSession(walletAddress, theme?.slotModel ?? modelParam ?? "Classic3Reel", mint)
       .then(setSession)
       .catch((e) => setError(`Session error: ${e.message}`));
   }, [isDemo, authenticated, walletAddress, session, theme, mint]);
@@ -228,7 +237,7 @@ export default function CasinoSlotPage({ params }: { params: { mint: string } })
         if (!isFree && (getDemoSession()?.balance ?? 0) < demoBet) {
           throw new Error("Insufficient demo balance");
         }
-        result = demoSpin(isFree ? 0 : demoBet, theme?.slotModel ?? "Classic3Reel");
+        result = demoSpin(isFree ? 0 : demoBet, theme?.slotModel ?? modelParam ?? "Classic3Reel");
       } else {
         result = await spin(session!.sessionId, clientSeed, effectiveBet || DEFAULT_BET_USDC);
         setClientSeed(generateClientSeed());
@@ -517,7 +526,7 @@ export default function CasinoSlotPage({ params }: { params: { mint: string } })
             </AnimatePresence>
 
             <SlotMachine
-              model={theme?.slotModel ?? "Classic3Reel"}
+              model={theme?.slotModel ?? modelParam ?? "Classic3Reel"}
               spinResult={spinResult}
               isSpinning={isSpinning}
               onSpinComplete={handleSpinComplete}
@@ -661,7 +670,7 @@ export default function CasinoSlotPage({ params }: { params: { mint: string } })
         <WinPresenter
           payoutUsdc={showWin.totalPayout}
           betUsdc={showWin.betAmount}
-          themeId={MODEL_TO_THEME[theme?.slotModel ?? "Classic3Reel"]}
+          themeId={MODEL_TO_THEME[theme?.slotModel ?? modelParam ?? "Classic3Reel"]}
           onDismiss={() => setShowWin(null)}
           onCoinPing={playCoinPing}
         />
