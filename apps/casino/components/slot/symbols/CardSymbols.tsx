@@ -3,7 +3,8 @@
 
 import type { JSX } from "react";
 
-type Renderer = (uid: string, size: number, filter: string, primary: string, secondary: string) => JSX.Element;
+// 3-param renderer — primary/secondary are already closed over
+type ClosedRenderer = (uid: string, size: number, filter: string) => JSX.Element;
 
 function makeCard(
   uid: string, size: number, filter: string,
@@ -53,7 +54,7 @@ function makeCard(
   );
 }
 
-export function makeCardRenderers(primary: string, secondary: string): Record<string, Renderer> {
+export function makeCardRenderers(primary: string, secondary: string): Record<string, ClosedRenderer> {
   return {
     ACE:   (uid, size, filter) => makeCard(uid, size, filter, primary, secondary, 'A', 'ACE'),
     KING:  (uid, size, filter) => makeCard(uid, size, filter, primary, secondary, 'K', 'KING'),
