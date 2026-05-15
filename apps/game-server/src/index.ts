@@ -10,6 +10,7 @@ import {
   getSession,
   incrementNonce,
   consumeSession,
+  updateFreeSpins,
 } from "./sessionStore";
 import { initVolumeStore, addVolume, getVolume } from "./volumeStore";
 import { computeEffectiveRtp, BASE_RTP } from "./paytable";
@@ -17,6 +18,9 @@ import type { SlotModel } from "./engine";
 
 const API_URL         = process.env.API_URL             ?? "http://localhost:3001";
 const INTERNAL_SECRET = process.env.INTERNAL_API_SECRET ?? "dev-secret-change-in-prod";
+if (process.env.NODE_ENV === "production" && INTERNAL_SECRET === "dev-secret-change-in-prod") {
+  throw new Error("INTERNAL_API_SECRET must be set to a non-default value in production");
+}
 
 async function debitBalance(wallet: string, usdcUnits: number): Promise<void> {
   const res = await fetch(`${API_URL}/internal/debit`, {
@@ -31,11 +35,32 @@ async function debitBalance(wallet: string, usdcUnits: number): Promise<void> {
 }
 
 async function creditBalance(wallet: string, usdcUnits: number): Promise<void> {
-  await fetch(`${API_URL}/internal/credit`, {
-    method:  "POST",
-    headers: { "Content-Type": "application/json", "x-internal-secret": INTERNAL_SECRET },
-    body:    JSON.stringify({ wallet, usdcUnits }),
-  }).catch((err) => console.error("[game-server] Failed to credit payout:", err));
+  const MAX_ATTEMPTS = 3;
+  const RETRY_DELAY_MS = 1_000;
+  let lastErr: unknown;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      const res = await fetch(`${API_URL}/internal/credit`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json", "x-internal-secret": INTERNAL_SECRET },
+        body:    JSON.stringify({ wallet, usdcUnits }),
+      });
+      if (res.ok) return;
+      const body = await res.json().catch(() => ({}));
+      lastErr = new Error(`HTTP ${res.status}: ${JSON.stringify(body)}`);
+    } catch (err) {
+      lastErr = err;
+    }
+    if (attempt < MAX_ATTEMPTS) await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
+  }
+  // All attempts failed — emit a structured dead-letter entry for manual recovery
+  console.error(JSON.stringify({
+    event:     "credit-dead-letter",
+    wallet,
+    usdcUnits,
+    timestamp: new Date().toISOString(),
+    error:     String(lastErr),
+  }));
 }
 
 // Slots are off-chain. The 4% house edge (100% - 96% RTP) funds the jackpot pool.
@@ -91,7 +116,7 @@ async function main() {
       const now            = Date.now();
       const targetRtp      = await fetchTokenRtp(mint, model);
 
-      createSession({ id, wallet, mint, model, serverSeed, serverSeedHash, nonce: 0, createdAt: now, lastSpinAt: now, targetRtp });
+      await createSession({ id, wallet, mint, model, serverSeed, serverSeedHash, nonce: 0, createdAt: now, lastSpinAt: now, targetRtp, freeSpinsEarned: 0, freeSpinsUsed: 0 });
 
       return reply.send({ sessionId: id, serverSeedHash });
     },
@@ -117,7 +142,11 @@ async function main() {
         return reply.code(400).send({ error: "Bet out of range ($0.50 – $100)" });
       }
 
-      if (!isFree) {
+      if (isFree) {
+        if (session.freeSpinsEarned <= session.freeSpinsUsed) {
+          return reply.code(400).send({ error: "No free spins remaining" });
+        }
+      } else {
         try {
           await debitBalance(session.wallet, betUsdc);
         } catch (err) {
@@ -127,7 +156,7 @@ async function main() {
 
       // Persist nonce increment before spinning — if server crashes mid-spin
       // the nonce is already advanced, preventing any replay attack.
-      const updated = incrementNonce(sessionId);
+      const updated = await incrementNonce(sessionId);
 
       try {
         const cumulativeVolume = getVolume(updated.mint);
@@ -144,7 +173,15 @@ async function main() {
         );
 
         if (result.totalPayout > 0) {
-          creditBalance(updated.wallet, result.totalPayout);
+          await creditBalance(updated.wallet, result.totalPayout);
+        }
+
+        // Track free spin consumption / award
+        if (isFree) {
+          await updateFreeSpins(sessionId, { used: 1 });
+        }
+        if (result.freeSpinsAwarded > 0) {
+          await updateFreeSpins(sessionId, { earned: result.freeSpinsAwarded });
         }
 
         // 4% house edge from every bet goes to the jackpot pool
@@ -165,7 +202,7 @@ async function main() {
         app.log.info({ wallet: updated.wallet, bet: betUsdc, payout: result.totalPayout, nonce: updated.nonce });
         return reply.send(result);
       } catch (err) {
-        if (!isFree) creditBalance(session.wallet, betUsdc);
+        if (!isFree) await creditBalance(session.wallet, betUsdc);
         app.log.error(err);
         return reply.code(500).send({ error: "Spin failed" });
       }
@@ -177,7 +214,7 @@ async function main() {
   app.post<{ Body: { sessionId: string } }>(
     "/session/reveal",
     async (req, reply) => {
-      const session = consumeSession(req.body.sessionId);
+      const session = await consumeSession(req.body.sessionId);
       if (!session) return reply.code(404).send({ error: "Session not found" });
       return reply.send({ serverSeed: session.serverSeed, serverSeedHash: session.serverSeedHash, nonce: session.nonce });
     },

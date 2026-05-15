@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from "crypto";
+import { createHash, createHmac, randomBytes } from "crypto";
 import type { SymbolId } from "./paytable";
 
 export interface SpinSeed {
@@ -17,8 +17,8 @@ export function generateReelPositions(
 ): number[] {
   const results: number[] = [];
   for (let i = 0; i < reelCount; i++) {
-    const hmac = createHash("sha256")
-      .update(`${seed.serverSeed}:${seed.clientSeed}:${seed.nonce}:${i}`)
+    const hmac = createHmac("sha256", seed.serverSeed)
+      .update(`${seed.clientSeed}:${seed.nonce}:${i}`)
       .digest("hex");
     // Take first 8 hex chars → uint32, divide by 2^32 to get [0, 1)
     const value = parseInt(hmac.slice(0, 8), 16) / 0x100000000;

@@ -11,6 +11,7 @@
  */
 
 import fs from "fs";
+import { writeFile } from "fs/promises";
 import path from "path";
 import type { SlotModel } from "./engine";
 
@@ -25,6 +26,8 @@ export interface Session {
   createdAt:      number;  // ms timestamp
   lastSpinAt:     number;  // ms timestamp — used for TTL
   targetRtp:      number;  // assigned RTP for this slot (0–1), fetched from API at session create
+  freeSpinsEarned: number; // total free spins granted in this session
+  freeSpinsUsed:   number; // free spins consumed so far
 }
 
 const DATA_DIR   = process.env.DATA_DIR ?? "./data";
@@ -44,10 +47,10 @@ function readDisk(): Record<string, Session> {
   }
 }
 
-function writeDisk(store: Record<string, Session>): void {
+async function writeDisk(store: Record<string, Session>): Promise<void> {
   fs.mkdirSync(path.dirname(STORE_PATH), { recursive: true });
   // Atomic write: write to .tmp then rename
-  fs.writeFileSync(STORE_TMP, JSON.stringify(store));
+  await writeFile(STORE_TMP, JSON.stringify(store));
   fs.renameSync(STORE_TMP, STORE_PATH);
 }
 
@@ -62,7 +65,7 @@ export function initSessionStore(): void {
   }, PRUNE_INTERVAL_MS);
 }
 
-function pruneExpired(): void {
+async function pruneExpired(): Promise<void> {
   const cutoff = Date.now() - SESSION_TTL_MS;
   let pruned = 0;
   for (const id of Object.keys(cache)) {
@@ -72,14 +75,14 @@ function pruneExpired(): void {
     }
   }
   if (pruned > 0) {
-    writeDisk(cache);
+    await writeDisk(cache);
     console.log(`[session-store] Pruned ${pruned} expired session(s)`);
   }
 }
 
-export function createSession(session: Session): void {
+export async function createSession(session: Session): Promise<void> {
   cache[session.id] = session;
-  writeDisk(cache);
+  await writeDisk(cache);
 }
 
 export function getSession(id: string): Session | null {
@@ -87,21 +90,34 @@ export function getSession(id: string): Session | null {
 }
 
 /** Atomically increment nonce and update lastSpinAt. Returns updated session. */
-export function incrementNonce(id: string): Session {
+export async function incrementNonce(id: string): Promise<Session> {
   const session = cache[id];
   if (!session) throw new Error("Session not found");
   session.nonce++;
   session.lastSpinAt = Date.now();
-  writeDisk(cache);
+  await writeDisk(cache);
+  return session;
+}
+
+/** Update free spin counters and persist. */
+export async function updateFreeSpins(
+  id: string,
+  delta: { earned?: number; used?: number },
+): Promise<Session> {
+  const session = cache[id];
+  if (!session) throw new Error("Session not found");
+  if (delta.earned !== undefined) session.freeSpinsEarned += delta.earned;
+  if (delta.used   !== undefined) session.freeSpinsUsed   += delta.used;
+  await writeDisk(cache);
   return session;
 }
 
 /** Delete session (called on /session/reveal). Returns the revealed session or null. */
-export function consumeSession(id: string): Session | null {
+export async function consumeSession(id: string): Promise<Session | null> {
   const session = cache[id] ?? null;
   if (session) {
     delete cache[id];
-    writeDisk(cache);
+    await writeDisk(cache);
   }
   return session;
 }
