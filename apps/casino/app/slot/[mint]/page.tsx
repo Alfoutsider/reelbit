@@ -125,6 +125,8 @@ export default function CasinoSlotPage({ params }: { params: { mint: string } })
   const [jackpotPrev,    setJackpotPrev]    = useState(0);
   const [autoSpinRemaining, setAutoSpinRemaining] = useState(0);
   const [showWin, setShowWin] = useState<SpinResult | null>(null);
+  const [turbo, setTurbo] = useState(false);
+  const [freeSpinsBanner, setFreeSpinsBanner] = useState(0);
 
   const autoSpinStopRef = useRef(true);
   // Always holds the latest handleSpin without stale closure issues
@@ -240,6 +242,7 @@ export default function CasinoSlotPage({ params }: { params: { mint: string } })
       if (result.freeSpinsAwarded > 0) {
         setFreeSpinsLeft((p) => p + result.freeSpinsAwarded);
         playFreeSpins();
+        setFreeSpinsBanner(result.freeSpinsAwarded);
       }
       setTotalWagered((p) => p + (isFree ? 0 : betUsdc));
       setTotalWon((p) => p + result.totalPayout);
@@ -282,6 +285,13 @@ export default function CasinoSlotPage({ params }: { params: { mint: string } })
 
   // Stop auto-spin on unmount
   useEffect(() => () => { autoSpinStopRef.current = true; }, []);
+
+  // Auto-clear free spins awarded banner after 3.5 s
+  useEffect(() => {
+    if (freeSpinsBanner <= 0) return;
+    const t = setTimeout(() => setFreeSpinsBanner(0), 3500);
+    return () => clearTimeout(t);
+  }, [freeSpinsBanner]);
 
   const stopAutoSpin = useCallback(() => {
     autoSpinStopRef.current = true;
@@ -439,6 +449,73 @@ export default function CasinoSlotPage({ params }: { params: { mint: string } })
 
           {/* Slot machine */}
           <div className="flex flex-col items-center gap-6">
+
+            {/* Free spins awarded banner — appears for 3.5 s then fades */}
+            <AnimatePresence>
+              {freeSpinsBanner > 0 && (
+                <motion.div
+                  key="fs-awarded"
+                  initial={{ scale: 0.75, opacity: 0, y: -12 }}
+                  animate={{ scale: 1, opacity: 1, y: 0 }}
+                  exit={{ scale: 1.1, opacity: 0, y: -20 }}
+                  transition={{ type: "spring", stiffness: 380, damping: 22 }}
+                  className="flex items-center gap-3 rounded-2xl px-6 py-3.5 text-center"
+                  style={{
+                    background: "linear-gradient(135deg, rgba(22,163,74,0.28), rgba(34,197,94,0.12))",
+                    border: "1px solid rgba(34,197,94,0.45)",
+                    boxShadow: "0 0 40px rgba(34,197,94,0.35)",
+                  }}
+                >
+                  <motion.span
+                    animate={{ rotate: [0, -12, 12, -8, 8, 0] }}
+                    transition={{ duration: 0.6, delay: 0.1 }}
+                    className="text-2xl"
+                  >🎰</motion.span>
+                  <div>
+                    <p className="font-orbitron text-lg font-black text-green-300 tracking-wide leading-none">
+                      {freeSpinsBanner} FREE SPINS!
+                    </p>
+                    <p className="font-rajdhani text-xs text-green-400/60 mt-0.5 tracking-widest">AWARDED</p>
+                  </div>
+                  <motion.span
+                    animate={{ rotate: [0, 12, -12, 8, -8, 0] }}
+                    transition={{ duration: 0.6, delay: 0.1 }}
+                    className="text-2xl"
+                  >🎰</motion.span>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Free spins active counter — persistent while freeSpinsLeft > 0 */}
+            <AnimatePresence>
+              {freeSpinsLeft > 0 && freeSpinsBanner === 0 && (
+                <motion.div
+                  key="fs-counter"
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="flex items-center gap-3 rounded-xl px-5 py-2.5"
+                  style={{
+                    background: "rgba(22,163,74,0.1)",
+                    border: "1px solid rgba(34,197,94,0.25)",
+                  }}
+                >
+                  <motion.div
+                    animate={{ opacity: [0.5, 1, 0.5] }}
+                    transition={{ duration: 1.2, repeat: Infinity }}
+                    className="w-2 h-2 rounded-full bg-green-400"
+                  />
+                  <span className="font-orbitron text-[11px] font-bold text-green-300 tracking-widest">
+                    FREE SPINS
+                  </span>
+                  <span className="font-orbitron text-xl font-black text-green-400 leading-none">
+                    {freeSpinsLeft}
+                  </span>
+                  <span className="font-orbitron text-[10px] text-green-400/50 tracking-widest">REMAINING</span>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
             <SlotMachine
               model={theme?.slotModel ?? "Classic3Reel"}
               spinResult={spinResult}
@@ -447,6 +524,7 @@ export default function CasinoSlotPage({ params }: { params: { mint: string } })
               onReelStop={playReelStop}
               theme={theme}
               customSymbols={theme?.customAssets?.symbols && Object.keys(theme.customAssets.symbols).length > 0 ? theme.customAssets.symbols : undefined}
+              turbo={turbo}
             />
 
             {error && (
@@ -477,6 +555,8 @@ export default function CasinoSlotPage({ params }: { params: { mint: string } })
                 autoSpinRemaining={autoSpinRemaining}
                 onStartAutoSpin={startAutoSpin}
                 onStopAutoSpin={stopAutoSpin}
+                turbo={turbo}
+                onTurboToggle={() => setTurbo((t) => !t)}
               />
             ) : (
               <motion.button

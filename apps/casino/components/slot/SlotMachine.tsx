@@ -21,6 +21,7 @@ interface Props {
   onReelStop?: (reelIdx: number) => void;
   theme?: SlotTheme | null;
   customSymbols?: Record<string, string>;
+  turbo?: boolean;
 }
 
 const REEL_COUNT_MAP = { Classic3Reel: 3, Standard5Reel: 5, FiveReelFreeSpins: 5 };
@@ -118,11 +119,12 @@ interface ReelProps {
   themeId:      ThemeId;
   spinPool:     string[];
   anticipating: boolean;
+  turbo:        boolean;
 }
 
 function Reel({
   reelIndex, symbols, spinning, stopDelay, winCells,
-  onStop, customSymbols, themeId, spinPool, anticipating,
+  onStop, customSymbols, themeId, spinPool, anticipating, turbo,
 }: ReelProps) {
   const [phase, setPhase] = useState<"idle" | "spinning" | "anticipating" | "stopping" | "settled">("idle");
   const phaseRef = useRef(phase);
@@ -138,7 +140,7 @@ function Reel({
         setTimeout(() => {
           setPhase("settled");
           onStop(reelIndex);
-        }, 300);
+        }, turbo ? 130 : 300);
       }, stopDelay);
       return () => clearTimeout(t);
     }
@@ -175,10 +177,10 @@ function Reel({
             animate={phase === "stopping" ? { y: -SYMBOL_SIZE * 18 } : { y: [0, -SYMBOL_SIZE * 18] }}
             transition={
               phase === "stopping"
-                ? { duration: 0.22, ease: "easeOut" }
+                ? { duration: turbo ? 0.10 : 0.22, ease: "easeOut" }
                 : phase === "anticipating"
-                  ? { duration: 4.5, repeat: Infinity, ease: "linear" }
-                  : { duration: 0.55, repeat: Infinity, ease: "linear" }
+                  ? { duration: turbo ? 2.0 : 4.5, repeat: Infinity, ease: "linear" }
+                  : { duration: turbo ? 0.26 : 0.55, repeat: Infinity, ease: "linear" }
             }
           >
             {spinStrip.map((sym, i) => (
@@ -346,7 +348,7 @@ function WinLineDisplay({ result }: { result: SpinResult }) {
 // ── SlotMachine ────────────────────────────────────────────────────────────────
 
 export function SlotMachine({
-  model, spinResult, isSpinning, onSpinComplete, onReelStop, theme, customSymbols,
+  model, spinResult, isSpinning, onSpinComplete, onReelStop, theme, customSymbols, turbo = false,
 }: Props) {
   const themeId: ThemeId = MODEL_TO_THEME[model] ?? "classic";
   const themeConfig = getThemeForModel(model);
@@ -384,8 +386,8 @@ export function SlotMachine({
 
   const winCells = settled && spinResult ? getWinCells(spinResult, is5reel) : new Set<string>();
 
-  function stopDelay(reelIdx: number): number { return reelIdx * 220; }
-  const lastReelDelay = stopDelay(reelCount - 1) + 380;
+  function stopDelay(reelIdx: number): number { return reelIdx * (turbo ? 90 : 220); }
+  const lastReelDelay = stopDelay(reelCount - 1) + (turbo ? 200 : 380);
 
   useEffect(() => {
     if (prevSpinning.current && !isSpinning) {
@@ -574,6 +576,7 @@ export function SlotMachine({
                   themeId={themeId}
                   spinPool={spinPool}
                   anticipating={anticipating}
+                  turbo={turbo}
                 />
               ))}
             </div>

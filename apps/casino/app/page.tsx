@@ -9,6 +9,8 @@ import Link from "next/link";
 import { usePrivy, useWallets } from "@/lib/privy";
 import { cn } from "@/lib/utils";
 import { getDemoSession, getDemoSlots, type DemoSlot } from "@/lib/demoSession";
+import { SymbolSVG } from "@/components/slot/SymbolSVG";
+import { MODEL_TO_THEME } from "@/lib/slotThemes";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
 
@@ -863,40 +865,36 @@ function SlotCard({ slot, index }: { slot: SlotEntry; index: number }) {
   );
 }
 
-// ── Placeholder art — mini slot preview ───────────────────────────────────────
+// ── Placeholder art — mini slot preview using real SVG symbols ───────────────
 
-const SLOT_ICONS: Record<string, string[]> = {
-  Classic3Reel:      ["🍒", "🍋", "7️⃣"],
-  Standard5Reel:     ["💎", "🃏", "⭐", "🔔", "💫"],
-  FiveReelFreeSpins: ["🐉", "🔥", "🔔", "💫", "🃏"],
+const LOBBY_SYMBOLS: Record<string, string[]> = {
+  Classic3Reel:      ["SEVEN", "CHERRY", "BELL"],
+  Standard5Reel:     ["DRAGON", "GEM", "SWORD"],
+  FiveReelFreeSpins: ["PHARAOH", "EYE_RA", "SCARAB"],
 };
 
 function PlaceholderArt({ slot }: { slot: SlotEntry }) {
-  const icons = SLOT_ICONS[slot.slotModel] ?? ["🎰"];
+  const syms    = LOBBY_SYMBOLS[slot.slotModel] ?? ["SEVEN", "CHERRY", "BELL"];
+  const themeId = MODEL_TO_THEME[slot.slotModel] ?? "classic";
   return (
-    <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
-      {/* Reel preview */}
-      <div className="flex items-center gap-2">
-        {icons.slice(0, slot.slotModel === "Classic3Reel" ? 3 : 5).map((icon, i) => (
-          <div
-            key={i}
-            className="w-10 h-10 rounded-lg flex items-center justify-center text-xl"
-            style={{
-              background: `${slot.primaryColor}15`,
-              border: `1px solid ${slot.primaryColor}25`,
-              boxShadow: i === Math.floor(icons.length / 2)
-                ? `0 0 16px ${slot.primaryColor}50`
-                : undefined,
-            }}
-          >
-            {icon}
-          </div>
+    <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
+      {/* Mini reel window */}
+      <div
+        className="flex items-center gap-1.5 px-3 py-2 rounded-xl"
+        style={{
+          background: "rgba(0,0,0,0.45)",
+          border: `1px solid ${slot.primaryColor}22`,
+          boxShadow: `inset 0 2px 10px rgba(0,0,0,0.55), 0 0 24px ${slot.primaryColor}18`,
+        }}
+      >
+        {syms.map((sym, i) => (
+          <SymbolSVG key={i} id={sym} size={46} theme={themeId} />
         ))}
       </div>
-      {/* Symbol label */}
+      {/* Token ticker */}
       <div
-        className="font-orbitron text-xs font-black tracking-widest"
-        style={{ color: slot.primaryColor, textShadow: `0 0 16px ${slot.primaryColor}80` }}
+        className="font-orbitron text-[11px] font-black tracking-[0.22em]"
+        style={{ color: slot.primaryColor, textShadow: `0 0 18px ${slot.primaryColor}80` }}
       >
         {slot.tokenSymbol}
       </div>
@@ -906,20 +904,15 @@ function PlaceholderArt({ slot }: { slot: SlotEntry }) {
 
 // ── Demo Slot Card ────────────────────────────────────────────────────────────
 
-const DEMO_SLOT_ICONS: Record<string, string[]> = {
-  Classic3Reel:      ["🍒", "🍋", "7️⃣"],
-  Standard5Reel:     ["💎", "🃏", "⭐", "🔔", "💫"],
-  FiveReelFreeSpins: ["🐉", "🔥", "🔔", "💫", "🃏"],
-};
-
 const DEMO_MODEL_LABEL: Record<string, string> = {
   Classic3Reel: "3-Reel", Standard5Reel: "5-Reel", FiveReelFreeSpins: "Free Spins",
 };
 
 function DemoSlotCard({ slot, index }: { slot: DemoSlot; index: number }) {
-  const progress  = Math.min(slot.realSolSim / 85, 1);
-  const icons     = DEMO_SLOT_ICONS[slot.model] ?? ["🎰"];
+  const progress   = Math.min(slot.realSolSim / 85, 1);
   const modelColor = slot.primaryColor;
+  const demoSyms   = LOBBY_SYMBOLS[slot.model] ?? ["SEVEN", "CHERRY", "BELL"];
+  const demoTheme  = MODEL_TO_THEME[slot.model] ?? "classic";
 
   return (
     <motion.div
@@ -943,17 +936,23 @@ function DemoSlotCard({ slot, index }: { slot: DemoSlot; index: number }) {
               // eslint-disable-next-line @next/next/no-img-element
               <img src={slot.imageUri} alt={slot.name} className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
             ) : (
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
-                <div className="flex items-center gap-2">
-                  {icons.slice(0, slot.model === "Classic3Reel" ? 3 : 5).map((icon, i) => (
-                    <div key={i} className="w-10 h-10 rounded-lg flex items-center justify-center text-xl"
-                      style={{ background: `${slot.primaryColor}15`, border: `1px solid ${slot.primaryColor}25` }}>
-                      {icon}
-                    </div>
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
+                <div
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl"
+                  style={{
+                    background: "rgba(0,0,0,0.45)",
+                    border: `1px solid ${slot.primaryColor}22`,
+                    boxShadow: `inset 0 2px 10px rgba(0,0,0,0.55), 0 0 24px ${slot.primaryColor}18`,
+                  }}
+                >
+                  {demoSyms.map((sym, i) => (
+                    <SymbolSVG key={i} id={sym} size={46} theme={demoTheme} />
                   ))}
                 </div>
-                <div className="font-orbitron text-xs font-black tracking-widest"
-                  style={{ color: slot.primaryColor, textShadow: `0 0 16px ${slot.primaryColor}80` }}>
+                <div
+                  className="font-orbitron text-[11px] font-black tracking-[0.22em]"
+                  style={{ color: slot.primaryColor, textShadow: `0 0 18px ${slot.primaryColor}80` }}
+                >
                   ${slot.ticker}
                 </div>
               </div>

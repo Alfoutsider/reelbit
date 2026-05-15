@@ -32,6 +32,8 @@ interface Props {
   autoSpinRemaining:  number;
   onStartAutoSpin:    (count: number) => void;
   onStopAutoSpin:     () => void;
+  turbo?:             boolean;
+  onTurboToggle?:     () => void;
 }
 
 export function BetControls({
@@ -39,6 +41,7 @@ export function BetControls({
   bonus = 0, wageringRequired = 0, wageringCompleted = 0,
   isSpinning, onSpin, freeSpinsLeft,
   autoSpinRemaining, onStartAutoSpin, onStopAutoSpin,
+  turbo = false, onTurboToggle,
 }: Props) {
   const [autoOpen, setAutoOpen]     = useState(false);
   const autoRef                     = useRef<HTMLDivElement>(null);
@@ -229,6 +232,21 @@ export function BetControls({
             </div>
           )}
         </div>
+
+        {/* Turbo toggle */}
+        {onTurboToggle && (
+          <button
+            onClick={onTurboToggle}
+            className={cn(
+              "flex items-center gap-1 rounded-xl px-3 py-2 text-[10px] font-orbitron font-bold transition-all",
+              turbo
+                ? "bg-yellow-500/22 border border-yellow-400/45 text-yellow-300 shadow-[0_0_14px_rgba(234,179,8,0.3)]"
+                : "bg-white/[0.04] border border-white/8 text-white/28 hover:text-white/55 hover:border-white/14",
+            )}
+          >
+            ⚡ TURBO
+          </button>
+        )}
       </div>
 
       {/* Bonus wagering progress — only shown when bonus is active */}
