@@ -1880,12 +1880,6 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
 
 app.listen(config.port, () => {
   console.log(`[api] ReelBit API running on port ${config.port}`);
-  if (isProduction && !process.env.DATA_DIR) {
-    console.warn(
-      "[api] WARNING: DATA_DIR is not set. Balance store and session data are written to ./data " +
-      "which is wiped on every Render deploy. Set DATA_DIR to a persistent disk mount path before mainnet launch."
-    );
-  }
   loadTrades();
   startDistributionCron(connection);
   startCreatorHoldingCron(connection);
